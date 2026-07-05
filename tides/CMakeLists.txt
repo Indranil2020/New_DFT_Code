@@ -112,7 +112,7 @@ if(TIDES_ENABLE_CUDA)
 
     add_executable(tides_cuda_gemm_probe core/tile/tests/cuda_gemm_probe.cpp)
     target_link_libraries(tides_cuda_gemm_probe PRIVATE
-      tides_core tides_cuda_tile cublas)
+      tides_core tides_cuda_tile cublas cublasLt)
     set_target_properties(tides_cuda_gemm_probe PROPERTIES
       CUDA_RUNTIME_LIBRARY Shared)
 
@@ -261,3 +261,31 @@ add_executable(tides_nao_tests
   core/basis/tests/nao_tests.cpp)
 target_link_libraries(tides_nao_tests PRIVATE tides_basis)
 add_test(NAME wp2_nao_generation COMMAND tides_nao_tests)
+
+add_executable(tides_wp2_profile
+  core/basis/tests/profile_wp2.cpp)
+target_link_libraries(tides_wp2_profile PRIVATE tides_basis)
+
+# --- WP3: Grids, Poisson, XC (CPU foundation) ---------------------------------
+
+add_library(tides_grid INTERFACE)
+target_include_directories(tides_grid INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+target_link_libraries(tides_grid INTERFACE tides_basis)
+
+add_executable(tides_dual_grid_tests
+  core/grid/tests/dual_grid_tests.cpp)
+target_link_libraries(tides_dual_grid_tests PRIVATE tides_grid)
+add_test(NAME wp3_dual_grid_index_map_and_halo
+  COMMAND tides_dual_grid_tests)
+
+add_executable(tides_poisson_tests
+  core/grid/tests/poisson_tests.cpp)
+target_link_libraries(tides_poisson_tests PRIVATE tides_grid)
+add_test(NAME wp3_poisson_gaussian_charge_all_bcs
+  COMMAND tides_poisson_tests)
+
+add_executable(tides_grid_ops_tests
+  core/grid/tests/grid_ops_tests.cpp)
+target_link_libraries(tides_grid_ops_tests PRIVATE tides_grid)
+add_test(NAME wp3_rho_adjoint_xc_grid_ops
+  COMMAND tides_grid_ops_tests)

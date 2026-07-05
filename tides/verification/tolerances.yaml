@@ -43,6 +43,34 @@ wp2:
     fd5_vs_exact: 1.0e-8          # 5-point FD machinery gate (MANDATORY)
     fd5_sum_vs_exact: 1.0e-8      # sum of derivatives, FD gate
     spline_vs_analytic: 3.0e-4     # spline O(h^3) accuracy
+
+# --- WP3: Grids, Poisson, XC ---
+wp3:
+  # T3.1: dual-grid index map + halo spec
+  dual_grid:
+    flatten_unflatten: "exact round-trip"
+    coord_mapping: "exact"
+    refinement_ratio: "integer validation"
+    halo_spec: "documented (periodic, n_halo, owned ranges)"
+  # T3.4: Poisson Gaussian-charge Hartree energy
+  poisson:
+    free_bc: 5.0e-3               # 16^3 direct sum with self-term reg
+    wire_bc: 5.0e-3
+    slab_bc: 5.0e-3
+    periodic_bc: 5.0e-2            # naive DFT; cuFFT reaches 1e-10
+    target: 1.0e-10                # with cuFFT + finer grid (GPU path)
+  # T3.2: rho builder
+  rho_builder:
+    integral_ne: 1.0e-3            # Gaussian orbital grid integral (h=0.5)
+    target: 1.0e-10                # finer grid
+  # T3.3: v->H adjoint map
+  adjoint_map:
+    adjointness: 1.0e-12           # MET: 1.67e-15
+  # T3.5: libxc / XC grid evaluation
+  xc_grid:
+    lda_energy: 1.0e-12            # uniform gas analytic (MET: 1e-13)
+    pbe_fs0: "exact (=1.0)"
+    pbe_fsinf: "exact (=1.804)"
   # T2.1 observable (2): atomic LDA total energy vs PySCF
   atomic_lda:
     He_vs_pyscf: 1.0e-4            # grid-converged (n=4000)

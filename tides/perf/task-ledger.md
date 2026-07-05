@@ -42,14 +42,14 @@
 
 ---
 
-## WP3–WP10 — not started
+## WP3–WP10 — status
 
 | WP | Owner | First task | Depends on | Status |
 |---|---|---|---|---|
-| WP3 | S3 | T3.1 dual-grid | – | [ ] pending |
+| WP3 | S3 | T3.1 dual-grid | – | [x] T3.1/T3.2/T3.3/T3.4/T3.5 GREEN (CPU foundation) |
 | WP4 | S4 | T4.1 batched dense eig | T1.1 (done) | [ ] pending |
 | WP5 | S5 | T5.1 SP2 CPU ref | – | [ ] pending |
-| WP6 | S6 | T6.1 SCF driver | T2.5, T3.2, T3.4, T3.5 | [ ] blocked |
+| WP6 | S6 | T6.1 SCF driver | T2.5, T3.2, T3.4, T3.5 | [ ] blocked (T2.5 deferred) |
 | WP7 | S7 | T7.1 D3/D4 | T6.3 | [ ] blocked |
 | WP8 | S8 | T8.5 packaging+CI | – | [ ] pending |
 | WP9 | S9 | T9.1 tolerances+runner | – | [ ] pending |
@@ -79,3 +79,6 @@
 4. **T2.5 GPU tile assembly** — unblocked (T1.1+T2.4 done) but deferred to
    Phase B per scope decision.
 5. **T2.7 basis library** — needs HDF5 writer + H-Kr coverage.
+6. **WP3 T3.4 Poisson** — free/wire/slab use direct O(N^2) Coulomb sum (CPU
+   reference); periodic uses naive DFT. GPU cuFFT path deferred. 1e-10 target
+   needs finer grid + cuFFT.
