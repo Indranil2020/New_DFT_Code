@@ -41,5 +41,19 @@ wp2:
   # T2.6: derivative streams
   derivatives:
     fd5_vs_exact: 1.0e-8          # 5-point FD machinery gate (MANDATORY)
-    fd5_sum_vs_exact: 1.0e-8       # sum of derivatives, FD gate
+    fd5_sum_vs_exact: 1.0e-8      # sum of derivatives, FD gate
     spline_vs_analytic: 3.0e-4     # spline O(h^3) accuracy
+  # T2.1 observable (2): atomic LDA total energy vs PySCF
+  atomic_lda:
+    He_vs_pyscf: 1.0e-4            # grid-converged (n=4000)
+    Be_vs_pyscf: 8.0e-3
+    Ne_vs_pyscf: 5.0e-1            # tight-core grid-limited; 1e-6 needs log grid (T2.2)
+    target: 1.0e-6                 # with non-uniform grid
+  # T2.4 observable (1): vs PySCF matched-basis overlap
+  pyscf_overlap: 1.0e-8            # MET (8.6e-9 with 2000-pt spline table)
+  # T2.2: NAO generation
+  nao:
+    monotone_dzp_tzp: "TZP functions > DZP"
+    basis_norm: 1.0e-4             # |norm - 1| within r_cut
+    ghost_free: true               # via T2.3 detector
+    recipe_hash: "deterministic FNV-1a"

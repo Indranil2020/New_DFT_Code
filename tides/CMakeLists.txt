@@ -187,6 +187,16 @@ add_executable(tides_atomgen_convergence_probe
   core/basis/atomgen/tests/convergence_probe.cpp)
 target_link_libraries(tides_atomgen_convergence_probe PRIVATE tides_basis)
 
+add_executable(tides_lda_xc_tests
+  core/basis/atomgen/tests/lda_xc_tests.cpp)
+target_link_libraries(tides_lda_xc_tests PRIVATE tides_basis)
+add_test(NAME wp2_lda_xc_vs_libxc COMMAND tides_lda_xc_tests)
+
+add_executable(tides_atomic_lda_tests
+  core/basis/atomgen/tests/atomic_lda_tests.cpp)
+target_link_libraries(tides_atomic_lda_tests PRIVATE tides_basis)
+add_test(NAME wp2_atomic_lda_ne_total_energy COMMAND tides_atomic_lda_tests)
+
 add_executable(tides_pseudo_tests
   core/basis/pseudo/tests/pseudo_tests.cpp)
 target_link_libraries(tides_pseudo_tests PRIVATE tides_basis)
@@ -204,3 +214,13 @@ add_executable(tides_derivative_tests
 target_link_libraries(tides_derivative_tests PRIVATE tides_basis)
 add_test(NAME wp2_derivative_streams_fd_validation
   COMMAND tides_derivative_tests)
+
+add_executable(tides_pyscf_overlap_tests
+  core/basis/tests/pyscf_overlap_tests.cpp)
+target_link_libraries(tides_pyscf_overlap_tests PRIVATE tides_basis)
+add_test(NAME wp2_pyscf_overlap_cross_check COMMAND tides_pyscf_overlap_tests)
+
+add_executable(tides_nao_tests
+  core/basis/tests/nao_tests.cpp)
+target_link_libraries(tides_nao_tests PRIVATE tides_basis)
+add_test(NAME wp2_nao_generation COMMAND tides_nao_tests)

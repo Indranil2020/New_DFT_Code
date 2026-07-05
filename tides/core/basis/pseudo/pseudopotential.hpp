@@ -124,6 +124,10 @@ class PseudoValidator {
                           std::vector<double>& energies,
                           std::vector<double>& deviations,
                           std::string& detail) {
+    (void)e_min; (void)e_max; (void)n_energies;  // reserved for the full AE
+                                                  // log-derivative scan (T2.3
+                                                  // refinement); the current
+                                                  // detector uses v_local curvature.
     energies.clear();
     deviations.clear();
     detail.clear();
