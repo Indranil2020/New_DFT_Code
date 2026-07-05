@@ -32,3 +32,13 @@ Model: memory-bound; ~0.5 MB traffic/atom/build => grid phase never dominates ab
 ### T3.8 — QTT-Poisson prototype (research flag)
 - Observables: accuracy/speed vs T3.4 on identical payloads; feeds gate R-1 (M30).
   Effort 5 pw. Depends T3.7.
+
+### T3.9 — ESP/prolate Ewald backend (periodic long-range candidate)
+- Problem: test the prolate-spheroidal Ewald/ESP idea as an optional accelerator for periodic
+  long-range electrostatics when FFT communication or reciprocal-grid size dominates.
+- Start: read `10-physics/13-electrostatics-boundary-conditions.md` and
+  `10-physics/s41467-026-73232-8_reference.pdf`.
+- Observables: (1) energy, forces, stress, and neutralization match T3.4/T6.2 within rung-2/4
+  tolerances on neutral and charged-compensated periodic cells; (2) timing and communication table
+  vs FFT/Ewald is recorded; (3) backend stays off by default unless it wins at equal accuracy.
+  Effort 4 pw. Depends T3.4, T6.2.

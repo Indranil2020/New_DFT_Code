@@ -2,7 +2,9 @@
 Purpose: the production loop. Physics: 10-physics/14,16; math: 20-math/25. Phase A core; T6.5+ Phase B.
 
 ### T6.1 — SCF driver + mixers (Pulay/Kerker/Broyden)
-- Observables: converges gauntlet-10 within a documented iteration budget; restart-safe via HDF5.
+- Observables: converges gauntlet-10 within a documented iteration budget; charged/open-shell UKS
+  cases preserve charge and spin multiplicity and match PySCF/ABACUS references within rung-3 budgets;
+  restart-safe via HDF5.
   Effort 5 pw. Depends T2.5, T3.2–T3.5. Unblocks T4.2, T6.2.
 
 ### T6.2 — Total energy assembly + Ewald/neutralization
