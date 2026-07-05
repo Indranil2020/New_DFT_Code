@@ -1,0 +1,18 @@
+=== CUDA GEMM probe ===
+cuda_gemm_probe: problems=128 products=12595200 scale_abs_sum=71.6641 cpu_ref_ms=99.3114 gpu_total_ms=103.6 gpu_kernel_ms=0.435488 kernel_gflops=57.8441 mixed_total_ms=604.957 mixed_kernel_ms=10.5178 mixed_postprocess_ms=0.044128 mixed_shape_buckets=3 mixed_kernel_gflops=2.39503 plan_build_ms=601.51 planned_total_ms=0.495663 planned_kernel_ms=0.099616 planned_postprocess_ms=0.01024 planned_shape_buckets=3 planned_device_total_ms=0.109856 planned_kernel_gflops=252.875 cublas_shape_buckets=3 cublas_status=ok cublas_kernel_ms=0.027584 cublas_kernel_gflops=913.225 planned_vs_cublas_ratio=3.61137 mixed_abs_bound=0.00889787
+=== CUDA SpGEMM probe ===
+cuda_spgemm_probe: n=256 edge=32 a_tiles=64 b_tiles=64
+eps=0 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=66.5755 gpu_total_ms=91.9813 gpu_kernel_ms=0.307488
+eps=4 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=50.9562 gpu_total_ms=3.47649 gpu_kernel_ms=0.193152
+eps=16 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=49.3965 gpu_total_ms=3.35337 gpu_kernel_ms=0.194592
+eps=32 candidates=512 retained=22 dropped=490 output_tiles=17 ledger_bound=13099.5 cpu_ms=3.94249 gpu_total_ms=2.93759 gpu_kernel_ms=0.037952
+eps=64 candidates=512 retained=0 dropped=512 output_tiles=0 ledger_bound=13837.7 cpu_ms=1.83164 gpu_total_ms=1.85573 gpu_kernel_ms=0
+=== CUDA f64e reduce probe ===
+cuda_reduce_f64e_probe: n=1048576 dot_wall_ms=36450.5 dot_kernel_ms=94.1987 dot_gterms_s=0.0111315 dot_abs_error=1.71296e+10 dot_abs_bound=3.03606e+20 sum_wall_ms=19455.9 sum_kernel_ms=1.17843 sum_gterms_s=0.889806 trace_edge=1024 trace_wall_ms=27.3057 trace_kernel_ms=0.017664 trace_abs_error=2.76486e-09
+=== CUDA graph probe ===
+cuda_graph_probe: case=tiny_launch_bound problems=1 repeats=1000 raw_repeated_kernel_ms=2.82128 raw_repeated_wall_ms=2.83343 graph_setup_ms=3.83055 graph_replay_ms=2.99427 graph_replay_wall_ms=3.14752 raw_per_launch_us=2.82128 graph_per_captured_kernel_us=2.99427 launch_count_reduction=1000
+cuda_graph_probe: case=tiny_launch_bound_mixed problems=1 repeats=1000 raw_repeated_kernel_ms=1.94221 raw_repeated_wall_ms=1.95351 graph_setup_ms=1.7788 graph_replay_ms=1.92579 graph_replay_wall_ms=2.06348 raw_per_launch_us=1.94221 graph_per_captured_kernel_us=1.92579 launch_count_reduction=1000 mixed_abs_bound=0.0032571
+cuda_graph_probe: case=mixed_tile_compute problems=128 repeats=200 raw_repeated_kernel_ms=28.5702 raw_repeated_wall_ms=28.5974 graph_setup_ms=0.37728 graph_replay_ms=25.1558 graph_replay_wall_ms=25.4002 raw_per_launch_us=142.851 graph_per_captured_kernel_us=125.779 launch_count_reduction=200
+cuda_graph_probe: case=mixed_tile_compute_fp16 problems=128 repeats=200 raw_repeated_kernel_ms=8.8111 raw_repeated_wall_ms=8.83927 graph_setup_ms=0.431983 graph_replay_ms=8.86429 graph_replay_wall_ms=8.90214 raw_per_launch_us=44.0555 graph_per_captured_kernel_us=44.3214 launch_count_reduction=200 mixed_abs_bound=0.00589567
+=== tile ops probe ===
+tile_ops_probe: n=1024 edge=32 x_tiles=1024 y_tiles=1024 out_tiles=1024 axpy_ms=35.6661 trace_ms=7.08704 norm_ms=19.9053 trace=0.861738 norm=97.7584

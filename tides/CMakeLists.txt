@@ -95,58 +95,93 @@ if(TIDES_ENABLE_CUDA)
     add_library(tides_cuda_tile STATIC
       core/tile/gemm_grouped.cu
       core/tile/ozaki.cu
-      core/tile/reduce_f64e.cu
       core/tile/spgemm_filtered.cu)
-    target_link_libraries(tides_cuda_tile PUBLIC tides_core)
+    target_link_libraries(tides_cuda_tile PUBLIC tides_core cublas)
     target_compile_options(tides_cuda_tile PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
+    set_target_properties(tides_cuda_tile PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
 
     add_executable(tides_cuda_gemm_tests core/tile/tests/cuda_gemm_tests.cpp)
     target_link_libraries(tides_cuda_gemm_tests PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_gemm_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
     add_test(NAME cuda_grouped_gemm_fp64_oracle COMMAND tides_cuda_gemm_tests)
     set_tests_properties(cuda_grouped_gemm_fp64_oracle PROPERTIES
       SKIP_RETURN_CODE 77)
 
     add_executable(tides_cuda_gemm_probe core/tile/tests/cuda_gemm_probe.cpp)
-    target_link_libraries(tides_cuda_gemm_probe PRIVATE tides_core tides_cuda_tile)
+    target_link_libraries(tides_cuda_gemm_probe PRIVATE
+      tides_core tides_cuda_tile cublas)
+    set_target_properties(tides_cuda_gemm_probe PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
 
     add_executable(tides_cuda_graph_tests core/tile/tests/cuda_graph_tests.cpp)
     target_link_libraries(tides_cuda_graph_tests PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_graph_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
     add_test(NAME cuda_graph_replay_fp64_oracle COMMAND tides_cuda_graph_tests)
     set_tests_properties(cuda_graph_replay_fp64_oracle PROPERTIES
       SKIP_RETURN_CODE 77)
 
     add_executable(tides_cuda_graph_probe core/tile/tests/cuda_graph_probe.cpp)
     target_link_libraries(tides_cuda_graph_probe PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_graph_probe PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
 
     add_executable(tides_cuda_determinism_tests
       core/tile/tests/cuda_determinism_tests.cpp)
     target_link_libraries(tides_cuda_determinism_tests PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_determinism_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
     add_test(NAME cuda_deterministic_substrate_gauntlet
       COMMAND tides_cuda_determinism_tests)
     set_tests_properties(cuda_deterministic_substrate_gauntlet PROPERTIES
       SKIP_RETURN_CODE 77)
 
+    add_executable(tides_cuda_runtime_link_probe
+      core/tile/tests/cuda_runtime_link_probe.cpp)
+    target_link_libraries(tides_cuda_runtime_link_probe PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_runtime_link_probe PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+
+    add_executable(tides_cuda_runtime_reduce_link_probe
+      core/tile/tests/cuda_runtime_link_probe.cpp
+      core/tile/reduce_f64e.cpp)
+    target_link_libraries(tides_cuda_runtime_reduce_link_probe PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_runtime_reduce_link_probe PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+
     add_executable(tides_cuda_reduce_f64e_tests
-      core/tile/tests/cuda_reduce_f64e_tests.cpp)
+      core/tile/tests/cuda_reduce_f64e_tests.cpp
+      core/tile/reduce_f64e.cpp)
     target_link_libraries(tides_cuda_reduce_f64e_tests PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_reduce_f64e_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
     add_test(NAME cuda_f64e_reduction_analytical_contracts
       COMMAND tides_cuda_reduce_f64e_tests)
     set_tests_properties(cuda_f64e_reduction_analytical_contracts PROPERTIES
       SKIP_RETURN_CODE 77)
 
     add_executable(tides_cuda_reduce_f64e_probe
-      core/tile/tests/cuda_reduce_f64e_probe.cpp)
+      core/tile/tests/cuda_reduce_f64e_probe.cpp
+      core/tile/reduce_f64e.cpp)
     target_link_libraries(tides_cuda_reduce_f64e_probe PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_reduce_f64e_probe PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
 
     add_executable(tides_cuda_spgemm_tests core/tile/tests/cuda_spgemm_tests.cpp)
     target_link_libraries(tides_cuda_spgemm_tests PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_spgemm_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
     add_test(NAME cuda_filtered_spgemm_fp64_oracle COMMAND tides_cuda_spgemm_tests)
     set_tests_properties(cuda_filtered_spgemm_fp64_oracle PROPERTIES
       SKIP_RETURN_CODE 77)
 
     add_executable(tides_cuda_spgemm_probe core/tile/tests/cuda_spgemm_probe.cpp)
     target_link_libraries(tides_cuda_spgemm_probe PRIVATE tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_spgemm_probe PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
   else()
     message(STATUS "CUDA compiler not found; skipping CUDA WP1 targets")
   endif()
@@ -183,9 +218,11 @@ add_executable(tides_atomgen_hydrogenic_tests
 target_link_libraries(tides_atomgen_hydrogenic_tests PRIVATE tides_basis)
 add_test(NAME wp2_atomgen_hydrogenic_eigenvalues COMMAND tides_atomgen_hydrogenic_tests)
 
-add_executable(tides_atomgen_convergence_probe
-  core/basis/atomgen/tests/convergence_probe.cpp)
-target_link_libraries(tides_atomgen_convergence_probe PRIVATE tides_basis)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/core/basis/atomgen/tests/convergence_probe.cpp)
+  add_executable(tides_atomgen_convergence_probe
+    core/basis/atomgen/tests/convergence_probe.cpp)
+  target_link_libraries(tides_atomgen_convergence_probe PRIVATE tides_basis)
+endif()
 
 add_executable(tides_lda_xc_tests
   core/basis/atomgen/tests/lda_xc_tests.cpp)
