@@ -151,3 +151,56 @@ if(TIDES_ENABLE_CUDA)
     message(STATUS "CUDA compiler not found; skipping CUDA WP1 targets")
   endif()
 endif()
+
+# --- WP2: Basis & integrals (CPU foundation) ---------------------------------
+
+# LAPACK/BLAS for the dense symmetric eigensolver used by the atomic radial
+# solver (system OpenBLAS+LAPACK). Standard scientific libraries, consistent
+# with the proposal's use of HDF5/GoogleTest as external deps.
+find_package(LAPACK QUIET)
+if(LAPACK_FOUND)
+  message(STATUS "WP2: LAPACK found (${LAPACK_LIBRARIES})")
+else()
+  message(STATUS "WP2: LAPACK not found; radial solver falls back to Jacobi")
+endif()
+
+add_library(tides_basis INTERFACE)
+target_include_directories(tides_basis INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+target_link_libraries(tides_basis INTERFACE tides_core)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_basis INTERFACE ${LAPACK_LIBRARIES})
+  target_compile_definitions(tides_basis INTERFACE TIDES_HAVE_LAPACK=1)
+endif()
+
+add_executable(tides_atomgen_eigensolver_tests
+  core/basis/atomgen/tests/eigensolver_tests.cpp)
+target_link_libraries(tides_atomgen_eigensolver_tests PRIVATE tides_core)
+add_test(NAME wp2_atomgen_eigensolver_analytical
+  COMMAND tides_atomgen_eigensolver_tests)
+
+add_executable(tides_atomgen_hydrogenic_tests
+  core/basis/atomgen/tests/hydrogenic_tests.cpp)
+target_link_libraries(tides_atomgen_hydrogenic_tests PRIVATE tides_basis)
+add_test(NAME wp2_atomgen_hydrogenic_eigenvalues COMMAND tides_atomgen_hydrogenic_tests)
+
+add_executable(tides_atomgen_convergence_probe
+  core/basis/atomgen/tests/convergence_probe.cpp)
+target_link_libraries(tides_atomgen_convergence_probe PRIVATE tides_basis)
+
+add_executable(tides_pseudo_tests
+  core/basis/pseudo/tests/pseudo_tests.cpp)
+target_link_libraries(tides_pseudo_tests PRIVATE tides_basis)
+add_test(NAME wp2_pseudo_validators_and_ghost_detector
+  COMMAND tides_pseudo_tests)
+
+add_executable(tides_two_center_tests
+  core/basis/tests/two_center_tests.cpp)
+target_link_libraries(tides_two_center_tests PRIVATE tides_basis)
+add_test(NAME wp2_two_center_rotation_invariance_and_spline
+  COMMAND tides_two_center_tests)
+
+add_executable(tides_derivative_tests
+  core/basis/tests/derivative_tests.cpp)
+target_link_libraries(tides_derivative_tests PRIVATE tides_basis)
+add_test(NAME wp2_derivative_streams_fd_validation
+  COMMAND tides_derivative_tests)

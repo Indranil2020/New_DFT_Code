@@ -1,0 +1,45 @@
+# TIDES tolerances — single source of truth for every acceptance threshold.
+# Mirror of 50-verification/51-tolerances.md. Changing any number requires S9
+# sign-off and a written justification in this file's history.
+
+# --- WP1: Tile substrate (see 51-tolerances.md rung-1) ---
+wp1:
+  rung1_kernel:
+    ulp_fp32: 8              # default 8 ulp FP32-equivalent
+    f64e_ulp: 4              # f64e: <=4x FP64 ulp bound
+  spgemm_filter:
+    fp32_rel: 1.0e-12
+    mixed_rel: 1.0e-6
+  f64e_trace_rel: 1.0e-13
+
+# --- WP2: Basis & integrals ---
+wp2:
+  # T2.1: hydrogenic eigenvalues vs exact eps_n = -Z^2/(2n^2)
+  hydrogenic_eigenvalues:
+    # 2nd-order 3-point stencil on uniform grid; achievable at stated n_r.
+    # 1e-10 target reached via non-uniform grid / Numerov (T2.2 refinement).
+    H_l0_1s:
+      tolerance: 5.0e-7      # n_r=50000, uniform grid
+      target: 1.0e-10        # with non-uniform grid (T2.2)
+    H_l1:
+      tolerance: 1.5e-8      # n_r=50000
+      target: 1.0e-10
+    He_l0:
+      tolerance: 4.0e-5      # n_r=16000
+    C5plus_l0:
+      tolerance: 1.0e-3      # n_r=16000
+  # T2.3: pseudopotential validators
+  pseudo:
+    norm_conservation_rel: 1.0e-4
+    ghost_detector: "sharp-feature outlier (median+50*MAD)"
+  # T2.4: two-center integrals
+  two_center:
+    rotation_invariance: 1.0e-12   # addition theorem + trace invariance
+    spline_value: 1.0e-5           # cubic spline on 500 pts, Gaussian model
+    spline_derivative: 1.0e-3
+    pyscf_overlap: 1.0e-8          # when PySCF available
+  # T2.6: derivative streams
+  derivatives:
+    fd5_vs_exact: 1.0e-8          # 5-point FD machinery gate (MANDATORY)
+    fd5_sum_vs_exact: 1.0e-8       # sum of derivatives, FD gate
+    spline_vs_analytic: 3.0e-4     # spline O(h^3) accuracy
