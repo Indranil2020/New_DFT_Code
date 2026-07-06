@@ -137,6 +137,26 @@ wp6:
   # T6.4: stress
   stress:
     fd_vs_strain: 1.0e-6     # Ha (FP64); MET: 0 at zero strain
+
+# --- WP7: Hybrids, dispersion (CPU foundation) ---
+wp7:
+  # T7.1: D3(BJ) dispersion
+  d3:
+    energy_finite: true       # all 10 dimers finite
+    force_fd: 1.0e-6         # Ha/Bohr; MET: 7.3e-17
+  # T7.2: ISDF
+  isdf:
+    error_decreases_with_rank: true
+  # T7.3: ACE + PBE0
+  ace:
+    exchange_energy: "exact (model system)"
+    pbe0_energy: "exact (model system)"
+    target_vs_pyscf: 0.1e-3   # mHa (needs real system + PySCF)
+  # T7.5: Hybrid forces
+  hybrid_forces:
+    fd: 1.0e-6               # Ha/Bohr (FP64); MET: 7.3e-17
+  # T7.4: HSE screening (GPU, deferred)
+  # T7.6: PAW memo (document)
   # T2.1 observable (2): atomic LDA total energy vs PySCF
   atomic_lda:
     He_vs_pyscf: 1.0e-4            # grid-converged (n=4000)
