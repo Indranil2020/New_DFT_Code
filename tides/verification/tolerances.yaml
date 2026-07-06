@@ -157,6 +157,30 @@ wp7:
     fd: 1.0e-6               # Ha/Bohr (FP64); MET: 7.3e-17
   # T7.4: HSE screening (GPU, deferred)
   # T7.6: PAW memo (document)
+
+# --- WP8: Parallel, HPC, packaging (CPU foundation) ---
+wp8:
+  # T8.4: HDF5 stage-dump/restart
+  stage_dump:
+    bitwise_round_trip: true   # MET
+    schema_version: 1
+    injection: true            # MET
+  # T8.2: graph partitioner
+  partitioner:
+    imbalance: 0.10           # MET: 0-4% on 10x10 grid
+  # T8.3: halo exchange
+  halo_exchange:
+    ghost_cells_correct: true # MET: [9,1,2,3,4,5]
+    comm_fraction_model: "1.6% at 1MB/10ms"  # profiling model
+  # T8.5: packaging + CI
+  packaging:
+    cmake_presets: "default, cuda, debug, ci"
+    one_command_setup: true
+    spack_recipe: true
+    ci_runner: true
+  # T8.1: 2-GPU data model (spec, GPU deferred)
+  # T8.6: MPI multi-node (Phase C, deferred)
+  # T8.7: HIP quarterly (needs AMD GPU, deferred)
   # T2.1 observable (2): atomic LDA total energy vs PySCF
   atomic_lda:
     He_vs_pyscf: 1.0e-4            # grid-converged (n=4000)

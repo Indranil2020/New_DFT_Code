@@ -51,7 +51,7 @@
 | WP5 | S5 | T5.1 SP2 CPU ref | – | [x] T5.1/T5.2/T5.4/T5.5/T5.6 GREEN (CPU foundation) |
 | WP6 | S6 | T6.1 SCF driver | T2.5, T3.2-T3.5 | [x] T6.1/T6.2/T6.3/T6.4/T6.5/T6.6 GREEN (CPU foundation) |
 | WP7 | S7 | T7.1 D3/D4 | T6.3 | [x] T7.1/T7.2/T7.3/T7.5/T7.6 GREEN (CPU foundation; T7.4 GPU deferred) |
-| WP8 | S8 | T8.5 packaging+CI | – | [ ] pending |
+| WP8 | S8 | T8.5 packaging+CI | – | [x] T8.1/T8.2/T8.3/T8.4/T8.5 GREEN (CPU foundation; T8.6/T8.7 deferred) |
 | WP9 | S9 | T9.1 tolerances+runner | – | [ ] pending |
 | WP10 | S10 | T10.4 TOML schema | – | [ ] pending |
 

@@ -1,0 +1,68 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default (CPU, no CUDA)",
+      "binaryDir": "${sourceDir}/../build-default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "TIDES_ENABLE_CUDA": "OFF",
+        "CMAKE_CXX_STANDARD": "20"
+      }
+    },
+    {
+      "name": "cuda",
+      "displayName": "CUDA (RTX/A40)",
+      "binaryDir": "${sourceDir}/../build-cuda",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "TIDES_ENABLE_CUDA": "ON",
+        "CMAKE_CUDA_ARCHITECTURES": "89;90",
+        "CMAKE_CXX_STANDARD": "20"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug (CPU, with sanitizers)",
+      "binaryDir": "${sourceDir}/../build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TIDES_ENABLE_CUDA": "OFF",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI runner (CPU, fast)",
+      "binaryDir": "${sourceDir}/../build-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "TIDES_ENABLE_CUDA": "OFF",
+        "CMAKE_CXX_FLAGS": "-Wall -Wextra -Wpedantic"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "default", "configurePreset": "default" },
+    { "name": "cuda", "configurePreset": "cuda" },
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "ci", "configurePreset": "ci" }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    }
+  ]
+}

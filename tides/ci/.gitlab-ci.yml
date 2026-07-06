@@ -1,0 +1,44 @@
+# TIDES CI configuration
+# Per T8.5: nightly CI on RTX, weekly on A40, opportunistic H100.
+# This file defines the CI stages; the actual runner is ci/nightly.sh.
+
+stages:
+  - configure
+  - build
+  - test
+  - profile
+
+variables:
+  CMAKE_PRESET: "ci"  # overridden to "cuda" on GPU runners
+
+# CPU-only runner (fast feedback, every push)
+cpu-quick:
+  stage: test
+  script:
+    - bash tides/ci/nightly.sh ci
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+
+# GPU runner (nightly, RTX primary device)
+gpu-nightly:
+  stage: test
+  script:
+    - bash tides/ci/nightly.sh cuda
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  tags:
+    - rtx
+  artifacts:
+    paths:
+      - perf/logs/
+    expire_in: 30 days
+
+# Weekly A40 (memory-heavy payloads)
+a40-weekly:
+  stage: test
+  script:
+    - bash tides/ci/nightly.sh cuda
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_SCHEDULE_NAME == "weekly"
+  tags:
+    - a40

@@ -339,3 +339,14 @@ add_executable(tides_wp7_tests
   core/hybrids/tests/wp7_tests.cpp)
 target_link_libraries(tides_wp7_tests PRIVATE tides_hybrids)
 add_test(NAME wp7_hybrids_d3_isdf_ace_paw COMMAND tides_wp7_tests)
+
+# --- WP8: Parallel, HPC, packaging (CPU foundation) -------------------------
+
+add_library(tides_parallel_lib INTERFACE)
+target_include_directories(tides_parallel_lib INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+target_link_libraries(tides_parallel_lib INTERFACE tides_core)
+
+add_executable(tides_wp8_tests
+  core/parallel/tests/wp8_tests.cpp)
+target_link_libraries(tides_wp8_tests PRIVATE tides_parallel_lib)
+add_test(NAME wp8_stage_dump_partitioner_halo_packaging COMMAND tides_wp8_tests)
