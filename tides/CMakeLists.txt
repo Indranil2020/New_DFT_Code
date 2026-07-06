@@ -350,3 +350,14 @@ add_executable(tides_wp8_tests
   core/parallel/tests/wp8_tests.cpp)
 target_link_libraries(tides_wp8_tests PRIVATE tides_parallel_lib)
 add_test(NAME wp8_stage_dump_partitioner_halo_packaging COMMAND tides_wp8_tests)
+
+# --- WP9: Verification & benchmarks (the red team) ---------------------------
+
+add_library(tides_verification_lib INTERFACE)
+target_include_directories(tides_verification_lib INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+target_link_libraries(tides_verification_lib INTERFACE tides_parallel_lib tides_scf tides_hybrids)
+
+add_executable(tides_wp9_tests
+  core/verification/tests/wp9_tests.cpp)
+target_link_libraries(tides_wp9_tests PRIVATE tides_verification_lib)
+add_test(NAME wp9_ladder_runner_reference_data_ab_fd_dashboard COMMAND tides_wp9_tests)

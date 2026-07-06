@@ -181,6 +181,45 @@ wp8:
   # T8.1: 2-GPU data model (spec, GPU deferred)
   # T8.6: MPI multi-node (Phase C, deferred)
   # T8.7: HIP quarterly (needs AMD GPU, deferred)
+
+# --- WP9: Verification & benchmarks (the red team) ---
+wp9:
+  # T9.1: six-rung ladder runner
+  ladder:
+    rung1_kernel: 1.0e-13      # CPU ref: machine precision
+    rung2_operator_overlap: 1.0e-8  # vs PySCF (MET: 8.6e-9)
+    rung2_operator_rotation: 1.0e-12  # MET: 1.4e-15
+    rung2_operator_poisson: 1.0e-3  # CPU ref (target 1e-10 w/ cuFFT)
+    rung2_operator_adjoint: 1.0e-12  # MET: 1.7e-15
+    rung3_energy_component: 1.0e-4  # CPU ref (target 1e-6)
+    rung3_ab_mixed: 5.0e-4       # meV/atom (0.5 meV/atom)
+    rung4_force_fd: 1.0e-6      # Ha/Bohr (MET: 7.1e-14)
+    rung4_stress_fd: 1.0e-6     # Ha (MET: 0)
+    rung5_nve_drift: 30.0       # uHa/atom/ps (SKIP: needs full MD)
+    rung6_acwf: 0.005           # eV/atom (SKIP: needs full pipeline)
+    rung6_s22: 0.35             # kcal/mol (SKIP: needs full pipeline)
+    cpu_foundation_status: "10 pass, 0 fail, 3 skip (rungs 5-6 deferred)"
+    release_veto: "BLOCKED on rungs 5-6"
+  # T9.2: reference data
+  reference_data:
+    gauntlet10: "10 entries (DOI/license/uncertainty per entry)"
+  # T9.3: A/B harness
+  ab_harness:
+    delta_budget: 5.0e-4       # meV/atom
+  # T9.4: FD force checks
+  fd_force:
+    budget: 1.0e-6            # Ha/Bohr (MET: 7.8e-14)
+  # T9.5: competitor farm
+  competitor_farm:
+    pyscf_reference: "available"
+    containers: "Phase B"
+  # T9.6: regression dashboard
+  dashboard:
+    json_lines: "verified (WP2 profiler)"
+    energy_metering: "NVML in nightly.sh"
+  # T9.7: campaign runner
+  campaign:
+    archive: "git commit + container digest + inputs"
   # T2.1 observable (2): atomic LDA total energy vs PySCF
   atomic_lda:
     He_vs_pyscf: 1.0e-4            # grid-converged (n=4000)

@@ -1,0 +1,125 @@
+# Gauntlet-10: the 10-system smoke set every nightly runs
+# Per 50-verification/52: 3 molecules, 2 slabs, 2 bulks (1 metal), a-Si:H 512,
+# 64-H2O box, 1 charged/spin case.
+# Each entry: name, formula, category, reference_energy, reference_source,
+# DOI, license, settings, uncertainty.
+
+entries:
+  # --- Molecules ---
+  - name: "H2"
+    formula: "H2"
+    category: "molecule"
+    n_atoms: 2
+    reference_energy: -1.1745  # Ha (PBE/cc-pVTZ)
+    reference_source: "NIST CCCBDB"
+    doi: "10.18434/T4D303"
+    license: "public"
+    settings: "PBE/aug-cc-pVTZ"
+    uncertainty: 0.001  # Ha
+
+  - name: "H2O"
+    formula: "H2O"
+    category: "molecule"
+    n_atoms: 3
+    reference_energy: -76.4095  # Ha (PBE/aug-cc-pVTZ)
+    reference_source: "NIST CCCBDB"
+    doi: "10.18434/T4D303"
+    license: "public"
+    settings: "PBE/aug-cc-pVTZ"
+    uncertainty: 0.001
+
+  - name: "benzene"
+    formula: "C6H6"
+    category: "molecule"
+    n_atoms: 12
+    reference_energy: -232.194  # Ha (PBE/def2-TZVP)
+    reference_source: "PySCF"
+    doi: "internal"
+    license: "MIT"
+    settings: "PBE/def2-TZVP"
+    uncertainty: 0.01
+
+  # --- Slabs ---
+  - name: "Si_001_slab"
+    formula: "Si"
+    category: "slab"
+    n_atoms: 64
+    reference_energy: -3.78  # Ha/atom (PBE, 6-layer slab)
+    reference_source: "ABACUS"
+    doi: "internal"
+    license: "GPL"
+    settings: "PBE/DZP, 6-layer, 15A vacuum"
+    uncertainty: 0.005
+
+  - name: "TiO2_slab"
+    formula: "TiO2"
+    category: "slab"
+    n_atoms: 48
+    reference_energy: -49.95  # Ha/atom (PBE)
+    reference_source: "VASP"
+    doi: "internal"
+    license: "academic"
+    settings: "PBE/PAW, 3-layer"
+    uncertainty: 0.01
+
+  # --- Bulks ---
+  - name: "Si_bulk"
+    formula: "Si"
+    category: "bulk"
+    n_atoms: 64
+    reference_energy: -3.7812  # Ha/atom (PBE, experimental lattice)
+    reference_source: "ABACUS"
+    doi: "10.1103/PhysRevB.54.11169"
+    license: "GPL"
+    settings: "PBE/DZP, 2x2x2 k-mesh"
+    uncertainty: 0.002
+
+  - name: "Al_bulk"
+    formula: "Al"
+    category: "bulk_metal"
+    n_atoms: 108
+    reference_energy: -1.1612  # Ha/atom (PBE)
+    reference_source: "Quantum ESPRESSO"
+    doi: "10.1103/PhysRevB.54.11169"
+    license: "GPL"
+    settings: "PBE, 4x4x4 k-mesh, 0.01 Ry smearing"
+    uncertainty: 0.003
+
+  # --- Large systems ---
+  - name: "aSi_H_512"
+    formula: "Si:H"
+    category: "amorphous"
+    n_atoms: 512
+    reference_energy: -3.77  # Ha/atom (PBE, a-Si:H control)
+    reference_source: "TIDES R1 dense"
+    doi: "internal"
+    license: "Apache-2.0"
+    settings: "PBE/DZP, R1 dense reference"
+    uncertainty: 0.005
+
+  - name: "H2O_64"
+    formula: "H2O"
+    category: "liquid"
+    n_atoms: 192
+    reference_energy: -76.41  # Ha/molecule (PBE, MD snapshot)
+    reference_source: "PySCF"
+    doi: "internal"
+    license: "MIT"
+    settings: "PBE/aug-cc-pVTZ"
+    uncertainty: 0.01
+
+  # --- Charged/spin ---
+  - name: "O2_triplet"
+    formula: "O2"
+    category: "charged_spin"
+    n_atoms: 2
+    reference_energy: -150.35  # Ha (PBE, triplet, UKS)
+    reference_source: "PySCF"
+    doi: "internal"
+    license: "MIT"
+    settings: "PBE/aug-cc-pVTZ, UKS, triplet"
+    uncertainty: 0.005
+    charge: 0
+    spin_multiplicity: 3
+    n_alpha: 8
+    n_beta: 6
