@@ -289,3 +289,18 @@ add_executable(tides_grid_ops_tests
 target_link_libraries(tides_grid_ops_tests PRIVATE tides_grid)
 add_test(NAME wp3_rho_adjoint_xc_grid_ops
   COMMAND tides_grid_ops_tests)
+
+# --- WP4: Mid-range solvers (CPU foundation) ---------------------------------
+
+add_library(tides_solvers INTERFACE)
+target_include_directories(tides_solvers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+target_link_libraries(tides_solvers INTERFACE tides_core)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_solvers INTERFACE ${LAPACK_LIBRARIES})
+  target_compile_definitions(tides_solvers INTERFACE TIDES_HAVE_LAPACK=1)
+endif()
+
+add_executable(tides_wp4_tests
+  core/solvers/tests/wp4_tests.cpp)
+target_link_libraries(tides_wp4_tests PRIVATE tides_solvers)
+add_test(NAME wp4_solvers_broker_chfsi_omm COMMAND tides_wp4_tests)

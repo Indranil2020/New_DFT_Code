@@ -47,7 +47,7 @@
 | WP | Owner | First task | Depends on | Status |
 |---|---|---|---|---|
 | WP3 | S3 | T3.1 dual-grid | – | [x] T3.1/T3.2/T3.3/T3.4/T3.5 GREEN (CPU foundation) |
-| WP4 | S4 | T4.1 batched dense eig | T1.1 (done) | [ ] pending |
+| WP4 | S4 | T4.1 batched dense eig | T1.1 (done) | [x] T4.1/T4.3/T4.5/T4.6 GREEN (CPU foundation) |
 | WP5 | S5 | T5.1 SP2 CPU ref | – | [ ] pending |
 | WP6 | S6 | T6.1 SCF driver | T2.5, T3.2, T3.4, T3.5 | [ ] blocked (T2.5 deferred) |
 | WP7 | S7 | T7.1 D3/D4 | T6.3 | [ ] blocked |

@@ -71,6 +71,26 @@ wp3:
     lda_energy: 1.0e-12            # uniform gas analytic (MET: 1e-13)
     pbe_fs0: "exact (=1.0)"
     pbe_fsinf: "exact (=1.804)"
+
+# --- WP4: Mid-range solvers (CPU foundation) ---
+wp4:
+  # T4.1: batched dense eigensolver (R0)
+  batched_eig:
+    residual: 1.0e-9           # MET: ~1e-14 (machine precision via LAPACK)
+    max_n: 400                 # observable: residuals <= 1e-9 at n <= 400
+  # T4.3: ChFSI (R1)
+  chfsi:
+    residual: 1.0e-8           # MET: ~1e-15 (k=0..3); k=4 at 1.3e-10
+    scf_iter_within: "+2 of dense"
+    subspace_reuse: ">=2x"
+  # T4.5: OMM direct minimization
+  omm:
+    energy_vs_diag: 1.0e-6    # MET: 3e-10
+    target: 1.0e-8
+  # T4.6: broker + tides tune
+  broker:
+    dispatch_correct: "R0/R1/R2/R3 by N, gap, Te"
+    within_10pct_best: true   # MET
   # T2.1 observable (2): atomic LDA total energy vs PySCF
   atomic_lda:
     He_vs_pyscf: 1.0e-4            # grid-converged (n=4000)
