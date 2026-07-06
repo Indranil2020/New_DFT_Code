@@ -34,6 +34,8 @@ enum class OperationKind : std::uint32_t {
   kSerialization,
   kPrecisionTransform,
   kReduction,
+  kPoissonSolve,
+  kXcFunctional,
 };
 
 enum class DeterminismMode : std::uint32_t {
@@ -79,6 +81,10 @@ struct OperationLedgerEntry {
 class OperationLedger {
  public:
   void Add(OperationLedgerEntry entry) { entries_.push_back(std::move(entry)); }
+
+  void Merge(const OperationLedger& other) {
+    for (const auto& e : other.entries_) entries_.push_back(e);
+  }
 
   [[nodiscard]] const std::vector<OperationLedgerEntry>& entries() const {
     return entries_;

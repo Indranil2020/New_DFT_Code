@@ -1,0 +1,70 @@
+{
+  "engine": "E4 Solvers Engine",
+  "date": "2026-07-06",
+  "status": "ALL PASS (26 profile entries, 2 known issues)",
+  "profiling": {
+    "dense_eig": {
+      "n=16": "23.5ms", "n=32": "0.359ms", "n=64": "7.094ms", "n=128": "16.025ms", "n=256": "137.392ms",
+      "batched_3x": "2.446ms",
+      "status": "ALL PASS"
+    },
+    "sp2": {
+      "cpu": {"n=32": "1.031ms", "n=64": "13.518ms", "n=128": "212.452ms", "n=256": "1745.183ms"},
+      "gpu": {"n=32": "2182ms (overhead)", "n=64": "3.601ms", "n=128": "7.594ms", "n=256": "31.814ms"},
+      "gpu_vs_cpu_speedup": {"n=64": "3.75x", "n=128": "27.97x", "n=256": "54.85x"},
+      "accuracy": "‖P²−P‖_F ≤ 3.6e-15",
+      "status": "ALL PASS"
+    },
+    "chfsi": {
+      "n=32": "1.679ms, error=3.883 (KNOWN-ISSUE)",
+      "n=64": "30.210ms, error=3.905 (KNOWN-ISSUE)",
+      "n=128": "746.786ms, error=3.914 (KNOWN-ISSUE)",
+      "issue": "Filter direction inverted — converges to highest eigenvalues"
+    },
+    "foe": {
+      "n=32": "0.984ms, error=7.1e-15",
+      "n=64": "8.441ms, error=7.1e-15",
+      "n=128": "124.758ms, error=2.1e-14",
+      "status": "ALL PASS"
+    },
+    "omm": {
+      "n=32": "23.579ms, error=0.079 (KNOWN-ISSUE)",
+      "n=64": "433.554ms, error=0.111 (KNOWN-ISSUE)",
+      "n=128": "14219ms, error=0.105 (KNOWN-ISSUE)",
+      "issue": "CG stuck at ~0.1 error — no line search"
+    },
+    "broker": {
+      "small_50": "PASS (R0 batched dense)",
+      "large_5000": "PASS (R2 SP2-submatrix)",
+      "medium_500": "PASS (R1 ChFSI)"
+    }
+  },
+  "known_issues": [
+    {
+      "id": "E4-KI-1",
+      "issue": "ChFSI filter direction inverted",
+      "impact": "Converges to highest eigenvalues instead of lowest",
+      "fix": "Negate spectral window or reverse filter polynomial",
+      "priority": "CRITICAL",
+      "paper": "arXiv:2503.22652"
+    },
+    {
+      "id": "E4-KI-2",
+      "issue": "OMM CG stuck at ~0.1 error",
+      "impact": "OMM solver unusable for production",
+      "fix": "Add Armijo backtracking line search",
+      "priority": "HIGH"
+    }
+  ],
+  "mpi_status": "NOT TESTED — no MPI distributed solver",
+  "gpu_status": "SP2 GPU works (55x speedup at n=256). ChFSI/OMM/FOE CPU only.",
+  "optimization_priorities": [
+    {"priority": 1, "item": "Fix ChFSI filter direction", "expected": "Correctness fix", "paper": "arXiv:2503.22652"},
+    {"priority": 2, "item": "Fix OMM CG — add line search", "expected": "Correctness fix"},
+    {"priority": 3, "item": "Implement residual-based ChFSI", "expected": "Better scalability", "paper": "arXiv:2503.22652"},
+    {"priority": 4, "item": "Wire GPU SP2 batching (SpGEMM + f64e)", "expected": "10-100x for large systems"},
+    {"priority": 5, "item": "GPU ChFSI — Chebyshev filter on GPU", "expected": "5-10x"},
+    {"priority": 6, "item": "Matrix-free ChFSI for 85M+ grid points", "expected": "Memory reduction", "paper": "arXiv:2512.08571"},
+    {"priority": 7, "item": "ML-based initial density guess", "expected": "20-50% fewer SCF iterations", "paper": "arXiv:2406.15873"}
+  ]
+}

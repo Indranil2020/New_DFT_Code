@@ -1,4 +1,5 @@
 #include "tile/f64e_reference.hpp"
+#include "tile/gemm_grouped.hpp"
 #include "tile/reduce_f64e.hpp"
 
 #include <algorithm>
@@ -14,6 +15,7 @@
 namespace {
 
 using tides::tile::DeterminismMode;
+using tides::tile::CudaRuntimeStatus;
 using tides::tile::DotF64eCuda;
 using tides::tile::DotF64eReference;
 using tides::tile::ErrorMetric;
@@ -165,6 +167,12 @@ int CheckValidationFailures() {
 }  // namespace
 
 int main() {
+  const auto runtime_status = CudaRuntimeStatus();
+  if (!runtime_status.ok()) {
+    std::cerr << "cuda_reduce_f64e_tests: SKIP "
+              << runtime_status.message() << '\n';
+    return 77;
+  }
   auto smoke = DotF64eCuda({1.0}, {1.0});
   if (!smoke.ok() && IsCudaRuntimeUnavailable(smoke.status())) {
     std::cerr << "cuda_reduce_f64e_tests: SKIP " << smoke.status().message()

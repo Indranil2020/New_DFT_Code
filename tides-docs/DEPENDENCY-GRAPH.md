@@ -35,6 +35,7 @@
 | **T3.6** | Grid force + stress terms | S3 | 4 pw | T3.3, T3.5 | T6.3 | A |
 | **T3.7** | QTT-rho prototype (research flag) | S3 | 5 pw | T3.2 | T3.8 | B |
 | **T3.8** | QTT-Poisson prototype (research flag) | S3 | 5 pw | T3.7 | gate R-1 | B |
+| **T3.9** | ESP/prolate Ewald backend (research flag) | S3 | 4 pw | T3.4, T6.2 | periodic-electrostatics backend decision | B/C |
 | **T4.1** | Batched dense eigensolver path (R0) | S4 | 4 pw | T1.1 | T4.2 | A |
 | **T4.2** | R0 batching driver | S4 | 6 pw | T4.1, T6.1 | T4.6, GA2 | A |
 | **T4.3** | ChFSI core (filter, RR, locking, reuse) | S4 | 6 pw | T1.2 | T4.6, T6.5 | A |

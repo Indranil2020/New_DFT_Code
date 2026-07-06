@@ -1,0 +1,2 @@
+/usr/bin/ar qc libtides_cuda_sp2.a CMakeFiles/tides_cuda_sp2.dir/core/solvers/sp2_submatrix/sp2_gpu.cu.o
+/usr/bin/ranlib libtides_cuda_sp2.a

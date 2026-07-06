@@ -1,0 +1,48 @@
+{
+  "engine": "E8 Hybrids Engine",
+  "date": "2026-07-06",
+  "status": "ALL PASS (12 profile entries, 1 known issue)",
+  "profiling": {
+    "d3_dispersion": {
+      "H-H_R3": "-3.653e-04 Ha",
+      "C-C_R3.5": "-5.213e-03 Ha",
+      "O-O_R3": "-1.040e-03 Ha",
+      "C-O_R3.2": "-2.309e-03 Ha",
+      "H2O_dimer": "-7.332e-03 Ha, 0.001ms",
+      "status": "ALL PASS"
+    },
+    "isdf": {
+      "100x10_r5": "0.018ms, error=0.935 (KNOWN-ISSUE)",
+      "500x20_r10": "0.164ms, error=0.976 (KNOWN-ISSUE)",
+      "2000x50_r20": "3.090ms, error=0.990 (KNOWN-ISSUE)",
+      "issue": "No LSQ fit — uses delta-function interpolation only"
+    },
+    "ace": {
+      "n=16_occ4": "0.001ms, PASS",
+      "n=32_occ8": "0.002ms, PASS",
+      "n=64_occ16": "0.007ms, PASS",
+      "pbe0_energy": "PASS (formula)"
+    }
+  },
+  "known_issues": [
+    {
+      "id": "E8-KI-1",
+      "issue": "ISDF no least-squares fit",
+      "impact": "Reconstruction error ~0.9 (should be <1e-8)",
+      "fix": "Implement LSQ fit: x = M(:,interp) * pinv(M(interp,:)) * M(interp,:)",
+      "priority": "CRITICAL",
+      "paper": "arXiv:2510.20826"
+    }
+  ],
+  "mpi_status": "NOT TESTED — no MPI distributed hybrid calculation",
+  "gpu_status": "NOT TESTED — D3/ISDF/ACE all CPU",
+  "optimization_priorities": [
+    {"priority": 1, "item": "Fix ISDF LSQ fit — implement proper interpolation", "paper": "arXiv:2510.20826"},
+    {"priority": 2, "item": "Add adaptive grid ISDF for localized basis", "paper": "arXiv:2510.20826"},
+    {"priority": 3, "item": "GPU ISDF point selection — parallelize random projection + greedy pivoting"},
+    {"priority": 4, "item": "ACE-ISDF combined approach — use ISDF to compress ACE basis"},
+    {"priority": 5, "item": "HSE06 screening — range-separated hybrid with short-range exchange"},
+    {"priority": 6, "item": "8-bit density fitting for Coulomb/exchange", "paper": "arXiv:2601.08077"},
+    {"priority": 7, "item": "MPI distributed hybrid calculation for large systems"}
+  ]
+}

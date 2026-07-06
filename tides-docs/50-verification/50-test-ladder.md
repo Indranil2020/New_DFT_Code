@@ -9,6 +9,7 @@
 5 Dynamics: NVE drift budget <=30 uHa/atom/ps; timestep convergence; XL-BOMD vs converged-SCF
   trajectory statistics (RDF, VACF).
 6 Physics: ACWF/Delta subset lattice constants & bulk moduli; S22/W4-11 subsets; charged/open-shell
-  UKS references; slab work functions and adsorption energies vs curated references.
+  UKS references covering anions, cations, radicals/triplets, and charged-compensated slabs; slab work
+  functions and adsorption energies vs curated references.
 Bisect-the-physics: HDF5 stage dumps (31) let any stage be injected from a reference code to localize
 a discrepancy in hours. Deterministic mode makes every bug bit-for-bit reproducible.

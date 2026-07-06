@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use TIDES in your research, please cite this work."
+title: "TIDES — TIle-based Democratic Electronic-Structure suite"
+type: software
+authors:
+  - given-names: "TIDES"
+    family-names: "Team"
+repository-code: "https://github.com/tides-dft/tides"
+license: Apache-2.0
+version: 0.1.0-alpha
+date-released: 2026-07-01
+keywords:
+  - density functional theory
+  - electronic structure
+  - GPU
+  - numeric atom-centered orbitals
+  - Kohn-Sham
+abstract: >-
+  TIDES is a GPU-native Kohn-Sham DFT engine designed to be the fastest
+  open-source code across the full system-size spectrum (10 to 10^6 atoms),
+  using tile-based mixed-precision execution, XL-BOMD shadow dynamics,
+  and a solver broker for regime dispatch.

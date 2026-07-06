@@ -74,7 +74,7 @@ class AnalyticForces {
     double E1 = energy_fn(p1);
     double Em1 = energy_fn(m1);
     double Em2 = energy_fn(m2);
-    return -(E2 - 8.0 * E1 + 8.0 * Em1 - Em2) / (12.0 * h);
+    return (E2 - 8.0 * E1 + 8.0 * Em1 - Em2) / (12.0 * h);
   }
 
   // Validate analytic forces against FD for all atoms/components.

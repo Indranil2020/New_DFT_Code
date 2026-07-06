@@ -7,5 +7,6 @@ Rung4 force: FD <=1e-6 Ha/Bohr (FP64 path) / <=1e-4 (production mixed); stress F
 Rung5 dynamics: NVE drift <=30 uHa/atom/ps; XL-BOMD RDF vs SCF-MD KS-test p>0.05.
 Rung6 physics: ACWF subset <= few meV/atom vs published all-electron refs (basis-labelled);
   S22 (TZP+D4, counterpoise) MAD <=0.35 kcal/mol; charged UKS charge/spin preserved exactly and
-  energy ordering stable under diffuse-basis refinement.
+  energy ordering stable under DZP->TZP->TZP+diffuse refinement, with density-tail and spin-density
+  diagnostics archived for every charged/open-shell case.
 Changing any number here requires S9 sign-off and a written justification in this file's history.

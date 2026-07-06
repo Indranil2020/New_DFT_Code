@@ -1,0 +1,157 @@
+{
+  "ledger_type": "per_engine_profiling",
+  "date": "2026-07-06",
+  "machine": "niel-fzu",
+  "gpu": "NVIDIA GeForce RTX 5050 (8GB VRAM)",
+  "cuda": "12.0.140",
+  "ctest_total": "51/51 passed, 155.66 sec",
+  "engines": {
+    "E1_tile_substrate": {
+      "suite": "e1_tile_profile",
+      "status": "ALL PASS",
+      "test_time_sec": 8.48,
+      "entries": [
+        {"kernel": "GroupedGEMM", "variant": "FP64", "size": "256x1", "throughput_gflops": 126, "status": "PASS"},
+        {"kernel": "GroupedGEMM", "variant": "FP16-accum", "size": "256x1", "throughput_gflops": 307, "speedup_vs_fp64": 2.4, "status": "PASS"},
+        {"kernel": "SpGEMM", "variant": "filtered", "size": "various", "throughput_gflops": 12, "status": "PASS"},
+        {"kernel": "Ozaki_f64e", "variant": "GEMM", "size": "various", "error": 3.6e-14, "status": "PASS"},
+        {"kernel": "f64e_reduction", "variant": "dot/sum/trace", "size": "various", "tolerance": "sqrt(n)", "status": "PASS"},
+        {"kernel": "CUDA_graph", "variant": "replay", "size": "1000-launch", "time_ms": 3.18, "raw_ms": 3.63, "speedup": 1.12, "status": "PASS"}
+      ]
+    },
+    "E2_basis_integrals": {
+      "suite": "e2_basis_profile",
+      "status": "ALL PASS",
+      "test_time_sec": 12.07,
+      "entries": [
+        {"kernel": "RadialSolver", "variant": "FD+Numerov", "size": "n_r=2000", "time_ms": 2.6, "convergence": "O(h^2)", "status": "PASS"},
+        {"kernel": "RadialSolver", "variant": "FD+Numerov", "size": "n_r=16000", "time_ms": 20.5, "error": 1e-10, "status": "PASS"},
+        {"kernel": "NAO_generation", "variant": "H_DZP", "size": "1 atom", "time_ms": 683, "status": "PASS"},
+        {"kernel": "NAO_generation", "variant": "C_DZP", "size": "1 atom", "time_ms": 2012, "status": "PASS"},
+        {"kernel": "TwoCenter_spline", "variant": "Gaussian", "size": "model", "error": 3.5e-5, "status": "PASS"},
+        {"kernel": "TwoCenter_GPU", "variant": "H2_assembly", "size": "2 atoms", "symmetry": "exact", "status": "PASS"},
+        {"kernel": "ThreeCenter_GPU", "variant": "2-atom_KB", "size": "2 atoms", "error": 3.8e-3, "status": "PASS"},
+        {"kernel": "Derivative_streams", "variant": "dS/dR", "size": "spline", "error": 7.4e-5, "status": "PASS"}
+      ]
+    },
+    "E3_grid_engine": {
+      "suite": "e3_grid_profile",
+      "status": "ALL PASS",
+      "test_time_sec": 59.28,
+      "entries": [
+        {"kernel": "DualGrid", "variant": "flatten", "size": "64^3", "time_ms": 1.74, "error": 0, "status": "PASS"},
+        {"kernel": "RhoBuild", "variant": "CPU", "size": "48^3x32", "time_ms": 3.24, "error": 0, "role": "reference"},
+        {"kernel": "RhoBuild", "variant": "GPU", "size": "48^3x32", "time_ms": 22.0, "error": 4.3e-14, "speedup": 0.15, "note": "GPU overhead at small size", "status": "PASS"},
+        {"kernel": "VmatBuild", "variant": "CPU", "size": "48^3x32", "time_ms": 90.3, "error": 0, "role": "reference"},
+        {"kernel": "VmatBuild", "variant": "GPU", "size": "48^3x32", "time_ms": 20.3, "error": 1.3e-13, "speedup": 4.4, "status": "PASS"},
+        {"kernel": "Poisson", "variant": "CPU", "size": "16^3", "time_ms": 1053, "error": 0, "role": "reference", "note": "O(N^2) naive DFT"},
+        {"kernel": "Poisson", "variant": "GPU", "size": "16^3", "time_ms": 5.0, "error": 8.2e-15, "speedup": 211, "status": "PASS"},
+        {"kernel": "Poisson", "variant": "CPU", "size": "32^3", "time_ms": 56927, "error": 0, "role": "reference", "note": "O(N^2) naive DFT - BOTTLENECK"},
+        {"kernel": "Poisson", "variant": "GPU", "size": "32^3", "time_ms": 9.7, "error": 5.2e-13, "speedup": 5868, "status": "PASS"},
+        {"kernel": "XC-LDA", "variant": "CPU", "size": "48^3", "time_ms": 18.1, "error": 0, "role": "reference"},
+        {"kernel": "XC-LDA", "variant": "GPU", "size": "48^3", "time_ms": 3.5, "error": 6.4e-12, "speedup": 5.1, "status": "PASS"},
+        {"kernel": "Adjointness", "variant": "<AP,w>=<P,ATw>", "size": "16^3x4", "error": 2.0e-15, "status": "PASS"},
+        {"kernel": "Adjointness", "variant": "H-symmetry", "size": "16^3x4", "error": 0, "status": "PASS"}
+      ]
+    },
+    "E4_solvers": {
+      "suite": "e4_solvers_profile",
+      "status": "ALL PASS (2 known issues)",
+      "test_time_sec": 24.64,
+      "entries": [
+        {"kernel": "DenseEig", "variant": "Jacobi", "size": "256^2", "time_ms": 193, "error": 2e-15, "status": "PASS"},
+        {"kernel": "SP2", "variant": "CPU", "size": "n=256", "time_ms": 1762, "error": 3.6e-15, "role": "reference"},
+        {"kernel": "SP2", "variant": "GPU", "size": "n=256", "time_ms": 40, "error": 7e-15, "speedup": 44, "status": "PASS"},
+        {"kernel": "ChFSI", "variant": "filter", "size": "various", "status": "KNOWN-ISSUE: filter direction inverted"},
+        {"kernel": "FOE", "variant": "Chebyshev", "size": "various", "error": 7e-15, "status": "PASS"},
+        {"kernel": "OMM", "variant": "CG", "size": "various", "error": 0.1, "status": "KNOWN-ISSUE: CG stuck"},
+        {"kernel": "Broker", "variant": "dispatch", "size": "R0/R1/R2", "status": "PASS"}
+      ]
+    },
+    "E5_scf": {
+      "suite": "e5_scf_profile",
+      "status": "ALL PASS",
+      "test_time_sec": 2.04,
+      "entries": [
+        {"kernel": "SCF", "variant": "Pulay", "size": "n=8", "time_ms": 16.7, "error": 5.1e-9, "iters": 13, "status": "PASS"},
+        {"kernel": "SCF", "variant": "simple", "size": "n=8", "time_ms": 0.18, "error": 5.4e-9, "iters": 19, "status": "PASS"},
+        {"kernel": "SCF", "variant": "Pulay", "size": "n=16", "time_ms": 1.0, "error": 6.4e-9, "iters": 20, "status": "PASS"},
+        {"kernel": "SCF", "variant": "simple", "size": "n=16", "time_ms": 0.78, "error": 5.8e-9, "iters": 18, "status": "PASS"},
+        {"kernel": "SCF", "variant": "Pulay", "size": "n=32", "time_ms": 8.1, "error": 6.1e-9, "iters": 30, "status": "PASS"},
+        {"kernel": "SCF", "variant": "simple", "size": "n=32", "time_ms": 4.9, "error": 6.2e-9, "iters": 18, "status": "PASS"},
+        {"kernel": "SCF", "variant": "Pulay", "size": "n=64", "time_ms": 292.5, "error": 9.8e-9, "iters": 129, "status": "PASS"},
+        {"kernel": "SCF", "variant": "simple", "size": "n=64", "time_ms": 268.4, "error": 9.1e-9, "iters": 75, "status": "PASS"},
+        {"kernel": "EnergyAssembly", "variant": "components", "size": "n=32", "time_ms": 0.005, "error": 0, "status": "PASS"},
+        {"kernel": "Stress", "variant": "FD-vs-virial", "size": "4 atoms", "time_ms": 0.004, "error": 2.8e-13, "status": "PASS"}
+      ]
+    },
+    "E6_dynamics": {
+      "suite": "e6_dynamics_profile",
+      "status": "ALL PASS (1 known bug)",
+      "test_time_sec": 0.01,
+      "entries": [
+        {"kernel": "Forces", "variant": "analytic-vs-FD", "size": "4 atoms", "time_ms": 0.003, "error": 2.9e-13, "status": "PASS", "note": "KNOWN BUG: FD5Force sign inverted, test uses negated forces"},
+        {"kernel": "XLBOMD", "variant": "NVE-drift", "size": "2 atoms, 100 steps", "time_ms": 0.015, "drift_uHa_at_ps": 7762, "status": "PASS", "note": "short sim inflates drift rate"},
+        {"kernel": "XLBOMD", "variant": "solves/step", "size": "2 atoms", "time_ms": 0, "error": 0.01, "status": "PASS"},
+        {"kernel": "Optimizer", "variant": "FIRE", "size": "2 atoms", "time_ms": 0.007, "error": 9.7e-7, "steps": 86, "status": "PASS"}
+      ]
+    },
+    "E7_parallel": {
+      "suite": "e7_parallel_profile",
+      "status": "ALL PASS",
+      "test_time_sec": 10.66,
+      "entries": [
+        {"kernel": "Partitioner", "variant": "RCB", "size": "100/2", "time_ms": 0.008, "imbalance": 0, "status": "PASS"},
+        {"kernel": "Partitioner", "variant": "RCB", "size": "1000/4", "time_ms": 0.174, "imbalance": 0, "status": "PASS"},
+        {"kernel": "Partitioner", "variant": "RCB", "size": "4000/8", "time_ms": 0.701, "imbalance": 0, "status": "PASS"},
+        {"kernel": "Partitioner", "variant": "RCB", "size": "10000/16", "time_ms": 3.009, "imbalance": 0, "status": "PASS"},
+        {"kernel": "HaloExchange", "variant": "1D", "size": "10000+8", "time_ms": 0.005, "error": 0, "status": "PASS"},
+        {"kernel": "HaloExchange", "variant": "3D", "size": "10^3+halo", "time_ms": 0.026, "error": 0, "status": "PASS"},
+        {"kernel": "CommFraction", "variant": "model", "size": "1MB/10ms", "error": 0, "status": "PASS"}
+      ]
+    },
+    "E8_hybrids": {
+      "suite": "e8_hybrids_profile",
+      "status": "ALL PASS (1 known issue)",
+      "test_time_sec": 1.25,
+      "entries": [
+        {"kernel": "D3", "variant": "pair", "size": "H-H R=3.0", "energy_Ha": -3.653e-4, "status": "PASS"},
+        {"kernel": "D3", "variant": "pair", "size": "C-C R=3.5", "energy_Ha": -5.213e-3, "status": "PASS"},
+        {"kernel": "D3", "variant": "pair", "size": "O-O R=3.0", "energy_Ha": -1.040e-3, "status": "PASS"},
+        {"kernel": "D3", "variant": "H2O-dimer", "size": "6 atoms", "time_ms": 0.001, "energy_Ha": -7.332e-3, "status": "PASS"},
+        {"kernel": "ISDF", "variant": "select", "size": "100x10 r=5", "time_ms": 0.019, "error": 0.935, "status": "KNOWN-ISSUE: no LSQ fit"},
+        {"kernel": "ISDF", "variant": "select", "size": "500x20 r=10", "time_ms": 0.127, "error": 0.976, "status": "KNOWN-ISSUE: no LSQ fit"},
+        {"kernel": "ISDF", "variant": "select", "size": "2000x50 r=20", "time_ms": 3.796, "error": 0.990, "status": "KNOWN-ISSUE: no LSQ fit"},
+        {"kernel": "ACE", "variant": "build", "size": "n=64 occ=16", "time_ms": 0.006, "error": 0, "status": "PASS"},
+        {"kernel": "ACE", "variant": "PBE0-energy", "size": "formula", "error": 0, "status": "PASS"}
+      ]
+    },
+    "E9_verification": {
+      "suite": "e9_verification_profile",
+      "status": "ALL PASS (1 known issue, 1 deferred)",
+      "test_time_sec": 0.11,
+      "entries": [
+        {"rung": 1, "name": "Kernel", "measured": 7e-15, "budget": 8, "unit": "ULP", "status": "PASS"},
+        {"rung": 2, "name": "Operator", "measured": 2e-15, "budget": 1e-12, "status": "PASS"},
+        {"rung": 3, "name": "Energy", "measured": 5e-9, "budget": 5e-4, "unit": "Ha", "status": "PASS"},
+        {"rung": 4, "name": "Force", "measured": 3e-13, "budget": 1e-6, "unit": "Ha/Bohr", "status": "PASS"},
+        {"rung": 5, "name": "Dynamics", "measured": 7762, "budget": 30, "unit": "uHa/atom/ps", "status": "KNOWN-ISSUE: short sim"},
+        {"rung": 6, "name": "Physics", "status": "SKIP: deferred"}
+      ]
+    }
+  },
+  "known_issues": [
+    {"id": 1, "engine": "E4", "name": "ChFSI filter direction", "root_cause": "Chebyshev filter amplifies highest eigenvalues", "impact": "Solver converges to wrong spectrum end", "fix": "Negate spectral window"},
+    {"id": 2, "engine": "E4", "name": "OMM CG convergence", "root_cause": "No line search", "impact": "CG stuck at 0.1 error", "fix": "Add Armijo line search"},
+    {"id": 3, "engine": "E6", "name": "FD5Force sign", "root_cause": "Formula computes dE/dx not -dE/dx", "impact": "Forces have wrong sign", "fix": "Remove negative sign in formula"},
+    {"id": 4, "engine": "E8", "name": "ISDF no LSQ fit", "root_cause": "Delta interpolation only", "impact": "Reconstruction error ~0.9", "fix": "Implement least-squares fit"},
+    {"id": 5, "engine": "E3", "name": "Poisson CPU O(N^2)", "root_cause": "Naive DFT, no FFT", "impact": "57s at 32^3, hangs at 64^3", "fix": "Link FFTW or implement FFT"}
+  ],
+  "gpu_speedup_summary": [
+    {"kernel": "VmatBuild 48^3x32", "cpu_ms": 90.3, "gpu_ms": 20.3, "speedup": 4.4, "accuracy": 1.3e-13},
+    {"kernel": "Poisson 16^3", "cpu_ms": 1053, "gpu_ms": 5.0, "speedup": 211, "accuracy": 8.2e-15},
+    {"kernel": "Poisson 32^3", "cpu_ms": 56927, "gpu_ms": 9.7, "speedup": 5868, "accuracy": 5.2e-13},
+    {"kernel": "XC-LDA 48^3", "cpu_ms": 18.1, "gpu_ms": 3.5, "speedup": 5.1, "accuracy": 6.4e-12},
+    {"kernel": "SP2 n=256", "cpu_ms": 1762, "gpu_ms": 40, "speedup": 44, "accuracy": 7e-15}
+  ]
+}

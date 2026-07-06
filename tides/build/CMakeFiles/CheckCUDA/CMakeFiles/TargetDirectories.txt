@@ -1,0 +1,2 @@
+/home/niel/git/New_DFT_Code/tides/build/CMakeFiles/CheckCUDA/CMakeFiles/edit_cache.dir
+/home/niel/git/New_DFT_Code/tides/build/CMakeFiles/CheckCUDA/CMakeFiles/rebuild_cache.dir

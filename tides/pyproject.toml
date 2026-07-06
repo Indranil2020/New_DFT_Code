@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tides-dft"
+version = "0.1.0a0"
+description = "TIDES — TIle-based Democratic Electronic-Structure suite"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+authors = [
+    {name = "TIDES Team"},
+]
+keywords = ["DFT", "density functional theory", "electronic structure", "GPU", "NAO"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+[project.optional-dependencies]
+ase = ["ase>=3.22", "numpy>=1.20"]
+jax = ["jax>=0.4.0", "jaxlib>=0.4.0"]
+toml = ["tomli>=2.0; python_version < '3.11'"]
+dev = ["pytest>=7.0", "pytest-cov", "ruff", "mypy"]
+
+[project.scripts]
+tides = "tides.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/tides-dft/tides"
+Documentation = "https://tides-dft.github.io/tides"
+Issues = "https://github.com/tides-dft/tides/issues"
+
+[tool.setuptools.packages.find]
+where = ["api/python"]
+
+[tool.setuptools.package-dir]
+"" = "api/python"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# ERR001 custom rule: no try/except. This is enforced separately.
+"api/python/tides/__init__.py" = ["E402"]  # importlib before imports is intentional
+
+[tool.pytest.ini_options]
+testpaths = ["api/python/tests", "examples"]
+python_files = ["test_*.py", "tutorial_*.py"]
+python_functions = ["test_*", "run_*"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

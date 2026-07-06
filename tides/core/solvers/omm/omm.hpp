@@ -49,6 +49,7 @@ class OMMSolver {
 
     double E_prev = 1e30;
     std::vector<double> G(n * n_occ, 0.0);  // gradient
+    std::vector<double> G_prev(n * n_occ, 0.0);  // previous gradient
     std::vector<double> D(n * n_occ, 0.0);  // search direction
     bool first = true;
     double beta = 0.0;
@@ -62,12 +63,6 @@ class OMMSolver {
         for (std::size_t i = 0; i < n; ++i)
           E += C[k * n + i] * HC[k * n + i];
       res.energy = E;
-
-      if (std::fabs(E - E_prev) < tol) {
-        res.converged = true;
-        break;
-      }
-      E_prev = E;
 
       // Gradient: G = H C - S C (C^T H C). First project to S-orthogonal.
       // G = H C - S C * Lambda  where Lambda = C^T H C (the projected H).
@@ -84,34 +79,54 @@ class OMMSolver {
           G[k * n + i] = HC[k * n + i] - sCL;
         }
 
-      // S-project gradient (remove the S-orthogonal component).
-      // G_proj = G - S C (C^T G) — ensure G is S-orthogonal to C.
-      auto CG = SubspaceProject(n, n_occ, C, G, S);
+      // S-project gradient: G_proj = G - S*C*(C^T*G), ensuring G is
+      // S-orthogonal to C.  Compute CtG = C^T * G (n_occ x n_occ), then
+      // subtract S*C*CtG from G.
+      auto CtG = SubspaceProject(n, n_occ, C, G);  // C^T * G (no S)
       for (std::size_t k = 0; k < n_occ; ++k)
-        for (std::size_t i = 0; i < n; ++i)
-          G[k * n + i] -= CG[k * n_occ + k] * C[k * n + i];  // simplified
+        for (std::size_t i = 0; i < n; ++i) {
+          double sc_ctg = 0.0;
+          for (std::size_t l = 0; l < n_occ; ++l)
+            sc_ctg += SC[l * n + i] * CtG[k * n_occ + l];
+          G[k * n + i] -= sc_ctg;
+        }
 
       // CG step: D = -G + beta * D (Polak-Ribiere beta).
-      double GdotG = 0.0, GdotGprev = 0.0;
+      double GdotG = 0.0, GdotGprev = 0.0, GdotGmGp = 0.0;
       for (std::size_t i = 0; i < G.size(); ++i) {
         GdotG += G[i] * G[i];
-        GdotGprev += D[i] * D[i];  // placeholder (should be G_prev)
+        GdotGprev += G_prev[i] * G_prev[i];
+        GdotGmGp += G[i] * (G[i] - G_prev[i]);
       }
+
+      // Convergence: check relative gradient norm.
+      double rel_grad = std::sqrt(GdotG) / std::max(1.0, std::fabs(E));
+      if (rel_grad < tol) {
+        res.converged = true;
+        break;
+      }
+
       if (first || GdotGprev < 1e-30) {
         beta = 0.0;
         first = false;
       } else {
-        beta = GdotG / GdotGprev;  // Fletcher-Reeves (simple)
+        beta = GdotGmGp / GdotGprev;  // Polak-Ribiere
+        if (beta < 0.0) beta = 0.0;  // restart if negative
       }
+      G_prev = G;
       for (std::size_t i = 0; i < D.size(); ++i)
         D[i] = -G[i] + beta * D[i];
 
       // Line search: C_new = C + alpha * D, then S-orthonormalize.
-      // Simple backtracking line search on E.
-      double alpha = 0.01;
+      // Armijo backtracking: accept if E_trial <= E + c1*alpha*(D^T*G).
+      const double c1 = 1e-4;  // Armijo constant
+      double DdotG = 0.0;
+      for (std::size_t i = 0; i < D.size(); ++i)
+        DdotG += D[i] * G[i];
+      double alpha = 1.0;  // initial step (will be reduced if needed)
       double E_best = E;
       std::vector<double> C_best = C;
-      for (int ls = 0; ls < 10; ++ls) {
+      for (int ls = 0; ls < 30; ++ls) {
         std::vector<double> C_trial(n * n_occ);
         for (std::size_t i = 0; i < C.size(); ++i)
           C_trial[i] = C[i] + alpha * D[i];
@@ -121,29 +136,59 @@ class OMMSolver {
         for (std::size_t k = 0; k < n_occ; ++k)
           for (std::size_t i = 0; i < n; ++i)
             E_trial += C_trial[k * n + i] * HC_trial[k * n + i];
-        if (E_trial < E_best) {
+        // Armijo condition: E_trial <= E + c1 * alpha * DdotG
+        if (E_trial <= E + c1 * alpha * DdotG) {
           E_best = E_trial;
           C_best = C_trial;
-          alpha *= 1.5;  // try a bigger step
-        } else {
-          alpha *= 0.5;  // backtrack
-          if (alpha < 1e-12) break;
+          break;
         }
+        alpha *= 0.5;  // backtrack
+        if (alpha < 1e-15) break;
       }
       C = C_best;
     }
 
-    // Extract eigenvalues as Rayleigh quotients.
+    // Final Rayleigh-Ritz: diagonalize H in the occupied subspace to get
+    // proper eigenvalues/eigenvectors. The OMM minimizes Tr(C^T H C) but the
+    // individual columns of C are not eigenvectors — they just span the space.
     auto HC = MatMul(n, n_occ, H, C);
-    res.eigenvalues.resize(n_occ);
-    res.eigenvectors = C;
-    for (std::size_t k = 0; k < n_occ; ++k) {
-      double rq = 0.0, norm = 0.0;
-      for (std::size_t i = 0; i < n; ++i) {
-        rq += C[k * n + i] * HC[k * n + i];
-        norm += C[k * n + i] * C[k * n + i];
+    auto H_proj = SubspaceProject(n, n_occ, C, HC);
+    auto SC = MatMul(n, n_occ, S, C);
+    auto S_proj = SubspaceProject(n, n_occ, C, SC);
+    // Symmetrize H_proj.
+    for (std::size_t k = 0; k < n_occ; ++k)
+      for (std::size_t l = k + 1; l < n_occ; ++l) {
+        double avg = 0.5 * (H_proj[k * n_occ + l] + H_proj[l * n_occ + k]);
+        H_proj[k * n_occ + l] = avg;
+        H_proj[l * n_occ + k] = avg;
       }
-      res.eigenvalues[k] = (norm > 1e-30) ? rq / norm : 0.0;
+    auto rr = BatchedDenseEig::SolveGeneralized(n_occ, H_proj, S_proj);
+    if (rr.ok) {
+      res.eigenvalues.resize(n_occ);
+      for (std::size_t k = 0; k < n_occ; ++k)
+        res.eigenvalues[k] = rr.eigenvalues[k];
+      // Rotate: C_new = C * eigenvectors.
+      std::vector<double> C_rot(n * n_occ, 0.0);
+      for (std::size_t k = 0; k < n_occ; ++k)
+        for (std::size_t i = 0; i < n; ++i) {
+          double s = 0.0;
+          for (std::size_t j = 0; j < n_occ; ++j)
+            s += C[j * n + i] * rr.eigenvectors[k * n_occ + j];
+          C_rot[k * n + i] = s;
+        }
+      res.eigenvectors = C_rot;
+    } else {
+      // Fallback: raw Rayleigh quotients.
+      res.eigenvalues.resize(n_occ);
+      res.eigenvectors = C;
+      for (std::size_t k = 0; k < n_occ; ++k) {
+        double rq = 0.0, norm = 0.0;
+        for (std::size_t i = 0; i < n; ++i) {
+          rq += C[k * n + i] * HC[k * n + i];
+          norm += C[k * n + i] * C[k * n + i];
+        }
+        res.eigenvalues[k] = (norm > 1e-30) ? rq / norm : 0.0;
+      }
     }
     return res;
   }

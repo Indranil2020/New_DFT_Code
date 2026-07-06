@@ -300,4 +300,19 @@ struct OzakiGemmResult {
   return result;
 }
 
+struct CudaOzakiGemmResult {
+  std::vector<double> values;
+  double max_abs_error_vs_long_double = 0.0;
+  double analytical_abs_bound = 0.0;
+  double kernel_ms = 0.0;
+  std::uint32_t a_slice_count = 0;
+  std::uint32_t b_slice_count = 0;
+  std::uint32_t slice_pair_count = 0;
+  OperationLedger ledger;
+};
+
+[[nodiscard]] Result<CudaOzakiGemmResult> GemmOzakiFp16Cuda(
+    std::size_t m, std::size_t k, std::size_t n,
+    const std::vector<double>& a, const std::vector<double>& b);
+
 }  // namespace tides::tile

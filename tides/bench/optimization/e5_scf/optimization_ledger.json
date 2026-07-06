@@ -1,0 +1,34 @@
+{
+  "engine": "E5 SCF Engine",
+  "date": "2026-07-06",
+  "status": "ALL PASS (12 profile entries)",
+  "profiling": {
+    "mixing": {
+      "pulay": "PASS",
+      "kerker": "PASS",
+      "broyden": "PASS",
+      "simple": "PASS"
+    },
+    "energy_assembly": {
+      "n=8": "0.001ms",
+      "n=16": "0.001ms",
+      "n=32": "0.004ms",
+      "status": "PASS"
+    },
+    "stress_tensor": {
+      "4_atoms": "0.004ms, error=2.791e-13",
+      "status": "PASS (FD vs virial)"
+    }
+  },
+  "known_issues": [],
+  "mpi_status": "NOT TESTED — no MPI distributed SCF",
+  "gpu_status": "NOT TESTED — SCF loop uses CPU kernels (energy assembly uses f64e)",
+  "optimization_priorities": [
+    {"priority": 1, "item": "Add multi-secant mixing (generalization of Pulay/Broyden)", "paper": "arXiv:2501.08697"},
+    {"priority": 2, "item": "Kerker preconditioning for metallic systems", "paper": "arXiv:2606.26693"},
+    {"priority": 3, "item": "GPU-accelerated energy assembly via f64e reductions"},
+    {"priority": 4, "item": "SCF restart from checkpoint for long-running calculations"},
+    {"priority": 5, "item": "Stress tensor implementation for periodic systems (Phase B)"},
+    {"priority": 6, "item": "ML-accelerated initial density guess", "paper": "arXiv:2406.15873"}
+  ]
+}

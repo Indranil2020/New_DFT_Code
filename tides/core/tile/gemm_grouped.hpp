@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -23,6 +24,8 @@ struct CudaGroupedGemmResult {
   std::vector<std::vector<double>> c_tiles;
   OperationLedger ledger;
   double kernel_ms = 0.0;
+  double postprocess_ms = 0.0;
+  std::size_t backend_shape_buckets = 0;
 };
 
 struct CudaGraphReplayResult {

@@ -1,5 +1,6 @@
 #include "tile/gemm_grouped.hpp"
 
+#include <cublas_v2.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
@@ -11,6 +12,7 @@
 #include <limits>
 #include <numeric>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace tides::tile {
@@ -24,6 +26,39 @@ constexpr int kBlockEdge = 16;
   }
   return Status::IoError(std::string(context) + ": " +
                          cudaGetErrorString(error));
+}
+
+[[nodiscard]] const char* CublasStatusName(cublasStatus_t status) {
+  switch (status) {
+    case CUBLAS_STATUS_SUCCESS:
+      return "SUCCESS";
+    case CUBLAS_STATUS_NOT_INITIALIZED:
+      return "NOT_INITIALIZED";
+    case CUBLAS_STATUS_ALLOC_FAILED:
+      return "ALLOC_FAILED";
+    case CUBLAS_STATUS_INVALID_VALUE:
+      return "INVALID_VALUE";
+    case CUBLAS_STATUS_ARCH_MISMATCH:
+      return "ARCH_MISMATCH";
+    case CUBLAS_STATUS_MAPPING_ERROR:
+      return "MAPPING_ERROR";
+    case CUBLAS_STATUS_EXECUTION_FAILED:
+      return "EXECUTION_FAILED";
+    case CUBLAS_STATUS_INTERNAL_ERROR:
+      return "INTERNAL_ERROR";
+    case CUBLAS_STATUS_NOT_SUPPORTED:
+      return "NOT_SUPPORTED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+[[nodiscard]] Status CublasStatus(cublasStatus_t status, const char* context) {
+  if (status == CUBLAS_STATUS_SUCCESS) {
+    return Status::Ok();
+  }
+  return Status::IoError(std::string(context) + ": " +
+                         CublasStatusName(status));
 }
 
 __global__ void GroupedGemmKernel(const double* a_all, const double* b_all,
@@ -87,6 +122,26 @@ __global__ void GroupedGemmFp16AccumKernel(
       epilogue_scales[problem] * static_cast<double>(sum);
 }
 
+__global__ void ScaleBucketFloatGemmOutputKernel(
+    const float* c_bucket, double* c_all, std::uint32_t first_problem,
+    const std::uint64_t* c_offsets, const double* epilogue_scales,
+    std::uint32_t m, std::uint32_t n) {
+  const std::uint32_t local_problem = static_cast<std::uint32_t>(blockIdx.z);
+  const std::uint32_t global_problem = first_problem + local_problem;
+  const std::uint32_t row =
+      static_cast<std::uint32_t>(blockIdx.y * blockDim.y + threadIdx.y);
+  const std::uint32_t col =
+      static_cast<std::uint32_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (row >= m || col >= n) {
+    return;
+  }
+  const std::uint64_t local_index =
+      static_cast<std::uint64_t>(local_problem) * m * n + row * n + col;
+  const std::uint64_t output_index = c_offsets[global_problem] + row * n + col;
+  c_all[output_index] = epilogue_scales[global_problem] *
+                        static_cast<double>(c_bucket[local_index]);
+}
+
 template <typename T>
 Status CopyToDevice(const std::vector<T>& host, T** device) {
   if (host.empty()) {
@@ -99,6 +154,26 @@ Status CopyToDevice(const std::vector<T>& host, T** device) {
     return CudaStatus(error, "cudaMalloc");
   }
   error = cudaMemcpy(*device, host.data(), bytes, cudaMemcpyHostToDevice);
+  if (error != cudaSuccess) {
+    cudaFree(*device);
+    *device = nullptr;
+    return CudaStatus(error, "cudaMemcpy H2D");
+  }
+  return Status::Ok();
+}
+
+template <typename T>
+Status CopySpanToDevice(const T* host, std::size_t count, T** device) {
+  if (count == 0) {
+    *device = nullptr;
+    return Status::Ok();
+  }
+  const std::size_t bytes = count * sizeof(T);
+  cudaError_t error = cudaMalloc(reinterpret_cast<void**>(device), bytes);
+  if (error != cudaSuccess) {
+    return CudaStatus(error, "cudaMalloc");
+  }
+  error = cudaMemcpy(*device, host, bytes, cudaMemcpyHostToDevice);
   if (error != cudaSuccess) {
     cudaFree(*device);
     *device = nullptr;
@@ -131,6 +206,17 @@ struct PackedProblems {
   bool uses_nontrivial_scale = false;
 };
 
+struct MixedShapeBucket {
+  std::uint32_t m = 0;
+  std::uint32_t k = 0;
+  std::uint32_t n = 0;
+  std::uint32_t first_problem = 0;
+  std::uint64_t a_offset = 0;
+  std::uint64_t b_offset = 0;
+  std::uint64_t c_offset = 0;
+  std::uint32_t count = 0;
+};
+
 struct PackedMixedProblems {
   std::vector<std::uint64_t> a_offsets;
   std::vector<std::uint64_t> b_offsets;
@@ -142,6 +228,8 @@ struct PackedMixedProblems {
   std::vector<__half> a_all;
   std::vector<__half> b_all;
   std::vector<double> c_all;
+  std::vector<std::size_t> original_indices;
+  std::vector<MixedShapeBucket> buckets;
   std::uint32_t max_m = 0;
   std::uint32_t max_n = 0;
   std::uint64_t products = 0;
@@ -281,8 +369,22 @@ Result<PackedMixedProblems> PackMixedProblems(
   packed.ns.assign(problems.size(), 0);
   packed.epilogue_scales.assign(problems.size(), 1.0);
 
-  for (std::size_t i = 0; i < problems.size(); ++i) {
-    const CudaGemmProblem& problem = problems[i];
+  std::vector<std::size_t> order(problems.size(), 0);
+  std::iota(order.begin(), order.end(), std::size_t{0});
+  std::stable_sort(order.begin(), order.end(),
+                   [&](std::size_t lhs, std::size_t rhs) {
+                     const CudaGemmProblem& a = problems[lhs];
+                     const CudaGemmProblem& b = problems[rhs];
+                     if (a.m != b.m) return a.m < b.m;
+                     if (a.k != b.k) return a.k < b.k;
+                     if (a.n != b.n) return a.n < b.n;
+                     return lhs < rhs;
+                   });
+  packed.original_indices.reserve(problems.size());
+
+  for (std::size_t packed_i = 0; packed_i < order.size(); ++packed_i) {
+    const std::size_t original_i = order[packed_i];
+    const CudaGemmProblem& problem = problems[original_i];
     if (problem.m == 0 || problem.k == 0 || problem.n == 0) {
       return Status::InvalidArgument(
           "mixed grouped GEMM dimensions must be nonzero");
@@ -305,18 +407,36 @@ Result<PackedMixedProblems> PackMixedProblems(
 
     std::vector<float> a_quantized(a_size, 0.0F);
     std::vector<float> b_quantized(b_size, 0.0F);
-    packed.a_offsets[i] = static_cast<std::uint64_t>(packed.a_all.size());
-    packed.b_offsets[i] = static_cast<std::uint64_t>(packed.b_all.size());
-    packed.c_offsets[i] = static_cast<std::uint64_t>(packed.c_all.size());
-    packed.ms[i] = problem.m;
-    packed.ks[i] = problem.k;
-    packed.ns[i] = problem.n;
-    packed.epilogue_scales[i] =
+    packed.a_offsets[packed_i] =
+        static_cast<std::uint64_t>(packed.a_all.size());
+    packed.b_offsets[packed_i] =
+        static_cast<std::uint64_t>(packed.b_all.size());
+    packed.c_offsets[packed_i] =
+        static_cast<std::uint64_t>(packed.c_all.size());
+    packed.ms[packed_i] = problem.m;
+    packed.ks[packed_i] = problem.k;
+    packed.ns[packed_i] = problem.n;
+    packed.original_indices.push_back(original_i);
+    packed.epilogue_scales[packed_i] =
         problem.a_scale * problem.b_scale * problem.epilogue_scale;
-    if (!std::isfinite(packed.epilogue_scales[i])) {
+    if (!std::isfinite(packed.epilogue_scales[packed_i])) {
       return Status::InvalidArgument(
           "mixed grouped GEMM combined epilogue scale must be finite");
     }
+    if (packed.buckets.empty() || packed.buckets.back().m != problem.m ||
+        packed.buckets.back().k != problem.k ||
+        packed.buckets.back().n != problem.n) {
+      packed.buckets.push_back(MixedShapeBucket{
+          problem.m,
+          problem.k,
+          problem.n,
+          static_cast<std::uint32_t>(packed_i),
+          packed.a_offsets[packed_i],
+          packed.b_offsets[packed_i],
+          packed.c_offsets[packed_i],
+          0});
+    }
+    ++packed.buckets.back().count;
     for (std::size_t j = 0; j < a_size; ++j) {
       auto half_value = ToHalfFinite(problem.a[j]);
       if (!half_value.ok()) return half_value.status();
@@ -367,6 +487,17 @@ struct DevicePackedMixedProblems {
   double* epilogue_scales = nullptr;
 };
 
+struct DeviceMixedShapeBucket {
+  __half* a = nullptr;
+  __half* b = nullptr;
+  float* c = nullptr;
+  std::uint32_t m = 0;
+  std::uint32_t k = 0;
+  std::uint32_t n = 0;
+  std::uint32_t first_problem = 0;
+  std::uint32_t count = 0;
+};
+
 void FreeDevicePackedProblems(DevicePackedProblems* device) {
   FreeDevice(device->a);
   FreeDevice(device->b);
@@ -393,6 +524,17 @@ void FreeDevicePackedMixedProblems(DevicePackedMixedProblems* device) {
   FreeDevice(device->ns);
   FreeDevice(device->epilogue_scales);
   *device = {};
+}
+
+void FreeDeviceMixedShapeBuckets(
+    std::vector<DeviceMixedShapeBucket>* buckets) {
+  for (DeviceMixedShapeBucket& bucket : *buckets) {
+    FreeDevice(bucket.a);
+    FreeDevice(bucket.b);
+    FreeDevice(bucket.c);
+    bucket = {};
+  }
+  buckets->clear();
 }
 
 Status CopyPackedToDevice(const PackedProblems& packed,
@@ -443,6 +585,61 @@ Status CopyMixedPackedToDevice(const PackedMixedProblems& packed,
   return status;
 }
 
+Status CopyMixedShapeBucketsToDevice(
+    const PackedMixedProblems& packed,
+    std::vector<DeviceMixedShapeBucket>* device_buckets) {
+  device_buckets->clear();
+  device_buckets->reserve(packed.buckets.size());
+  for (const MixedShapeBucket& bucket : packed.buckets) {
+    DeviceMixedShapeBucket device_bucket;
+    device_bucket.m = bucket.m;
+    device_bucket.k = bucket.k;
+    device_bucket.n = bucket.n;
+    device_bucket.first_problem = bucket.first_problem;
+    device_bucket.count = bucket.count;
+
+    const std::size_t a_count =
+        static_cast<std::size_t>(bucket.count) * bucket.m * bucket.k;
+    const std::size_t b_count =
+        static_cast<std::size_t>(bucket.count) * bucket.k * bucket.n;
+    const std::size_t c_count =
+        static_cast<std::size_t>(bucket.count) * bucket.m * bucket.n;
+    Status status =
+        CopySpanToDevice(packed.a_all.data() + bucket.a_offset, a_count,
+                         &device_bucket.a);
+    if (!status.ok()) {
+      FreeDeviceMixedShapeBuckets(device_buckets);
+      return status;
+    }
+    status = CopySpanToDevice(packed.b_all.data() + bucket.b_offset, b_count,
+                              &device_bucket.b);
+    if (!status.ok()) {
+      FreeDevice(device_bucket.a);
+      FreeDeviceMixedShapeBuckets(device_buckets);
+      return status;
+    }
+    cudaError_t error =
+        cudaMalloc(reinterpret_cast<void**>(&device_bucket.c),
+                   c_count * sizeof(float));
+    if (error != cudaSuccess) {
+      FreeDevice(device_bucket.a);
+      FreeDevice(device_bucket.b);
+      FreeDeviceMixedShapeBuckets(device_buckets);
+      return CudaStatus(error, "cudaMalloc mixed bucket C");
+    }
+    error = cudaMemset(device_bucket.c, 0, c_count * sizeof(float));
+    if (error != cudaSuccess) {
+      FreeDevice(device_bucket.a);
+      FreeDevice(device_bucket.b);
+      FreeDevice(device_bucket.c);
+      FreeDeviceMixedShapeBuckets(device_buckets);
+      return CudaStatus(error, "cudaMemset mixed bucket C");
+    }
+    device_buckets->push_back(device_bucket);
+  }
+  return Status::Ok();
+}
+
 std::vector<std::vector<double>> SplitOutputTiles(
     const std::vector<CudaGemmProblem>& problems,
     const std::vector<double>& c_all,
@@ -459,18 +656,18 @@ std::vector<std::vector<double>> SplitOutputTiles(
   return c_tiles;
 }
 
-std::vector<std::vector<double>> SplitOutputTilesFromPacked(
+std::vector<std::vector<double>> SplitMixedOutputTilesFromPacked(
     const std::vector<std::uint32_t>& ms,
     const std::vector<std::uint32_t>& ns,
     const std::vector<double>& c_all,
-    const std::vector<std::uint64_t>& c_offsets) {
-  std::vector<std::vector<double>> c_tiles;
-  c_tiles.reserve(ms.size());
+    const std::vector<std::uint64_t>& c_offsets,
+    const std::vector<std::size_t>& original_indices) {
+  std::vector<std::vector<double>> c_tiles(ms.size());
   for (std::size_t i = 0; i < ms.size(); ++i) {
     const std::size_t begin = static_cast<std::size_t>(c_offsets[i]);
     const std::size_t count = static_cast<std::size_t>(ms[i]) * ns[i];
-    c_tiles.emplace_back(c_all.begin() + begin,
-                         c_all.begin() + begin + count);
+    c_tiles[original_indices[i]] =
+        std::vector<double>(c_all.begin() + begin, c_all.begin() + begin + count);
   }
   return c_tiles;
 }
@@ -514,11 +711,145 @@ OperationLedgerEntry CudaMixedGemmLedgerEntry(std::uint64_t products,
       "CUDA FP16-store FP32-accumulate grouped tile GEMM reference kernel"};
 }
 
+Status CreateCublasHandle(cublasHandle_t* handle, cudaStream_t stream) {
+  cublasStatus_t status = cublasCreate(handle);
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    return CublasStatus(status, "cublasCreate");
+  }
+  status = cublasSetMathMode(*handle, CUBLAS_TENSOR_OP_MATH);
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    cublasDestroy(*handle);
+    *handle = nullptr;
+    return CublasStatus(status, "cublasSetMathMode");
+  }
+  status = cublasSetStream(*handle, stream);
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    cublasDestroy(*handle);
+    *handle = nullptr;
+    return CublasStatus(status, "cublasSetStream");
+  }
+  return Status::Ok();
+}
+
+Status RunMixedCublasBuckets(
+    cublasHandle_t handle,
+    const std::vector<DeviceMixedShapeBucket>& device_buckets) {
+  const float alpha = 1.0F;
+  const float beta = 0.0F;
+  for (const DeviceMixedShapeBucket& bucket : device_buckets) {
+    const int m = static_cast<int>(bucket.n);
+    const int n = static_cast<int>(bucket.m);
+    const int k = static_cast<int>(bucket.k);
+    const long long a_stride =
+        static_cast<long long>(bucket.m) * bucket.k;
+    const long long b_stride =
+        static_cast<long long>(bucket.k) * bucket.n;
+    const long long c_stride =
+        static_cast<long long>(bucket.m) * bucket.n;
+    const int batch_count = static_cast<int>(bucket.count);
+    const cublasStatus_t status = cublasGemmStridedBatchedEx(
+        handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, bucket.b,
+        CUDA_R_16F, m, b_stride, bucket.a, CUDA_R_16F, k, a_stride, &beta,
+        bucket.c, CUDA_R_32F, m, c_stride, batch_count, CUBLAS_COMPUTE_32F,
+        CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+    if (status != CUBLAS_STATUS_SUCCESS) {
+      return CublasStatus(status, "cublasGemmStridedBatchedEx");
+    }
+  }
+  return Status::Ok();
+}
+
+Status LaunchMixedScaleKernel(const PackedMixedProblems& packed,
+                              const DevicePackedMixedProblems& device,
+                              const std::vector<DeviceMixedShapeBucket>&
+                                  device_buckets,
+                              cudaStream_t stream) {
+  (void)packed;
+  const dim3 block(kBlockEdge, kBlockEdge);
+  for (const DeviceMixedShapeBucket& bucket : device_buckets) {
+    const dim3 grid((bucket.n + kBlockEdge - 1) / kBlockEdge,
+                    (bucket.m + kBlockEdge - 1) / kBlockEdge,
+                    static_cast<unsigned int>(bucket.count));
+    ScaleBucketFloatGemmOutputKernel<<<grid, block, 0, stream>>>(
+        bucket.c, device.c, bucket.first_problem, device.c_offsets,
+        device.epilogue_scales, bucket.m, bucket.n);
+    const Status status =
+        CudaStatus(cudaGetLastError(), "ScaleBucketFloatGemmOutputKernel launch");
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  return Status::Ok();
+}
+
+Status TimedRunMixedCublasAndScale(cublasHandle_t handle,
+                                   const PackedMixedProblems& packed,
+                                   const DevicePackedMixedProblems& device,
+                                   const std::vector<DeviceMixedShapeBucket>&
+                                       device_buckets,
+                                   cudaStream_t stream, double* gemm_ms,
+                                   double* scale_ms) {
+  cudaEvent_t start = nullptr;
+  cudaEvent_t after_gemm = nullptr;
+  cudaEvent_t stop = nullptr;
+  cudaError_t error = cudaEventCreate(&start);
+  if (error != cudaSuccess) {
+    return CudaStatus(error, "cudaEventCreate mixed start");
+  }
+  error = cudaEventCreate(&after_gemm);
+  if (error != cudaSuccess) {
+    cudaEventDestroy(start);
+    return CudaStatus(error, "cudaEventCreate mixed after_gemm");
+  }
+  error = cudaEventCreate(&stop);
+  if (error != cudaSuccess) {
+    cudaEventDestroy(start);
+    cudaEventDestroy(after_gemm);
+    return CudaStatus(error, "cudaEventCreate mixed stop");
+  }
+  cudaEventRecord(start, stream);
+  Status status = RunMixedCublasBuckets(handle, device_buckets);
+  if (!status.ok()) {
+    cudaEventDestroy(start);
+    cudaEventDestroy(after_gemm);
+    cudaEventDestroy(stop);
+    return status;
+  }
+  cudaEventRecord(after_gemm, stream);
+  status = LaunchMixedScaleKernel(packed, device, device_buckets, stream);
+  if (!status.ok()) {
+    cudaEventDestroy(start);
+    cudaEventDestroy(after_gemm);
+    cudaEventDestroy(stop);
+    return status;
+  }
+  cudaEventRecord(stop, stream);
+  error = cudaEventSynchronize(stop);
+  if (error != cudaSuccess) {
+    cudaEventDestroy(start);
+    cudaEventDestroy(after_gemm);
+    cudaEventDestroy(stop);
+    return CudaStatus(error, "mixed cuBLAS grouped GEMM synchronize");
+  }
+  float gemm_elapsed_ms = 0.0F;
+  float scale_elapsed_ms = 0.0F;
+  cudaEventElapsedTime(&gemm_elapsed_ms, start, after_gemm);
+  cudaEventElapsedTime(&scale_elapsed_ms, after_gemm, stop);
+  cudaEventDestroy(start);
+  cudaEventDestroy(after_gemm);
+  cudaEventDestroy(stop);
+  *gemm_ms = static_cast<double>(gemm_elapsed_ms);
+  *scale_ms = static_cast<double>(scale_elapsed_ms);
+  return Status::Ok();
+}
+
 }  // namespace
 
 struct CudaGroupedGemmFp16AccumPlan::Impl {
   PackedMixedProblems packed;
   DevicePackedMixedProblems device;
+  std::vector<DeviceMixedShapeBucket> cublas_buckets;
+  cublasHandle_t handle = nullptr;
 };
 
 CudaGroupedGemmFp16AccumPlan::CudaGroupedGemmFp16AccumPlan() = default;
@@ -528,6 +859,10 @@ CudaGroupedGemmFp16AccumPlan::CudaGroupedGemmFp16AccumPlan(Impl* impl)
 
 CudaGroupedGemmFp16AccumPlan::~CudaGroupedGemmFp16AccumPlan() {
   if (impl_ != nullptr) {
+    if (impl_->handle != nullptr) {
+      cublasDestroy(impl_->handle);
+    }
+    FreeDeviceMixedShapeBuckets(&impl_->cublas_buckets);
     FreeDevicePackedMixedProblems(&impl_->device);
     delete impl_;
     impl_ = nullptr;
@@ -544,6 +879,10 @@ CudaGroupedGemmFp16AccumPlan& CudaGroupedGemmFp16AccumPlan::operator=(
     CudaGroupedGemmFp16AccumPlan&& other) noexcept {
   if (this != &other) {
     if (impl_ != nullptr) {
+      if (impl_->handle != nullptr) {
+        cublasDestroy(impl_->handle);
+      }
+      FreeDeviceMixedShapeBuckets(&impl_->cublas_buckets);
       FreeDevicePackedMixedProblems(&impl_->device);
       delete impl_;
     }
@@ -562,15 +901,25 @@ bool CudaRuntimeAvailable() {
 }
 
 Status CudaRuntimeStatus() {
-  int count = 0;
-  const cudaError_t error = cudaGetDeviceCount(&count);
-  if (error != cudaSuccess) {
-    return CudaStatus(error, "cudaGetDeviceCount");
+  cudaFree(nullptr);
+  cudaGetLastError();
+  cudaError_t last_error = cudaSuccess;
+  for (int attempt = 0; attempt < 5; ++attempt) {
+    int count = 0;
+    const cudaError_t error = cudaGetDeviceCount(&count);
+    if (error == cudaSuccess) {
+      if (count == 0) {
+        return Status::IoError("cudaGetDeviceCount returned zero devices");
+      }
+      return Status::Ok();
+    }
+    last_error = error;
+    cudaGetLastError();
+    if (attempt + 1 < 5) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
   }
-  if (count == 0) {
-    return Status::IoError("cudaGetDeviceCount returned zero devices");
-  }
-  return Status::Ok();
+  return CudaStatus(last_error, "cudaGetDeviceCount");
 }
 
 Result<CudaGroupedGemmResult> GroupedGemmFp64Cuda(
@@ -673,64 +1022,53 @@ Result<CudaGroupedGemmResult> GroupedGemmFp16AccumCuda(
     FreeDevicePackedMixedProblems(&device);
     return status;
   }
-
-  cudaEvent_t start = nullptr;
-  cudaEvent_t stop = nullptr;
-  error = cudaEventCreate(&start);
-  if (error != cudaSuccess) {
+  std::vector<DeviceMixedShapeBucket> cublas_buckets;
+  status = CopyMixedShapeBucketsToDevice(packed, &cublas_buckets);
+  if (!status.ok()) {
     FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "cudaEventCreate mixed start");
-  }
-  error = cudaEventCreate(&stop);
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "cudaEventCreate mixed stop");
+    return status;
   }
 
-  const dim3 block(kBlockEdge, kBlockEdge);
-  const dim3 grid((packed.max_n + kBlockEdge - 1) / kBlockEdge,
-                  (packed.max_m + kBlockEdge - 1) / kBlockEdge,
-                  static_cast<unsigned int>(problems.size()));
+  cublasHandle_t handle = nullptr;
+  status = CreateCublasHandle(&handle, nullptr);
+  if (!status.ok()) {
+    FreeDeviceMixedShapeBuckets(&cublas_buckets);
+    FreeDevicePackedMixedProblems(&device);
+    return status;
+  }
 
-  cudaEventRecord(start);
-  GroupedGemmFp16AccumKernel<<<grid, block>>>(
-      device.a, device.b, device.c, device.a_offsets, device.b_offsets,
-      device.c_offsets, device.ms, device.ks, device.ns,
-      device.epilogue_scales);
-  error = cudaGetLastError();
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
+  double kernel_ms = 0.0;
+  double postprocess_ms = 0.0;
+  status = TimedRunMixedCublasAndScale(handle, packed, device, cublas_buckets,
+                                       nullptr, &kernel_ms, &postprocess_ms);
+  if (!status.ok()) {
+    cublasDestroy(handle);
+    FreeDeviceMixedShapeBuckets(&cublas_buckets);
     FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "GroupedGemmFp16AccumKernel launch");
+    return status;
   }
-  cudaEventRecord(stop);
-  error = cudaEventSynchronize(stop);
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "GroupedGemmFp16AccumKernel synchronize");
-  }
-  float kernel_ms = 0.0F;
-  cudaEventElapsedTime(&kernel_ms, start, stop);
-  cudaEventDestroy(start);
-  cudaEventDestroy(stop);
 
   error = cudaMemcpy(packed.c_all.data(), device.c,
                      packed.c_all.size() * sizeof(double),
                      cudaMemcpyDeviceToHost);
   if (error != cudaSuccess) {
+    cublasDestroy(handle);
+    FreeDeviceMixedShapeBuckets(&cublas_buckets);
     FreeDevicePackedMixedProblems(&device);
     return CudaStatus(error, "cudaMemcpy mixed D2H");
   }
 
+  cublasDestroy(handle);
+  FreeDeviceMixedShapeBuckets(&cublas_buckets);
   FreeDevicePackedMixedProblems(&device);
 
   CudaGroupedGemmResult result;
-  result.kernel_ms = static_cast<double>(kernel_ms);
-  result.c_tiles = SplitOutputTiles(problems, packed.c_all, packed.c_offsets);
+  result.kernel_ms = kernel_ms;
+  result.postprocess_ms = postprocess_ms;
+  result.backend_shape_buckets = packed.buckets.size();
+  result.c_tiles = SplitMixedOutputTilesFromPacked(
+      packed.ms, packed.ns, packed.c_all, packed.c_offsets,
+      packed.original_indices);
   result.ledger.Add(
       CudaMixedGemmLedgerEntry(packed.products, packed.max_abs_error_bound));
   return result;
@@ -756,6 +1094,20 @@ Result<CudaGroupedGemmFp16AccumPlan> BuildGroupedGemmFp16AccumCudaPlan(
     delete impl;
     return status;
   }
+  const Status bucket_status =
+      CopyMixedShapeBucketsToDevice(impl->packed, &impl->cublas_buckets);
+  if (!bucket_status.ok()) {
+    FreeDevicePackedMixedProblems(&impl->device);
+    delete impl;
+    return bucket_status;
+  }
+  const Status handle_status = CreateCublasHandle(&impl->handle, nullptr);
+  if (!handle_status.ok()) {
+    FreeDeviceMixedShapeBuckets(&impl->cublas_buckets);
+    FreeDevicePackedMixedProblems(&impl->device);
+    delete impl;
+    return handle_status;
+  }
   return CudaGroupedGemmFp16AccumPlan(impl);
 }
 
@@ -767,58 +1119,30 @@ Result<CudaGroupedGemmResult> RunGroupedGemmFp16AccumCudaPlan(
 
   PackedMixedProblems& packed = plan.impl_->packed;
   DevicePackedMixedProblems& device = plan.impl_->device;
-  cudaError_t error = cudaSuccess;
-  cudaEvent_t start = nullptr;
-  cudaEvent_t stop = nullptr;
-  error = cudaEventCreate(&start);
-  if (error != cudaSuccess) {
-    return CudaStatus(error, "cudaEventCreate planned mixed start");
-  }
-  error = cudaEventCreate(&stop);
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    return CudaStatus(error, "cudaEventCreate planned mixed stop");
+  cublasHandle_t handle = plan.impl_->handle;
+  double kernel_ms = 0.0;
+  double postprocess_ms = 0.0;
+  Status status = TimedRunMixedCublasAndScale(
+      handle, packed, device, plan.impl_->cublas_buckets, nullptr, &kernel_ms,
+      &postprocess_ms);
+  if (!status.ok()) {
+    return status;
   }
 
-  const dim3 block(kBlockEdge, kBlockEdge);
-  const dim3 grid((packed.max_n + kBlockEdge - 1) / kBlockEdge,
-                  (packed.max_m + kBlockEdge - 1) / kBlockEdge,
-                  static_cast<unsigned int>(packed.ms.size()));
-
-  cudaEventRecord(start);
-  GroupedGemmFp16AccumKernel<<<grid, block>>>(
-      device.a, device.b, device.c, device.a_offsets, device.b_offsets,
-      device.c_offsets, device.ms, device.ks, device.ns,
-      device.epilogue_scales);
-  error = cudaGetLastError();
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    return CudaStatus(error, "planned GroupedGemmFp16AccumKernel launch");
-  }
-  cudaEventRecord(stop);
-  error = cudaEventSynchronize(stop);
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    return CudaStatus(error, "planned GroupedGemmFp16AccumKernel synchronize");
-  }
-  float kernel_ms = 0.0F;
-  cudaEventElapsedTime(&kernel_ms, start, stop);
-  cudaEventDestroy(start);
-  cudaEventDestroy(stop);
-
-  error = cudaMemcpy(packed.c_all.data(), device.c,
-                     packed.c_all.size() * sizeof(double),
-                     cudaMemcpyDeviceToHost);
+  cudaError_t error = cudaMemcpy(packed.c_all.data(), device.c,
+                                 packed.c_all.size() * sizeof(double),
+                                 cudaMemcpyDeviceToHost);
   if (error != cudaSuccess) {
     return CudaStatus(error, "cudaMemcpy planned mixed D2H");
   }
 
   CudaGroupedGemmResult result;
-  result.kernel_ms = static_cast<double>(kernel_ms);
-  result.c_tiles = SplitOutputTilesFromPacked(packed.ms, packed.ns,
-                                              packed.c_all, packed.c_offsets);
+  result.kernel_ms = kernel_ms;
+  result.postprocess_ms = postprocess_ms;
+  result.backend_shape_buckets = packed.buckets.size();
+  result.c_tiles = SplitMixedOutputTilesFromPacked(
+      packed.ms, packed.ns, packed.c_all, packed.c_offsets,
+      packed.original_indices);
   result.ledger.Add(
       CudaMixedGemmLedgerEntry(packed.products, packed.max_abs_error_bound));
   return result;
@@ -1185,7 +1509,9 @@ Result<CudaGraphReplayResult> GroupedGemmFp16AccumCudaGraphReplay(
       std::chrono::duration<double, std::milli>(graph_wall_end -
                                                 graph_wall_start)
           .count();
-  result.c_tiles = SplitOutputTiles(problems, packed.c_all, packed.c_offsets);
+  result.c_tiles = SplitMixedOutputTilesFromPacked(
+      packed.ms, packed.ns, packed.c_all, packed.c_offsets,
+      packed.original_indices);
   result.ledger.Add(CudaMixedGemmLedgerEntry(
       packed.products * repeats, packed.max_abs_error_bound));
   return result;
@@ -1348,8 +1674,9 @@ Result<CudaGraphReplayResult> RunGroupedGemmFp16AccumCudaPlanGraphReplay(
       std::chrono::duration<double, std::milli>(graph_wall_end -
                                                 graph_wall_start)
           .count();
-  result.c_tiles = SplitOutputTilesFromPacked(packed.ms, packed.ns,
-                                              packed.c_all, packed.c_offsets);
+  result.c_tiles = SplitMixedOutputTilesFromPacked(
+      packed.ms, packed.ns, packed.c_all, packed.c_offsets,
+      packed.original_indices);
   result.ledger.Add(CudaMixedGemmLedgerEntry(
       packed.products * repeats, packed.max_abs_error_bound));
   return result;

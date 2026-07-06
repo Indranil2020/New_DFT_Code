@@ -1,0 +1,94 @@
+[
+  {
+    "system": "He atom",
+    "method": "PySCF RKS LDA",
+    "basis": "ccpvdz",
+    "energy_Ha": -2.8267065541903005,
+    "time_ms": 1426.9553889753297,
+    "n_atoms": 1
+  },
+  {
+    "system": "He atom",
+    "method": "TIDES TidesCalculator LDA (DZP)",
+    "basis": "DZP",
+    "energy_Ha": -2.280000000000001,
+    "time_ms": 0.24550198577344418,
+    "n_atoms": 1,
+    "n_iterations": 0,
+    "delta_vs_pyscf_Ha": 0.5467065541902993
+  },
+  {
+    "system": "Ne atom",
+    "method": "PySCF RKS LDA",
+    "basis": "ccpvdz",
+    "energy_Ha": -128.1561357577954,
+    "time_ms": 1716.2879389943555,
+    "n_atoms": 1
+  },
+  {
+    "system": "Ne atom",
+    "method": "TIDES TidesCalculator LDA (DZP)",
+    "basis": "DZP",
+    "energy_Ha": -3.400000000000001,
+    "time_ms": 3.560708981240168,
+    "n_atoms": 1,
+    "n_iterations": 0,
+    "delta_vs_pyscf_Ha": 124.75613575779539
+  },
+  {
+    "system": "H2O molecule",
+    "method": "PySCF RKS LDA",
+    "basis": "ccpvdz",
+    "energy_Ha": -75.85470220347418,
+    "forces_Ha_per_Bohr": [
+      [
+        2.8089029521625306e-16,
+        1.4103424243063376e-15,
+        0.024198236653275806
+      ],
+      [
+        6.041927825567509e-17,
+        0.013009575381447647,
+        -0.012097591771923044
+      ],
+      [
+        1.2761384788146751e-17,
+        -0.013009575381447647,
+        -0.012097591771922822
+      ]
+    ],
+    "time_ms": 2451.6593730077147,
+    "force_time_ms": 346.9380119931884,
+    "n_atoms": 3
+  },
+  {
+    "system": "H2 curve",
+    "points": [
+      {
+        "r_Ang": 0.5,
+        "energy_Ha": -1.0405930606975635,
+        "time_ms": 1607.4696819996461
+      },
+      {
+        "r_Ang": 0.74,
+        "energy_Ha": -1.1314112857563137,
+        "time_ms": 2179.2081900057383
+      },
+      {
+        "r_Ang": 1.0,
+        "energy_Ha": -1.1138144608548388,
+        "time_ms": 1678.1231799977832
+      },
+      {
+        "r_Ang": 2.0,
+        "energy_Ha": -0.9736244427214533,
+        "time_ms": 1645.312667998951
+      },
+      {
+        "r_Ang": 3.0,
+        "energy_Ha": -0.9128923354468541,
+        "time_ms": 1582.3048920137808
+      }
+    ]
+  }
+]

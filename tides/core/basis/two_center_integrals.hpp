@@ -90,6 +90,7 @@ class CubicSpline {
   [[nodiscard]] std::size_t size() const { return x_.size(); }
   [[nodiscard]] const std::vector<double>& x() const { return x_; }
   [[nodiscard]] const std::vector<double>& y() const { return y_; }
+  [[nodiscard]] const std::vector<double>& d2y() const { return d2y_; }
 
  private:
   std::vector<double> x_, y_, d2y_;

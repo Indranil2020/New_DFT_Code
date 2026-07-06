@@ -182,6 +182,129 @@ if(TIDES_ENABLE_CUDA)
     target_link_libraries(tides_cuda_spgemm_probe PRIVATE tides_core tides_cuda_tile)
     set_target_properties(tides_cuda_spgemm_probe PROPERTIES
       CUDA_RUNTIME_LIBRARY Shared)
+
+    add_executable(tides_cuda_ozaki_gemm_tests
+      core/tile/tests/cuda_ozaki_gemm_tests.cpp)
+    target_link_libraries(tides_cuda_ozaki_gemm_tests PRIVATE
+      tides_core tides_cuda_tile)
+    set_target_properties(tides_cuda_ozaki_gemm_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_ozaki_f64e_gemm_vs_fp64_oracle
+             COMMAND tides_cuda_ozaki_gemm_tests)
+    set_tests_properties(cuda_ozaki_f64e_gemm_vs_fp64_oracle PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # WP2 T2.5: GPU tile assembly of S, H0
+    add_library(tides_cuda_basis STATIC
+      core/basis/two_center.cu
+      core/basis/three_center.cu)
+    target_link_libraries(tides_cuda_basis PUBLIC tides_basis tides_cuda_tile)
+    target_compile_options(tides_cuda_basis PRIVATE
+      $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
+    set_target_properties(tides_cuda_basis PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+
+    add_executable(tides_cuda_two_center_tests
+      core/basis/tests/cuda_two_center_tests.cpp)
+    target_link_libraries(tides_cuda_two_center_tests PRIVATE
+      tides_basis tides_cuda_basis)
+    set_target_properties(tides_cuda_two_center_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_two_center_tile_assembly
+             COMMAND tides_cuda_two_center_tests)
+    set_tests_properties(cuda_two_center_tile_assembly PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # WP2 T2.5: GPU three-center KB assembly
+    add_executable(tides_cuda_three_center_tests
+      core/basis/tests/cuda_three_center_tests.cpp)
+    target_link_libraries(tides_cuda_three_center_tests PRIVATE
+      tides_basis tides_cuda_basis)
+    set_target_properties(tides_cuda_three_center_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_three_center_kb_assembly
+             COMMAND tides_cuda_three_center_tests)
+    set_tests_properties(cuda_three_center_kb_assembly PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # WP3 T3.2: GPU rho builder
+    add_library(tides_cuda_grid STATIC
+      core/grid/rho_build.cu
+      core/grid/poisson_fft.cu
+      core/grid/vmat_build.cu
+      core/grid/xc.cu)
+    target_link_libraries(tides_cuda_grid PUBLIC tides_grid tides_cuda_tile cufft)
+    target_compile_options(tides_cuda_grid PRIVATE
+      $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
+    set_target_properties(tides_cuda_grid PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+
+    add_executable(tides_cuda_rho_build_tests
+      core/grid/tests/cuda_rho_build_tests.cpp)
+    target_link_libraries(tides_cuda_rho_build_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_cuda_rho_build_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_rho_build_vs_cpu
+             COMMAND tides_cuda_rho_build_tests)
+    set_tests_properties(cuda_rho_build_vs_cpu PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # WP3 T3.4: GPU cuFFT Poisson solver
+    add_executable(tides_cuda_poisson_fft_tests
+      core/grid/tests/cuda_poisson_fft_tests.cpp)
+    target_link_libraries(tides_cuda_poisson_fft_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_cuda_poisson_fft_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_poisson_fft_vs_cpu
+             COMMAND tides_cuda_poisson_fft_tests)
+    set_tests_properties(cuda_poisson_fft_vs_cpu PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # WP3 T3.3: GPU v->H adjoint
+    add_executable(tides_cuda_vmat_build_tests
+      core/grid/tests/cuda_vmat_build_tests.cpp)
+    target_link_libraries(tides_cuda_vmat_build_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_cuda_vmat_build_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_vmat_build_vs_cpu
+             COMMAND tides_cuda_vmat_build_tests)
+    set_tests_properties(cuda_vmat_build_vs_cpu PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # WP3 T3.5: GPU XC functional evaluation
+    add_executable(tides_cuda_xc_tests
+      core/grid/tests/cuda_xc_tests.cpp)
+    target_link_libraries(tides_cuda_xc_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_cuda_xc_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_xc_lda_vs_cpu
+             COMMAND tides_cuda_xc_tests)
+    set_tests_properties(cuda_xc_lda_vs_cpu PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # WP5 T5.3: GPU SP2 purification
+    add_library(tides_cuda_sp2 STATIC
+      core/solvers/sp2_submatrix/sp2_gpu.cu)
+    target_link_libraries(tides_cuda_sp2 PUBLIC tides_solvers tides_cuda_tile)
+    target_compile_options(tides_cuda_sp2 PRIVATE
+      $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
+    set_target_properties(tides_cuda_sp2 PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+
+    add_executable(tides_cuda_sp2_tests
+      core/solvers/tests/cuda_sp2_tests.cpp)
+    target_link_libraries(tides_cuda_sp2_tests PRIVATE
+      tides_solvers tides_cuda_sp2)
+    set_target_properties(tides_cuda_sp2_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_sp2_purification_vs_cpu
+             COMMAND tides_cuda_sp2_tests)
+    set_tests_properties(cuda_sp2_purification_vs_cpu PROPERTIES
+      SKIP_RETURN_CODE 77)
   else()
     message(STATUS "CUDA compiler not found; skipping CUDA WP1 targets")
   endif()
@@ -272,6 +395,23 @@ add_library(tides_grid INTERFACE)
 target_include_directories(tides_grid INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(tides_grid INTERFACE tides_basis)
 
+# FFTW3 linking for O(N log N) Poisson solver (T3.4)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFTW3 REQUIRED fftw3)
+target_include_directories(tides_grid INTERFACE ${FFTW3_INCLUDE_DIRS})
+target_link_libraries(tides_grid INTERFACE ${FFTW3_LIBRARIES})
+
+# --- libxc linking (T3.5) -----------------------------------------------------
+# libxc is installed at /home/niel/src/libxc-7.0.0-install/
+set(LIBXC_ROOT "/home/niel/src/libxc-7.0.0-install" CACHE PATH "libxc install prefix")
+find_path(LIBXC_INCLUDE_DIR xc.h PATHS ${LIBXC_ROOT}/include REQUIRED)
+find_library(LIBXC_LIBRARY NAMES xc PATHS ${LIBXC_ROOT}/lib REQUIRED)
+message(STATUS "libxc found: ${LIBXC_LIBRARY} (headers: ${LIBXC_INCLUDE_DIR})")
+target_include_directories(tides_grid INTERFACE ${LIBXC_INCLUDE_DIR})
+target_link_libraries(tides_grid INTERFACE ${LIBXC_LIBRARY})
+list(APPEND CMAKE_BUILD_RPATH ${LIBXC_ROOT}/lib)
+list(APPEND CMAKE_INSTALL_RPATH ${LIBXC_ROOT}/lib)
+
 add_executable(tides_dual_grid_tests
   core/grid/tests/dual_grid_tests.cpp)
 target_link_libraries(tides_dual_grid_tests PRIVATE tides_grid)
@@ -289,6 +429,12 @@ add_executable(tides_grid_ops_tests
 target_link_libraries(tides_grid_ops_tests PRIVATE tides_grid)
 add_test(NAME wp3_rho_adjoint_xc_grid_ops
   COMMAND tides_grid_ops_tests)
+
+# T3.5: libxc PBE/GGA test (CPU, no CUDA required)
+add_executable(tides_libxc_pbe_tests
+  core/grid/tests/libxc_pbe_tests.cpp)
+target_link_libraries(tides_libxc_pbe_tests PRIVATE tides_grid)
+add_test(NAME wp3_libxc_pbe_vs_analytical COMMAND tides_libxc_pbe_tests)
 
 # --- WP4: Mid-range solvers (CPU foundation) ---------------------------------
 
@@ -309,6 +455,114 @@ add_executable(tides_wp5_tests
   core/solvers/tests/wp5_tests.cpp)
 target_link_libraries(tides_wp5_tests PRIVATE tides_solvers)
 add_test(NAME wp5_sp2_submatrix_foe_fermi_truncation COMMAND tides_wp5_tests)
+
+# --- P3: Physics validation tests ---
+add_executable(tides_physics_tests
+  core/tests/physics_tests.cpp)
+target_link_libraries(tides_physics_tests PRIVATE tides_solvers tides_basis)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_physics_tests PRIVATE ${LAPACK_LIBRARIES})
+endif()
+add_test(NAME physics_validation COMMAND tides_physics_tests)
+
+# --- P3.3: GPU regression tests ---
+add_executable(tides_gpu_regression_tests
+  core/tests/gpu_regression_tests.cpp)
+target_link_libraries(tides_gpu_regression_tests PRIVATE
+  tides_solvers tides_basis tides_cuda_grid tides_cuda_sp2)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_gpu_regression_tests PRIVATE ${LAPACK_LIBRARIES})
+endif()
+set_target_properties(tides_gpu_regression_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME gpu_regression COMMAND tides_gpu_regression_tests)
+set_tests_properties(gpu_regression PROPERTIES
+  SKIP_RETURN_CODE 77)
+
+# --- P4: Benchmark suite ---
+add_executable(tides_benchmark
+  core/tests/benchmark.cpp)
+target_link_libraries(tides_benchmark PRIVATE
+  tides_solvers tides_basis tides_cuda_grid tides_cuda_sp2)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_benchmark PRIVATE ${LAPACK_LIBRARIES})
+endif()
+set_target_properties(tides_benchmark PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+
+# --- Per-Engine Test & Profile Suites (E1-E8) ---
+add_executable(tides_e1_tile_profile
+  tests/per_engine/e1_tile/e1_test_profile.cpp
+  core/tile/reduce_f64e.cpp)
+target_link_libraries(tides_e1_tile_profile PRIVATE
+  tides_cuda_tile)
+set_target_properties(tides_e1_tile_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e1_tile_profile COMMAND tides_e1_tile_profile)
+
+add_executable(tides_e2_basis_profile
+  tests/per_engine/e2_basis/e2_test_profile.cpp)
+target_link_libraries(tides_e2_basis_profile PRIVATE
+  tides_basis tides_cuda_basis)
+set_target_properties(tides_e2_basis_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e2_basis_profile COMMAND tides_e2_basis_profile)
+
+add_executable(tides_e3_grid_profile
+  tests/per_engine/e3_grid/e3_test_profile.cpp)
+target_link_libraries(tides_e3_grid_profile PRIVATE
+  tides_grid tides_cuda_grid)
+set_target_properties(tides_e3_grid_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e3_grid_profile COMMAND tides_e3_grid_profile)
+
+add_executable(tides_e4_solvers_profile
+  tests/per_engine/e4_solvers/e4_test_profile.cpp)
+target_link_libraries(tides_e4_solvers_profile PRIVATE
+  tides_solvers tides_cuda_sp2)
+set_target_properties(tides_e4_solvers_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e4_solvers_profile COMMAND tides_e4_solvers_profile)
+
+add_executable(tides_e5_scf_profile
+  tests/per_engine/e5_scf/e5_test_profile.cpp)
+target_link_libraries(tides_e5_scf_profile PRIVATE
+  tides_scf tides_solvers)
+set_target_properties(tides_e5_scf_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e5_scf_profile COMMAND tides_e5_scf_profile)
+
+add_executable(tides_e6_dynamics_profile
+  tests/per_engine/e6_dynamics/e6_test_profile.cpp)
+target_link_libraries(tides_e6_dynamics_profile PRIVATE
+  tides_scf tides_solvers)
+set_target_properties(tides_e6_dynamics_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e6_dynamics_profile COMMAND tides_e6_dynamics_profile)
+
+add_executable(tides_e7_parallel_profile
+  tests/per_engine/e7_parallel/e7_test_profile.cpp)
+target_link_libraries(tides_e7_parallel_profile PRIVATE
+  tides_core)
+set_target_properties(tides_e7_parallel_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e7_parallel_profile COMMAND tides_e7_parallel_profile)
+
+add_executable(tides_e8_hybrids_profile
+  tests/per_engine/e8_hybrids/e8_test_profile.cpp)
+target_link_libraries(tides_e8_hybrids_profile PRIVATE
+  tides_core)
+set_target_properties(tides_e8_hybrids_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e8_hybrids_profile COMMAND tides_e8_hybrids_profile)
+
+add_executable(tides_e9_verification_profile
+  tests/per_engine/e9_verification/e9_test_profile.cpp)
+target_link_libraries(tides_e9_verification_profile PRIVATE
+  tides_core)
+set_target_properties(tides_e9_verification_profile PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME e9_verification_profile COMMAND tides_e9_verification_profile)
 
 # --- WP6: SCF, XL-BOMD, forces, dynamics (CPU foundation) -------------------
 
@@ -361,3 +615,33 @@ add_executable(tides_wp9_tests
   core/verification/tests/wp9_tests.cpp)
 target_link_libraries(tides_wp9_tests PRIVATE tides_verification_lib)
 add_test(NAME wp9_ladder_runner_reference_data_ab_fd_dashboard COMMAND tides_wp9_tests)
+
+# --- WP10: API, docs, community, releases -----------------------------------
+# T10.1: Nanobind Python bindings (optional — requires nanobind installed)
+# When built, produces tides/_native*.so importable from Python.
+# Build with: cmake -DBUILD_PYTHON_BINDINGS=ON ..
+
+option(BUILD_PYTHON_BINDINGS "Build Python nanobind bindings" OFF)
+if(BUILD_PYTHON_BINDINGS)
+  find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+  # nanobind must be installed via pip: pip install nanobind
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE} -c "import nanobind; print(nanobind.cmake_dir())"
+    OUTPUT_VARIABLE NANOBIND_CMAKE_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE NANOBIND_RESULT)
+  if(NANOBIND_RESULT EQUAL 0)
+    list(APPEND CMAKE_PREFIX_PATH "${NANOBIND_CMAKE_DIR}")
+    find_package(nanobind CONFIG REQUIRED)
+    nanobind_add_module(tides_native
+      NB_STATIC STABLE_ABI
+      api/python/tides/_native.cpp)
+    target_link_libraries(tides_native PRIVATE tides_core tides_scf tides_forces tides_dynamics tides_solvers)
+    set_target_properties(tides_native PROPERTIES
+      OUTPUT_NAME "_native"
+      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/api/python/tides")
+    message(STATUS "WP10: Python nanobind bindings enabled (tides._native)")
+  else()
+    message(WARNING "WP10: nanobind not found — Python bindings skipped. Install with: pip install nanobind")
+  endif()
+endif()

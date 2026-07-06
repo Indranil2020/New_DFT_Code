@@ -93,13 +93,83 @@ class ISDF {
 
     // Step 3: Fit the interpolating vectors x_mu'(r) via least-squares.
     // M_approx(r, ij) = sum_mu' x_mu'(r) * M(r_mu', ij)
-    // => x = M(:, interp) * (M(interp, :) * M(:, interp))^(-1) * M(interp, :)
-    // For simplicity: x_mu'(r) = sum over interp points of the pseudoinverse.
-    // Here we just record the selected indices; the full fit is done in ACE.
-    res.interp_vectors.assign(n_grid * res.rank, 0.0);
-    // Simple: x_mu'(r) = delta(r, interp_point[mu']).
-    for (std::size_t mu = 0; mu < res.rank; ++mu)
-      res.interp_vectors[res.interp_point_indices[mu] * res.rank + mu] = 1.0;
+    // => x = M * M_interp^T * (M_interp * M_interp^T)^{-1}
+    // where M_interp is the submatrix of M at the interpolation points.
+    const std::size_t r = res.rank;
+    
+    // Extract M_interp: r x n_pairs (rows at interpolation points).
+    std::vector<double> M_interp(r * n_pairs, 0.0);
+    for (std::size_t mu = 0; mu < r; ++mu) {
+      const std::size_t idx = res.interp_point_indices[mu];
+      for (std::size_t j = 0; j < n_pairs; ++j)
+        M_interp[mu * n_pairs + j] = M[idx * n_pairs + j];
+    }
+    
+    // Compute G = M_interp * M_interp^T (r x r).
+    std::vector<double> G(r * r, 0.0);
+    for (std::size_t i = 0; i < r; ++i)
+      for (std::size_t j = 0; j < r; ++j) {
+        double s = 0.0;
+        for (std::size_t k = 0; k < n_pairs; ++k)
+          s += M_interp[i * n_pairs + k] * M_interp[j * n_pairs + k];
+        G[i * r + j] = s;
+      }
+    
+    // Invert G via Gaussian elimination with partial pivoting.
+    // Augment [G | I] and reduce.
+    std::vector<double> aug(r * 2 * r, 0.0);
+    for (std::size_t i = 0; i < r; ++i) {
+      for (std::size_t j = 0; j < r; ++j) aug[i * 2 * r + j] = G[i * r + j];
+      aug[i * 2 * r + r + i] = 1.0;
+    }
+    for (std::size_t col = 0; col < r; ++col) {
+      // Find pivot.
+      std::size_t piv = col;
+      double max_val = std::abs(aug[col * 2 * r + col]);
+      for (std::size_t row = col + 1; row < r; ++row) {
+        double val = std::abs(aug[row * 2 * r + col]);
+        if (val > max_val) { max_val = val; piv = row; }
+      }
+      if (max_val < 1e-30) continue;  // singular column, skip
+      if (piv != col) {
+        for (std::size_t j = 0; j < 2 * r; ++j)
+          std::swap(aug[col * 2 * r + j], aug[piv * 2 * r + j]);
+      }
+      double diag = aug[col * 2 * r + col];
+      for (std::size_t j = 0; j < 2 * r; ++j) aug[col * 2 * r + j] /= diag;
+      for (std::size_t row = 0; row < r; ++row) {
+        if (row == col) continue;
+        double factor = aug[row * 2 * r + col];
+        for (std::size_t j = 0; j < 2 * r; ++j)
+          aug[row * 2 * r + j] -= factor * aug[col * 2 * r + j];
+      }
+    }
+    // Extract G_inv.
+    std::vector<double> G_inv(r * r, 0.0);
+    for (std::size_t i = 0; i < r; ++i)
+      for (std::size_t j = 0; j < r; ++j)
+        G_inv[i * r + j] = aug[i * 2 * r + r + j];
+    
+    // Compute interpolation vectors: x_mu(r) = sum_nu M(r, :) . M_interp(nu, :)^T * G_inv[nu, mu]
+    // First compute M * M_interp^T = n_grid x r.
+    std::vector<double> M_Mt(n_grid * r, 0.0);
+    for (std::size_t i = 0; i < n_grid; ++i)
+      for (std::size_t mu = 0; mu < r; ++mu) {
+        double s = 0.0;
+        for (std::size_t j = 0; j < n_pairs; ++j)
+          s += M[i * n_pairs + j] * M_interp[mu * n_pairs + j];
+        M_Mt[i * r + mu] = s;
+      }
+    
+    // x = M_Mt * G_inv (n_grid x r).
+    res.interp_vectors.assign(n_grid * r, 0.0);
+    for (std::size_t i = 0; i < n_grid; ++i)
+      for (std::size_t mu = 0; mu < r; ++mu) {
+        double s = 0.0;
+        for (std::size_t nu = 0; nu < r; ++nu)
+          s += M_Mt[i * r + nu] * G_inv[nu * r + mu];
+        res.interp_vectors[i * r + mu] = s;
+      }
 
     // Compute reconstruction error.
     double err = 0.0, norm_M = 0.0;

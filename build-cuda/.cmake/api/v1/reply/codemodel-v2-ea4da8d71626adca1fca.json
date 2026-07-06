@@ -1,0 +1,510 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Release-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.24"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18,
+						19,
+						20,
+						21,
+						22,
+						23,
+						24,
+						25,
+						26,
+						27,
+						28,
+						29,
+						30,
+						31,
+						32,
+						33,
+						34,
+						35,
+						36,
+						37,
+						38,
+						39,
+						40,
+						41,
+						42,
+						43,
+						44,
+						45,
+						46,
+						47,
+						48,
+						49,
+						50
+					]
+				}
+			],
+			"name" : "Release",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "TIDES",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15,
+						16,
+						17,
+						18,
+						19,
+						20,
+						21,
+						22,
+						23,
+						24,
+						25,
+						26,
+						27,
+						28,
+						29,
+						30,
+						31,
+						32,
+						33,
+						34,
+						35,
+						36,
+						37,
+						38,
+						39,
+						40,
+						41,
+						42,
+						43,
+						44,
+						45,
+						46,
+						47,
+						48,
+						49,
+						50
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_atomgen_eigensolver_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_atomgen_eigensolver_tests-Release-16e7e0ba1ec55a238fb5.json",
+					"name" : "tides_atomgen_eigensolver_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_atomgen_hydrogenic_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_atomgen_hydrogenic_tests-Release-462b4153fe26eaa8a795.json",
+					"name" : "tides_atomgen_hydrogenic_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_atomic_lda_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_atomic_lda_tests-Release-b1aad2b6f43a8b078044.json",
+					"name" : "tides_atomic_lda_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_basis::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_basis-Release-13a665636561a0947c57.json",
+					"name" : "tides_cuda_basis",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_determinism_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_determinism_tests-Release-8388f96daa75e9a65aca.json",
+					"name" : "tides_cuda_determinism_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_gemm_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_gemm_probe-Release-c6bae86f7ab6d40ce66c.json",
+					"name" : "tides_cuda_gemm_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_gemm_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_gemm_tests-Release-5500fb198d5f39933eb9.json",
+					"name" : "tides_cuda_gemm_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_graph_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_graph_probe-Release-55db3bb61136589afb8e.json",
+					"name" : "tides_cuda_graph_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_graph_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_graph_tests-Release-4d60ce8c5a45040b0f56.json",
+					"name" : "tides_cuda_graph_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_grid::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_grid-Release-6df9b4e34fe8f31cb5c6.json",
+					"name" : "tides_cuda_grid",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_ozaki_gemm_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_ozaki_gemm_tests-Release-6267c67c76b06ed8ddfc.json",
+					"name" : "tides_cuda_ozaki_gemm_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_poisson_fft_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_poisson_fft_tests-Release-4ac4762f4b5f3bc3db4d.json",
+					"name" : "tides_cuda_poisson_fft_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_reduce_f64e_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_reduce_f64e_probe-Release-b4f60edba65da9dc4c85.json",
+					"name" : "tides_cuda_reduce_f64e_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_reduce_f64e_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_reduce_f64e_tests-Release-94e872ed3163eb2b7bbc.json",
+					"name" : "tides_cuda_reduce_f64e_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_rho_build_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_rho_build_tests-Release-5d092e2c84f634eb9bb9.json",
+					"name" : "tides_cuda_rho_build_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_runtime_link_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_runtime_link_probe-Release-d90f623a3b2956f5a41f.json",
+					"name" : "tides_cuda_runtime_link_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_runtime_reduce_link_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_runtime_reduce_link_probe-Release-a72af2d093caaa113a55.json",
+					"name" : "tides_cuda_runtime_reduce_link_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_spgemm_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_spgemm_probe-Release-2bee21ca5bfd4f33cad5.json",
+					"name" : "tides_cuda_spgemm_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_spgemm_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_spgemm_tests-Release-4988388935b4624ad5ce.json",
+					"name" : "tides_cuda_spgemm_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_tile::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_tile-Release-bbe657ef0653819a5039.json",
+					"name" : "tides_cuda_tile",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_two_center_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_two_center_tests-Release-5f4a277ffe3f8178b11e.json",
+					"name" : "tides_cuda_two_center_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_cuda_xc_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_cuda_xc_tests-Release-8944f0bd9a57e0dd03a7.json",
+					"name" : "tides_cuda_xc_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_derivative_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_derivative_tests-Release-f3a756eccee29fe97690.json",
+					"name" : "tides_derivative_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_deterministic_gauntlet_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_deterministic_gauntlet_tests-Release-27f70141bf054be63524.json",
+					"name" : "tides_deterministic_gauntlet_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_dual_grid_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_dual_grid_tests-Release-49b369ed3a2e98dafa3b.json",
+					"name" : "tides_dual_grid_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_f64e_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_f64e_probe-Release-f8a1dcddf99b4e792355.json",
+					"name" : "tides_f64e_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_f64e_reference_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_f64e_reference_tests-Release-8ccc86e19e4f706b8f85.json",
+					"name" : "tides_f64e_reference_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_grid_ops_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_grid_ops_tests-Release-5055810bc786681b91ec.json",
+					"name" : "tides_grid_ops_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_lda_xc_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_lda_xc_tests-Release-016d617a5da283e342c8.json",
+					"name" : "tides_lda_xc_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_nao_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_nao_tests-Release-1239b38b986acfbe7cb4.json",
+					"name" : "tides_nao_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_ops_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_ops_tests-Release-491e75aa3527dcf3be09.json",
+					"name" : "tides_ops_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_ozaki_gemm_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_ozaki_gemm_probe-Release-809c2e9deeb3c079aa46.json",
+					"name" : "tides_ozaki_gemm_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_ozaki_slice_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_ozaki_slice_tests-Release-6f8b3f5ca24ad1e21a6d.json",
+					"name" : "tides_ozaki_slice_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_poisson_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_poisson_tests-Release-77e42bd39b3ef6933d47.json",
+					"name" : "tides_poisson_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_precision_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_precision_tests-Release-768d79c56f28cc6db0f3.json",
+					"name" : "tides_precision_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_pseudo_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_pseudo_tests-Release-206f406c0b812d12fca9.json",
+					"name" : "tides_pseudo_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_pyscf_overlap_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_pyscf_overlap_tests-Release-e2b680a81f6c8eed7fd0.json",
+					"name" : "tides_pyscf_overlap_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_spgemm_filter_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_spgemm_filter_probe-Release-ed2fa3e0d692404ea7ef.json",
+					"name" : "tides_spgemm_filter_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_spgemm_filtered_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_spgemm_filtered_tests-Release-e9af5beddaeb9d628ea0.json",
+					"name" : "tides_spgemm_filtered_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_tile_ops_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_tile_ops_probe-Release-0930e5cd5f9879c0d2dc.json",
+					"name" : "tides_tile_ops_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_tilemat_dump_fixture::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_tilemat_dump_fixture-Release-26470731110ee9876b77.json",
+					"name" : "tides_tilemat_dump_fixture",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_tilemat_layout_probe::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_tilemat_layout_probe-Release-bc4b6b2d302a6a184e61.json",
+					"name" : "tides_tilemat_layout_probe",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_tilemat_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_tilemat_tests-Release-852b3e3b6adf6c956d12.json",
+					"name" : "tides_tilemat_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_two_center_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_two_center_tests-Release-dbdfaec1368bbf2b2737.json",
+					"name" : "tides_two_center_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_wp2_profile::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_wp2_profile-Release-339ab6639a41c93d164f.json",
+					"name" : "tides_wp2_profile",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_wp4_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_wp4_tests-Release-78cc814fa97d8e324df1.json",
+					"name" : "tides_wp4_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_wp5_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_wp5_tests-Release-51419c7c68bcb916f0ca.json",
+					"name" : "tides_wp5_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_wp6_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_wp6_tests-Release-00444cffd68204e1af4d.json",
+					"name" : "tides_wp6_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_wp7_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_wp7_tests-Release-14e56b268fc4dae52ec7.json",
+					"name" : "tides_wp7_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_wp8_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_wp8_tests-Release-c1d0329112748f30083c.json",
+					"name" : "tides_wp8_tests",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tides_wp9_tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tides_wp9_tests-Release-60c24687ab08c537ea9b.json",
+					"name" : "tides_wp9_tests",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/niel/git/New_DFT_Code/build-cuda",
+		"source" : "/home/niel/git/New_DFT_Code/tides"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

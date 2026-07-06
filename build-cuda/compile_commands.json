@@ -1,0 +1,350 @@
+[
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_tilemat_tests.dir/core/tile/tests/tilemat_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/tilemat_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/tilemat_tests.cpp",
+  "output": "CMakeFiles/tides_tilemat_tests.dir/core/tile/tests/tilemat_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_tilemat_dump_fixture.dir/core/tile/tests/tilemat_dump_fixture.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/tilemat_dump_fixture.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/tilemat_dump_fixture.cpp",
+  "output": "CMakeFiles/tides_tilemat_dump_fixture.dir/core/tile/tests/tilemat_dump_fixture.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_tilemat_layout_probe.dir/core/tile/tests/tilemat_layout_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/tilemat_layout_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/tilemat_layout_probe.cpp",
+  "output": "CMakeFiles/tides_tilemat_layout_probe.dir/core/tile/tests/tilemat_layout_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_spgemm_filtered_tests.dir/core/tile/tests/spgemm_filtered_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/spgemm_filtered_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/spgemm_filtered_tests.cpp",
+  "output": "CMakeFiles/tides_spgemm_filtered_tests.dir/core/tile/tests/spgemm_filtered_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_spgemm_filter_probe.dir/core/tile/tests/spgemm_filter_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/spgemm_filter_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/spgemm_filter_probe.cpp",
+  "output": "CMakeFiles/tides_spgemm_filter_probe.dir/core/tile/tests/spgemm_filter_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_precision_tests.dir/core/tile/tests/precision_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/precision_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/precision_tests.cpp",
+  "output": "CMakeFiles/tides_precision_tests.dir/core/tile/tests/precision_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_ops_tests.dir/core/tile/tests/ops_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/ops_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/ops_tests.cpp",
+  "output": "CMakeFiles/tides_ops_tests.dir/core/tile/tests/ops_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_tile_ops_probe.dir/core/tile/tests/tile_ops_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/tile_ops_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/tile_ops_probe.cpp",
+  "output": "CMakeFiles/tides_tile_ops_probe.dir/core/tile/tests/tile_ops_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_f64e_reference_tests.dir/core/tile/tests/f64e_reference_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/f64e_reference_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/f64e_reference_tests.cpp",
+  "output": "CMakeFiles/tides_f64e_reference_tests.dir/core/tile/tests/f64e_reference_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_f64e_probe.dir/core/tile/tests/f64e_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/f64e_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/f64e_probe.cpp",
+  "output": "CMakeFiles/tides_f64e_probe.dir/core/tile/tests/f64e_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_ozaki_slice_tests.dir/core/tile/tests/ozaki_slice_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/ozaki_slice_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/ozaki_slice_tests.cpp",
+  "output": "CMakeFiles/tides_ozaki_slice_tests.dir/core/tile/tests/ozaki_slice_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_ozaki_gemm_probe.dir/core/tile/tests/ozaki_gemm_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/ozaki_gemm_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/ozaki_gemm_probe.cpp",
+  "output": "CMakeFiles/tides_ozaki_gemm_probe.dir/core/tile/tests/ozaki_gemm_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_deterministic_gauntlet_tests.dir/core/tile/tests/deterministic_gauntlet_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/deterministic_gauntlet_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/deterministic_gauntlet_tests.cpp",
+  "output": "CMakeFiles/tides_deterministic_gauntlet_tests.dir/core/tile/tests/deterministic_gauntlet_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/nvcc -forward-unknown-to-host-compiler  --options-file CMakeFiles/tides_cuda_tile.dir/includes_CUDA.rsp -O3 -DNDEBUG -std=c++17 \"--generate-code=arch=compute_89,code=[compute_89,sm_89]\" \"--generate-code=arch=compute_90,code=[compute_90,sm_90]\" --expt-relaxed-constexpr --allow-unsupported-compiler -x cu -c /home/niel/git/New_DFT_Code/tides/core/tile/gemm_grouped.cu -o CMakeFiles/tides_cuda_tile.dir/core/tile/gemm_grouped.cu.o",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/gemm_grouped.cu",
+  "output": "CMakeFiles/tides_cuda_tile.dir/core/tile/gemm_grouped.cu.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/nvcc -forward-unknown-to-host-compiler  --options-file CMakeFiles/tides_cuda_tile.dir/includes_CUDA.rsp -O3 -DNDEBUG -std=c++17 \"--generate-code=arch=compute_89,code=[compute_89,sm_89]\" \"--generate-code=arch=compute_90,code=[compute_90,sm_90]\" --expt-relaxed-constexpr --allow-unsupported-compiler -x cu -c /home/niel/git/New_DFT_Code/tides/core/tile/ozaki.cu -o CMakeFiles/tides_cuda_tile.dir/core/tile/ozaki.cu.o",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/ozaki.cu",
+  "output": "CMakeFiles/tides_cuda_tile.dir/core/tile/ozaki.cu.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/nvcc -forward-unknown-to-host-compiler  --options-file CMakeFiles/tides_cuda_tile.dir/includes_CUDA.rsp -O3 -DNDEBUG -std=c++17 \"--generate-code=arch=compute_89,code=[compute_89,sm_89]\" \"--generate-code=arch=compute_90,code=[compute_90,sm_90]\" --expt-relaxed-constexpr --allow-unsupported-compiler -x cu -c /home/niel/git/New_DFT_Code/tides/core/tile/spgemm_filtered.cu -o CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/spgemm_filtered.cu",
+  "output": "CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_gemm_tests.dir/core/tile/tests/cuda_gemm_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_gemm_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_gemm_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_gemm_tests.dir/core/tile/tests/cuda_gemm_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_gemm_probe.dir/core/tile/tests/cuda_gemm_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_gemm_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_gemm_probe.cpp",
+  "output": "CMakeFiles/tides_cuda_gemm_probe.dir/core/tile/tests/cuda_gemm_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_graph_tests.dir/core/tile/tests/cuda_graph_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_graph_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_graph_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_graph_tests.dir/core/tile/tests/cuda_graph_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_graph_probe.dir/core/tile/tests/cuda_graph_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_graph_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_graph_probe.cpp",
+  "output": "CMakeFiles/tides_cuda_graph_probe.dir/core/tile/tests/cuda_graph_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_determinism_tests.dir/core/tile/tests/cuda_determinism_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_determinism_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_determinism_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_determinism_tests.dir/core/tile/tests/cuda_determinism_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_runtime_link_probe.dir/core/tile/tests/cuda_runtime_link_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_runtime_link_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_runtime_link_probe.cpp",
+  "output": "CMakeFiles/tides_cuda_runtime_link_probe.dir/core/tile/tests/cuda_runtime_link_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_runtime_reduce_link_probe.dir/core/tile/tests/cuda_runtime_link_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_runtime_link_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_runtime_link_probe.cpp",
+  "output": "CMakeFiles/tides_cuda_runtime_reduce_link_probe.dir/core/tile/tests/cuda_runtime_link_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_runtime_reduce_link_probe.dir/core/tile/reduce_f64e.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/reduce_f64e.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/reduce_f64e.cpp",
+  "output": "CMakeFiles/tides_cuda_runtime_reduce_link_probe.dir/core/tile/reduce_f64e.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_reduce_f64e_tests.dir/core/tile/tests/cuda_reduce_f64e_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_reduce_f64e_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_reduce_f64e_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_reduce_f64e_tests.dir/core/tile/tests/cuda_reduce_f64e_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_reduce_f64e_tests.dir/core/tile/reduce_f64e.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/reduce_f64e.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/reduce_f64e.cpp",
+  "output": "CMakeFiles/tides_cuda_reduce_f64e_tests.dir/core/tile/reduce_f64e.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_reduce_f64e_probe.dir/core/tile/tests/cuda_reduce_f64e_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_reduce_f64e_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_reduce_f64e_probe.cpp",
+  "output": "CMakeFiles/tides_cuda_reduce_f64e_probe.dir/core/tile/tests/cuda_reduce_f64e_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_reduce_f64e_probe.dir/core/tile/reduce_f64e.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/reduce_f64e.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/reduce_f64e.cpp",
+  "output": "CMakeFiles/tides_cuda_reduce_f64e_probe.dir/core/tile/reduce_f64e.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_spgemm_tests.dir/core/tile/tests/cuda_spgemm_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_spgemm_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_spgemm_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_spgemm_tests.dir/core/tile/tests/cuda_spgemm_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_spgemm_probe.dir/core/tile/tests/cuda_spgemm_probe.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_spgemm_probe.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_spgemm_probe.cpp",
+  "output": "CMakeFiles/tides_cuda_spgemm_probe.dir/core/tile/tests/cuda_spgemm_probe.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_ozaki_gemm_tests.dir/core/tile/tests/cuda_ozaki_gemm_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_ozaki_gemm_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/tile/tests/cuda_ozaki_gemm_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_ozaki_gemm_tests.dir/core/tile/tests/cuda_ozaki_gemm_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/nvcc -forward-unknown-to-host-compiler -DTIDES_HAVE_LAPACK=1 --options-file CMakeFiles/tides_cuda_basis.dir/includes_CUDA.rsp -O3 -DNDEBUG -std=c++17 \"--generate-code=arch=compute_89,code=[compute_89,sm_89]\" \"--generate-code=arch=compute_90,code=[compute_90,sm_90]\" --expt-relaxed-constexpr --allow-unsupported-compiler -x cu -c /home/niel/git/New_DFT_Code/tides/core/basis/two_center.cu -o CMakeFiles/tides_cuda_basis.dir/core/basis/two_center.cu.o",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/two_center.cu",
+  "output": "CMakeFiles/tides_cuda_basis.dir/core/basis/two_center.cu.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_two_center_tests.dir/core/basis/tests/cuda_two_center_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/tests/cuda_two_center_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/tests/cuda_two_center_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_two_center_tests.dir/core/basis/tests/cuda_two_center_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/nvcc -forward-unknown-to-host-compiler -DTIDES_HAVE_LAPACK=1 --options-file CMakeFiles/tides_cuda_grid.dir/includes_CUDA.rsp -O3 -DNDEBUG -std=c++17 \"--generate-code=arch=compute_89,code=[compute_89,sm_89]\" \"--generate-code=arch=compute_90,code=[compute_90,sm_90]\" --expt-relaxed-constexpr --allow-unsupported-compiler -x cu -c /home/niel/git/New_DFT_Code/tides/core/grid/rho_build.cu -o CMakeFiles/tides_cuda_grid.dir/core/grid/rho_build.cu.o",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/rho_build.cu",
+  "output": "CMakeFiles/tides_cuda_grid.dir/core/grid/rho_build.cu.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/nvcc -forward-unknown-to-host-compiler -DTIDES_HAVE_LAPACK=1 --options-file CMakeFiles/tides_cuda_grid.dir/includes_CUDA.rsp -O3 -DNDEBUG -std=c++17 \"--generate-code=arch=compute_89,code=[compute_89,sm_89]\" \"--generate-code=arch=compute_90,code=[compute_90,sm_90]\" --expt-relaxed-constexpr --allow-unsupported-compiler -x cu -c /home/niel/git/New_DFT_Code/tides/core/grid/poisson_fft.cu -o CMakeFiles/tides_cuda_grid.dir/core/grid/poisson_fft.cu.o",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/poisson_fft.cu",
+  "output": "CMakeFiles/tides_cuda_grid.dir/core/grid/poisson_fft.cu.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/nvcc -forward-unknown-to-host-compiler -DTIDES_HAVE_LAPACK=1 --options-file CMakeFiles/tides_cuda_grid.dir/includes_CUDA.rsp -O3 -DNDEBUG -std=c++17 \"--generate-code=arch=compute_89,code=[compute_89,sm_89]\" \"--generate-code=arch=compute_90,code=[compute_90,sm_90]\" --expt-relaxed-constexpr --allow-unsupported-compiler -x cu -c /home/niel/git/New_DFT_Code/tides/core/grid/xc.cu -o CMakeFiles/tides_cuda_grid.dir/core/grid/xc.cu.o",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/xc.cu",
+  "output": "CMakeFiles/tides_cuda_grid.dir/core/grid/xc.cu.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -I/home/niel/src/libxc-7.0.0-install/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_rho_build_tests.dir/core/grid/tests/cuda_rho_build_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/grid/tests/cuda_rho_build_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/tests/cuda_rho_build_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_rho_build_tests.dir/core/grid/tests/cuda_rho_build_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -I/home/niel/src/libxc-7.0.0-install/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_poisson_fft_tests.dir/core/grid/tests/cuda_poisson_fft_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/grid/tests/cuda_poisson_fft_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/tests/cuda_poisson_fft_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_poisson_fft_tests.dir/core/grid/tests/cuda_poisson_fft_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -I/home/niel/src/libxc-7.0.0-install/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_cuda_xc_tests.dir/core/grid/tests/cuda_xc_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/grid/tests/cuda_xc_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/tests/cuda_xc_tests.cpp",
+  "output": "CMakeFiles/tides_cuda_xc_tests.dir/core/grid/tests/cuda_xc_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_atomgen_eigensolver_tests.dir/core/basis/atomgen/tests/eigensolver_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/atomgen/tests/eigensolver_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/atomgen/tests/eigensolver_tests.cpp",
+  "output": "CMakeFiles/tides_atomgen_eigensolver_tests.dir/core/basis/atomgen/tests/eigensolver_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_atomgen_hydrogenic_tests.dir/core/basis/atomgen/tests/hydrogenic_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/atomgen/tests/hydrogenic_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/atomgen/tests/hydrogenic_tests.cpp",
+  "output": "CMakeFiles/tides_atomgen_hydrogenic_tests.dir/core/basis/atomgen/tests/hydrogenic_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_lda_xc_tests.dir/core/basis/atomgen/tests/lda_xc_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/atomgen/tests/lda_xc_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/atomgen/tests/lda_xc_tests.cpp",
+  "output": "CMakeFiles/tides_lda_xc_tests.dir/core/basis/atomgen/tests/lda_xc_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_atomic_lda_tests.dir/core/basis/atomgen/tests/atomic_lda_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/atomgen/tests/atomic_lda_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/atomgen/tests/atomic_lda_tests.cpp",
+  "output": "CMakeFiles/tides_atomic_lda_tests.dir/core/basis/atomgen/tests/atomic_lda_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_pseudo_tests.dir/core/basis/pseudo/tests/pseudo_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/pseudo/tests/pseudo_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/pseudo/tests/pseudo_tests.cpp",
+  "output": "CMakeFiles/tides_pseudo_tests.dir/core/basis/pseudo/tests/pseudo_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_two_center_tests.dir/core/basis/tests/two_center_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/tests/two_center_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/tests/two_center_tests.cpp",
+  "output": "CMakeFiles/tides_two_center_tests.dir/core/basis/tests/two_center_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_derivative_tests.dir/core/basis/tests/derivative_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/tests/derivative_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/tests/derivative_tests.cpp",
+  "output": "CMakeFiles/tides_derivative_tests.dir/core/basis/tests/derivative_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_pyscf_overlap_tests.dir/core/basis/tests/pyscf_overlap_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/tests/pyscf_overlap_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/tests/pyscf_overlap_tests.cpp",
+  "output": "CMakeFiles/tides_pyscf_overlap_tests.dir/core/basis/tests/pyscf_overlap_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_nao_tests.dir/core/basis/tests/nao_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/tests/nao_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/tests/nao_tests.cpp",
+  "output": "CMakeFiles/tides_nao_tests.dir/core/basis/tests/nao_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_wp2_profile.dir/core/basis/tests/profile_wp2.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/basis/tests/profile_wp2.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/basis/tests/profile_wp2.cpp",
+  "output": "CMakeFiles/tides_wp2_profile.dir/core/basis/tests/profile_wp2.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -I/home/niel/src/libxc-7.0.0-install/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_dual_grid_tests.dir/core/grid/tests/dual_grid_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/grid/tests/dual_grid_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/tests/dual_grid_tests.cpp",
+  "output": "CMakeFiles/tides_dual_grid_tests.dir/core/grid/tests/dual_grid_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -I/home/niel/src/libxc-7.0.0-install/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_poisson_tests.dir/core/grid/tests/poisson_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/grid/tests/poisson_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/tests/poisson_tests.cpp",
+  "output": "CMakeFiles/tides_poisson_tests.dir/core/grid/tests/poisson_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -I/home/niel/src/libxc-7.0.0-install/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_grid_ops_tests.dir/core/grid/tests/grid_ops_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/grid/tests/grid_ops_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/grid/tests/grid_ops_tests.cpp",
+  "output": "CMakeFiles/tides_grid_ops_tests.dir/core/grid/tests/grid_ops_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_wp4_tests.dir/core/solvers/tests/wp4_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/solvers/tests/wp4_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/solvers/tests/wp4_tests.cpp",
+  "output": "CMakeFiles/tides_wp4_tests.dir/core/solvers/tests/wp4_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_wp5_tests.dir/core/solvers/tests/wp5_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/solvers/tests/wp5_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/solvers/tests/wp5_tests.cpp",
+  "output": "CMakeFiles/tides_wp5_tests.dir/core/solvers/tests/wp5_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_wp6_tests.dir/core/scf/tests/wp6_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/scf/tests/wp6_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/scf/tests/wp6_tests.cpp",
+  "output": "CMakeFiles/tides_wp6_tests.dir/core/scf/tests/wp6_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_wp7_tests.dir/core/hybrids/tests/wp7_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/hybrids/tests/wp7_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/hybrids/tests/wp7_tests.cpp",
+  "output": "CMakeFiles/tides_wp7_tests.dir/core/hybrids/tests/wp7_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++  -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_wp8_tests.dir/core/parallel/tests/wp8_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/parallel/tests/wp8_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/parallel/tests/wp8_tests.cpp",
+  "output": "CMakeFiles/tides_wp8_tests.dir/core/parallel/tests/wp8_tests.cpp.o"
+},
+{
+  "directory": "/home/niel/git/New_DFT_Code/build-cuda",
+  "command": "/usr/bin/c++ -DTIDES_HAVE_LAPACK=1 -I/home/niel/git/New_DFT_Code/tides/core -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -o CMakeFiles/tides_wp9_tests.dir/core/verification/tests/wp9_tests.cpp.o -c /home/niel/git/New_DFT_Code/tides/core/verification/tests/wp9_tests.cpp",
+  "file": "/home/niel/git/New_DFT_Code/tides/core/verification/tests/wp9_tests.cpp",
+  "output": "CMakeFiles/tides_wp9_tests.dir/core/verification/tests/wp9_tests.cpp.o"
+}
+]

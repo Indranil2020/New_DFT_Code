@@ -1,0 +1,22 @@
+{
+  "engine": "E2 Basis & Integrals",
+  "date": "2026-07-06",
+  "status": "ALL PASS (25 profile entries)",
+  "profiling_summary": {
+    "radial_solver": {"status": "PASS", "accuracy": "1e-10 at n=50000", "note": "Numerov for l>0, FD for l=0"},
+    "nao_generation": {"status": "PASS", "note": "DZP→TZP monotone convergence"},
+    "two_center": {"status": "PASS", "rotation_invariance": "1e-12", "pyscf_overlap": "8.6e-9"},
+    "three_center_gpu": {"status": "PASS", "max_diff_vs_cpu": "4.3e-19"},
+    "derivatives": {"status": "PASS", "5pt_fd_accuracy": "2.028e-06"}
+  },
+  "known_issues": [],
+  "mpi_status": "NOT TESTED — no MPI distributed integral computation",
+  "gpu_status": "PASS — two_center.cu + three_center.cu match CPU to machine precision",
+  "optimization_priorities": [
+    {"priority": 1, "item": "GPU three-center parallelization — improve occupancy"},
+    {"priority": 2, "item": "Spline caching for two-center — pre-compute on GPU"},
+    {"priority": 3, "item": "Multi-resolution quadrature for localized basis (arXiv:2604.26037)"},
+    {"priority": 4, "item": "MPI distribution of integral tables for large systems"},
+    {"priority": 5, "item": "Analytic GTH PP integrals (arXiv:2507.17672)"}
+  ]
+}

@@ -7,6 +7,7 @@
 // and norm, and validate against the independent Python FP64 oracle.
 
 #include "basis/atomgen/radial_solver.hpp"
+#include "basis/atomgen/numerov_solver.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -18,6 +19,7 @@ namespace {
 
 using tides::atomgen::RadialSolver;
 using tides::atomgen::RadialState;
+using tides::atomgen::NumerovSolver;
 
 int Fail(const std::string& msg) {
   std::cerr << "hydrogenic_tests: " << msg << '\n';
@@ -92,6 +94,30 @@ int CheckR1sShape(int Z, std::size_t n_r, double r_max) {
 
 }  // namespace
 
+int CheckNumerov(int Z, int l, const std::vector<double>& expected_eps,
+                 double tol, const std::string& label,
+                 std::size_t n_r = 4000, double r_max = 60.0) {
+  auto states = NumerovSolver::SolveHydrogenic(Z, l, expected_eps.size(),
+                                               r_max, n_r);
+  if (states.size() != expected_eps.size())
+    return Fail(label + ": wrong state count");
+  double max_err = 0.0;
+  for (std::size_t k = 0; k < states.size(); ++k) {
+    const double err = std::fabs(states[k].epsilon - expected_eps[k]);
+    max_err = std::max(max_err, err);
+    std::cout << label << " state " << k << " (l=" << l << "): eps="
+              << states[k].epsilon << "  exact=" << expected_eps[k]
+              << "  err=" << err << '\n';
+  }
+  if (max_err > tol) {
+    std::ostringstream os;
+    os << label << ": max eigenvalue error " << max_err << " > " << tol;
+    return Fail(os.str());
+  }
+  std::cout << label << ": max_err=" << max_err << " (tol=" << tol << ") OK\n";
+  return 0;
+}
+
 int main() {
   // Hydrogen (Z=1), l=0: 1s, 2s, 3s -> -0.5, -0.125, -0.0555556 Ha.
   // 2nd-order 3-point stencil + selective tridiagonal eigensolver (dstevx_).
@@ -127,5 +153,27 @@ int main() {
 
   std::cout << "hydrogenic_tests: ALL GREEN\n";
   std::cout << "NOTE: 1e-10 target MET on H 1s (n=50000) and H l=1 (n=50000).\n";
+
+  // Numerov solver tests.
+  // For l=0: Numerov falls back to standard FD (Coulomb singularity degrades
+  // Numerov to O(h), worse than standard FD's O(h^1.5)).
+  // For l>0: Numerov gives ~5x better accuracy than standard FD.
+  // Dense generalized eigensolver limit: m = n_r - 2 <= 2000 => n_r <= 2002.
+  std::cout << "\n--- Numerov solver tests ---\n";
+  // l=0 falls back to standard FD — verify it still works correctly.
+  if (CheckNumerov(1, 0, {-0.5}, 4e-6, "Numerov_H_1s_fallback", 16000, 80.0))
+    return 1;
+  // l=1: Numerov gives ~5x improvement over standard FD.
+  // Standard FD at n=2000: ~4e-6. Numerov at n=2000: ~9e-7.
+  if (CheckNumerov(1, 1, {-0.125, -1.0 / 18.0}, 2e-6, "Numerov_H_l1", 2000, 80.0))
+    return 1;
+  // l=2: Numerov gives ~6x improvement.
+  if (CheckNumerov(1, 2, {-1.0 / 18.0}, 5e-7, "Numerov_H_l2", 2000, 80.0))
+    return 1;
+  // He+ l=1
+  if (CheckNumerov(2, 1, {-0.5}, 5e-5, "Numerov_He+_l1", 2000, 50.0))
+    return 1;
+
+  std::cout << "Numerov tests: ALL GREEN\n";
   return 0;
 }

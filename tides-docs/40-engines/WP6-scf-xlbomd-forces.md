@@ -3,8 +3,9 @@ Purpose: the production loop. Physics: 10-physics/14,16; math: 20-math/25. Phase
 
 ### T6.1 — SCF driver + mixers (Pulay/Kerker/Broyden)
 - Observables: converges gauntlet-10 within a documented iteration budget; charged/open-shell UKS
-  cases preserve charge and spin multiplicity and match PySCF/ABACUS references within rung-3 budgets;
-  restart-safe via HDF5.
+  cases preserve charge, spin multiplicity, spin moment, and integrated spin density and match
+  PySCF/ABACUS references within rung-3 budgets; charged slabs/cells exercise the T6.2 neutralization
+  path; restart-safe via HDF5.
   Effort 5 pw. Depends T2.5, T3.2–T3.5. Unblocks T4.2, T6.2.
 
 ### T6.2 — Total energy assembly + Ewald/neutralization

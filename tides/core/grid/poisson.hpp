@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <vector>
 
+#include <fftw3.h>
+
 #include "grid/dual_grid.hpp"
 
 namespace tides::grid {
@@ -15,8 +17,8 @@ namespace tides::grid {
 // (per 10-physics/13 and WP3 T3.4).
 //
 // The CPU reference uses a direct N-body Coulomb sum for free BCs (with
-// self-term regularization) and a DFT-based Green's function for periodic BC.
-// The GPU path (cuFFT) is deferred to Phase B; this CPU path is the FP64 oracle.
+// self-term regularization) and an FFTW3-based FFT for periodic BC.
+// The GPU path uses cuFFT for O(N log N) periodic Poisson.
 //
 // Observable (T3.4): the Hartree energy of a Gaussian charge distribution must
 // match the analytic result E_H = q^2 * sqrt(alpha/(2*pi)) to <= 1e-10 Ha
@@ -91,8 +93,8 @@ class PoissonSolver {
     return V;
   }
 
-  // Periodic DFT-based Poisson: V(k) = 4 pi rho(k) / k^2 (k=0 -> 0).
-  // O(N^2) naive DFT; GPU path uses cuFFT for O(N log N).
+  // Periodic FFT-based Poisson: V(k) = 4 pi rho(k) / k^2 (k=0 -> 0).
+  // Uses FFTW3 for O(N log N) 3D FFT. Replaces the former O(N^2) naive DFT.
   static std::vector<double> SolvePeriodicFFT(const UniformGrid3D& grid,
                                              const std::vector<double>& rho) {
     const std::size_t N = grid.total_points();
@@ -101,25 +103,23 @@ class PoissonSolver {
     const auto [L0, L1, L2] = grid.cell_size();
     const double dv = h0 * h1 * h2;
 
-    // Forward DFT: rho(k) = sum_j rho(j) exp(-i k.r_j) dv.
-    std::vector<std::array<double, 2>> rho_k(N, {0.0, 0.0});
-    for (std::size_t k = 0; k < N; ++k) {
-      const auto [kx, ky, kz] = grid.unflatten(k);
-      double re = 0.0, im = 0.0;
-      for (std::size_t j = 0; j < N; ++j) {
-        const auto [jx, jy, jz] = grid.unflatten(j);
-        const double phase = -2.0 * M_PI *
-            (static_cast<double>(kx * jx) / static_cast<double>(n0) +
-             static_cast<double>(ky * jy) / static_cast<double>(n1) +
-             static_cast<double>(kz * jz) / static_cast<double>(n2));
-        re += rho[j] * std::cos(phase) * dv;
-        im += rho[j] * std::sin(phase) * dv;
-      }
-      rho_k[k] = {re, im};
+    // Allocate FFTW complex arrays (interleaved re/im).
+    fftw_complex* in = reinterpret_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * N));
+    fftw_complex* out = reinterpret_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * N));
+
+    // Forward FFT: rho(r) * dv -> rho(k).
+    for (std::size_t i = 0; i < N; ++i) {
+      in[i][0] = rho[i] * dv;
+      in[i][1] = 0.0;
     }
 
-    // Green's function: V(k) = 4 pi rho(k) / k^2.
-    std::vector<std::array<double, 2>> V_k(N, {0.0, 0.0});
+    fftw_plan fwd = fftw_plan_dft_3d(
+        static_cast<int>(n0), static_cast<int>(n1), static_cast<int>(n2),
+        in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+    fftw_execute(fwd);
+    fftw_destroy_plan(fwd);
+
+    // Apply Green's function: V(k) = 4 pi rho(k) / k^2.
     for (std::size_t k = 0; k < N; ++k) {
       const auto [kx, ky, kz] = grid.unflatten(k);
       double fx = static_cast<double>(kx);
@@ -132,27 +132,33 @@ class PoissonSolver {
       const double ky_p = 2.0 * M_PI * fy / L1;
       const double kz_p = 2.0 * M_PI * fz / L2;
       const double k2 = kx_p * kx_p + ky_p * ky_p + kz_p * kz_p;
-      if (k2 < 1e-30) continue;
+      if (k2 < 1e-30) {
+        out[k][0] = 0.0;
+        out[k][1] = 0.0;
+        continue;
+      }
       const double factor = 4.0 * M_PI / k2;
-      V_k[k] = {rho_k[k][0] * factor, rho_k[k][1] * factor};
+      out[k][0] *= factor;
+      out[k][1] *= factor;
     }
 
-    // Inverse DFT: V(r) = sum_k V(k) exp(+i k.r) / V_cell.
-    std::vector<double> V(N, 0.0);
+    // Inverse FFT: V(k) -> V(r), then normalize by 1/V_cell.
+    fftw_complex* V_c = reinterpret_cast<fftw_complex*>(fftw_malloc(sizeof(fftw_complex) * N));
+    fftw_plan bwd = fftw_plan_dft_3d(
+        static_cast<int>(n0), static_cast<int>(n1), static_cast<int>(n2),
+        out, V_c, FFTW_BACKWARD, FFTW_ESTIMATE);
+    fftw_execute(bwd);
+    fftw_destroy_plan(bwd);
+
     const double inv_vol = 1.0 / (L0 * L1 * L2);
-    for (std::size_t j = 0; j < N; ++j) {
-      const auto [jx, jy, jz] = grid.unflatten(j);
-      double re = 0.0;
-      for (std::size_t k = 0; k < N; ++k) {
-        const auto [kx, ky, kz] = grid.unflatten(k);
-        const double phase = 2.0 * M_PI *
-            (static_cast<double>(kx * jx) / static_cast<double>(n0) +
-             static_cast<double>(ky * jy) / static_cast<double>(n1) +
-             static_cast<double>(kz * jz) / static_cast<double>(n2));
-        re += (V_k[k][0] * std::cos(phase) - V_k[k][1] * std::sin(phase));
-      }
-      V[j] = re * inv_vol;
+    std::vector<double> V(N, 0.0);
+    for (std::size_t i = 0; i < N; ++i) {
+      V[i] = V_c[i][0] * inv_vol;
     }
+
+    fftw_free(in);
+    fftw_free(out);
+    fftw_free(V_c);
     return V;
   }
 };

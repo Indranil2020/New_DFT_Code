@@ -1,0 +1,50 @@
+{
+  "engine": "E3 Grid Engine",
+  "date": "2026-07-06",
+  "status": "ALL PASS (33 profile entries)",
+  "profiling": {
+    "dual_grid": {"16^3": "0.140ms", "48^3": "0.482ms", "64^3": "1.966ms"},
+    "rho_build": {
+      "cpu": {"16^3x4": "0.012ms", "24^3x8": "0.107ms", "32^3x16": "0.323ms", "48^3x32": "1.889ms"},
+      "gpu": {"16^3x4": "2335ms (overhead)", "24^3x8": "0.892ms", "32^3x16": "3.372ms", "48^3x32": "17.630ms"},
+      "gpu_vs_cpu_speedup": {"24^3x8": "0.12x (overhead)", "32^3x16": "0.10x", "48^3x32": "0.11x"},
+      "note": "GPU slower than CPU — kernel launch overhead dominates at these sizes"
+    },
+    "vmat_build": {
+      "cpu": {"16^3x4": "0.040ms", "24^3x8": "0.500ms", "32^3x16": "4.687ms", "48^3x32": "64.471ms"},
+      "gpu": {"16^3x4": "0.619ms", "24^3x8": "0.599ms", "32^3x16": "1.616ms", "48^3x32": "17.345ms"},
+      "gpu_vs_cpu_speedup": {"32^3x16": "2.9x", "48^3x32": "3.7x"}
+    },
+    "poisson": {
+      "cpu": {"16^3": "714ms", "32^3": "43000ms (43 seconds!)"},
+      "gpu": {"16^3": "4.311ms", "32^3": "19.182ms"},
+      "gpu_vs_cpu_speedup": {"16^3": "165x", "32^3": "2240x"},
+      "note": "CPU uses O(N^2) naive DFT. GPU uses cuFFT. CRITICAL: CPU needs FFTW."
+    },
+    "xc_lda": {
+      "cpu": {"16^3": "0.385ms", "24^3": "1.281ms", "32^3": "3.070ms", "48^3": "10.679ms"},
+      "gpu": {"16^3": "0.833ms", "24^3": "0.505ms", "32^3": "0.870ms", "48^3": "2.751ms"},
+      "gpu_vs_cpu_speedup": {"24^3": "2.5x", "32^3": "3.5x", "48^3": "3.9x"}
+    },
+    "adjointness": {"status": "PASS", "error": "1.998e-15"}
+  },
+  "known_issues": [
+    {
+      "id": "E3-KI-1",
+      "issue": "CPU Poisson uses O(N^2) naive DFT",
+      "impact": "43 seconds at 32^3, hangs at 64^3",
+      "fix": "Link FFTW or implement Cooley-Tukey FFT",
+      "priority": "CRITICAL"
+    }
+  ],
+  "mpi_status": "NOT TESTED — no MPI distributed grid computation",
+  "gpu_status": "PASS — all GPU kernels match CPU to machine precision. Poisson GPU 2240x faster than CPU.",
+  "optimization_priorities": [
+    {"priority": 1, "item": "Link FFTW for CPU Poisson — replace O(N^2) with O(N log N)", "expected_speedup": "100-1000x", "paper": "arXiv:2512.08555"},
+    {"priority": 2, "item": "Implement multigrid-FFT for free BCs", "expected_speedup": "10-100x for free BCs", "paper": "arXiv:2512.08555"},
+    {"priority": 3, "item": "Rho build GPU optimization — kernel launch overhead dominates", "expected_speedup": "5-10x for small grids"},
+    {"priority": 4, "item": "Adaptive grids for localized orbitals", "expected_speedup": "2-5x fewer grid points", "paper": "arXiv:2510.20826"},
+    {"priority": 5, "item": "GPU XC kernel — improve occupancy", "expected_speedup": "1.5-2x"},
+    {"priority": 6, "item": "MPI domain decomposition for large grids", "expected_speedup": "Nx for N ranks"}
+  ]
+}

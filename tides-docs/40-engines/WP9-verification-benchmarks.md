@@ -7,8 +7,9 @@ Purpose: nothing is true until this WP says so. Sources: 50-verification/*, 60-b
 
 ### T9.2 — Reference data curation
 - Observables: ACWF subset, S22, W4-11 subset, surface DB ingested with DOI/license/uncertainty per
-  entry, plus charged/open-shell UKS molecules/slabs with charge, spin, diffuse-basis convergence,
-  and density-tail diagnostics (52-reference-data). Effort 4 pw. Depends –.
+  entry, plus charged/open-shell UKS molecules and charged-compensated cells/slabs with charge,
+  N_alpha/N_beta, spin moment, diffuse-basis convergence, integrated spin density, and density-tail
+  diagnostics (52-reference-data). Effort 4 pw. Depends –.
 
 ### T9.3 — Nightly mixed-vs-FP64 A/B harness
 - Observables: <=0.5 meV/atom budget enforced on gauntlet-10; alarm + bisect pointer on breach.

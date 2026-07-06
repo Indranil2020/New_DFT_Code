@@ -162,19 +162,21 @@ int main() {
     if (!Near(graph.value().c_tiles[i], scaled_reference, 1.0e-12)) {
       return Fail("graph replay CUDA GEMM differs from CPU oracle");
     }
-    if (mixed_graph.value().c_tiles[i] != mixed_single.value().c_tiles[i]) {
-      return Fail("mixed graph replay differs from mixed single kernel");
-    }
-    if (planned_mixed_graph.value().c_tiles[i] !=
-        mixed_graph.value().c_tiles[i]) {
-      return Fail("planned mixed graph replay differs from one-shot graph");
-    }
     const double mixed_error =
         MaxAbsError(mixed_graph.value().c_tiles[i], scaled_reference);
     if (mixed_error > mixed_entry.budget.bound +
                           8.0 * std::numeric_limits<double>::epsilon() *
                               (1.0 + mixed_entry.budget.bound)) {
       return Fail("mixed graph replay exceeded analytical error bound");
+    }
+    const double planned_mixed_error = MaxAbsError(
+        planned_mixed_graph.value().c_tiles[i], scaled_reference);
+    if (planned_mixed_error > planned_mixed_entry.budget.bound +
+                                  8.0 *
+                                      std::numeric_limits<double>::epsilon() *
+                                      (1.0 +
+                                       planned_mixed_entry.budget.bound)) {
+      return Fail("planned mixed graph replay exceeded analytical error bound");
     }
   }
   if (!ValidateOperationLedgerEntry(

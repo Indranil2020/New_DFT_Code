@@ -1,0 +1,2 @@
+/usr/bin/ar qc libtides_cuda_basis.a CMakeFiles/tides_cuda_basis.dir/core/basis/two_center.cu.o
+/usr/bin/ranlib libtides_cuda_basis.a
