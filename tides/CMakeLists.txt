@@ -304,3 +304,8 @@ add_executable(tides_wp4_tests
   core/solvers/tests/wp4_tests.cpp)
 target_link_libraries(tides_wp4_tests PRIVATE tides_solvers)
 add_test(NAME wp4_solvers_broker_chfsi_omm COMMAND tides_wp4_tests)
+
+add_executable(tides_wp5_tests
+  core/solvers/tests/wp5_tests.cpp)
+target_link_libraries(tides_wp5_tests PRIVATE tides_solvers)
+add_test(NAME wp5_sp2_submatrix_foe_fermi_truncation COMMAND tides_wp5_tests)
