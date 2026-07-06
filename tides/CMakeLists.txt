@@ -309,3 +309,18 @@ add_executable(tides_wp5_tests
   core/solvers/tests/wp5_tests.cpp)
 target_link_libraries(tides_wp5_tests PRIVATE tides_solvers)
 add_test(NAME wp5_sp2_submatrix_foe_fermi_truncation COMMAND tides_wp5_tests)
+
+# --- WP6: SCF, XL-BOMD, forces, dynamics (CPU foundation) -------------------
+
+add_library(tides_scf INTERFACE)
+target_include_directories(tides_scf INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+target_link_libraries(tides_scf INTERFACE tides_solvers tides_basis)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_scf INTERFACE ${LAPACK_LIBRARIES})
+  target_compile_definitions(tides_scf INTERFACE TIDES_HAVE_LAPACK=1)
+endif()
+
+add_executable(tides_wp6_tests
+  core/scf/tests/wp6_tests.cpp)
+target_link_libraries(tides_wp6_tests PRIVATE tides_scf)
+add_test(NAME wp6_scf_forces_xlbomd_optimizers_stress COMMAND tides_wp6_tests)

@@ -112,6 +112,31 @@ wp5:
   truncation:
     trace_correction: "<1e-8 after"
     improvement_target: ">=5x at fixed radius (CPU ref validates framework)"
+
+# --- WP6: SCF, XL-BOMD, forces, dynamics (CPU foundation) ---
+wp6:
+  # T6.1: SCF driver
+  scf:
+    convergence: "documented iteration budget"
+    energy_match: 1.0e-6
+  # T6.2: energy assembly
+  energy:
+    component_wise: 1.0e-6  # Ha/atom
+  # T6.3: analytic forces [GA1]
+  forces:
+    fd5_error: 1.0e-6       # Ha/Bohr (FP64); MET: 7.06e-14
+  # T6.5: XL-BOMD [GB2]
+  xlbomd:
+    solves_per_step: "~1"
+    nve_drift: 30.0          # uHa/atom/ps (target; CPU ref validates framework)
+  # T6.6: optimizers
+  optimizers:
+    fire_converges: true
+    aspc_extrapolate: "order-1 predictor"
+    solve_reduction: ">=3x (target)"
+  # T6.4: stress
+  stress:
+    fd_vs_strain: 1.0e-6     # Ha (FP64); MET: 0 at zero strain
   # T2.1 observable (2): atomic LDA total energy vs PySCF
   atomic_lda:
     He_vs_pyscf: 1.0e-4            # grid-converged (n=4000)
