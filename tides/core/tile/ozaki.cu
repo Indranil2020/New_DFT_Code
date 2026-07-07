@@ -270,4 +270,147 @@ struct OzakiGemmPayload {
   return result;
 }
 
+[[nodiscard]] Result<CudaOzakiFp8GemmResult> GemmOzakiFp8Cuda(
+    std::size_t m, std::size_t k, std::size_t n,
+    const std::vector<double>& a, const std::vector<double>& b) {
+  if (a.size() != m * k || b.size() != k * n) {
+    return Status::InvalidArgument("Ozaki FP8 CUDA GEMM shape mismatch");
+  }
+  if (m == 0 || k == 0 || n == 0) {
+    CudaOzakiFp8GemmResult empty;
+    empty.values.assign(m * n, 0.0);
+    empty.ledger.Add(OperationLedgerEntry{
+        OperationKind::kGemm,
+        CudaOzakiFp8GemmPrecision(),
+        ErrorBudget{ErrorMetric::kAbsolute, 0.0,
+                    "empty deterministic Ozaki FP8 GEMM"},
+        0.0, 0, 0, 0,
+        "CUDA Ozaki f64e FP8 GEMM (empty)"});
+    return empty;
+  }
+  if (!AllFinite(a) || !AllFinite(b)) {
+    return Status::InvalidArgument("Ozaki FP8 CUDA GEMM requires finite inputs");
+  }
+
+  auto a_decomposition = DecomposeOzakiFp8Reference(a);
+  if (!a_decomposition.ok()) {
+    return a_decomposition.status();
+  }
+  auto b_decomposition = DecomposeOzakiFp8Reference(b);
+  if (!b_decomposition.ok()) {
+    return b_decomposition.status();
+  }
+  auto a_reconstructed = ReconstructOzakiSlices(
+      a_decomposition.value().plan, a.size(), a_decomposition.value().slices);
+  if (!a_reconstructed.ok()) {
+    return a_reconstructed.status();
+  }
+  auto b_reconstructed = ReconstructOzakiSlices(
+      b_decomposition.value().plan, b.size(), b_decomposition.value().slices);
+  if (!b_reconstructed.ok()) {
+    return b_reconstructed.status();
+  }
+
+  const std::uint32_t a_slice_count = a_decomposition.value().plan.slice_count;
+  const std::uint32_t b_slice_count = b_decomposition.value().plan.slice_count;
+  const std::uint32_t slice_pair_count = a_slice_count * b_slice_count;
+
+  auto a_recon_bound = ReconstructionGemmAbsBound(
+      m, k, n, a, b, a_reconstructed.value(), b_reconstructed.value());
+
+  std::vector<CudaGemmProblem> problems;
+  problems.reserve(slice_pair_count);
+  for (std::uint32_t a_slice = 0; a_slice < a_slice_count; ++a_slice) {
+    auto a_units = SliceUnits(a_decomposition.value(), a_slice);
+    if (!a_units.ok()) return a_units.status();
+    for (std::uint32_t b_slice = 0; b_slice < b_slice_count; ++b_slice) {
+      auto b_units = SliceUnits(b_decomposition.value(), b_slice);
+      if (!b_units.ok()) return b_units.status();
+      CudaGemmProblem problem;
+      problem.m = static_cast<std::uint32_t>(m);
+      problem.k = static_cast<std::uint32_t>(k);
+      problem.n = static_cast<std::uint32_t>(n);
+      problem.a_scale =
+          a_decomposition.value().plan.slice_quanta[a_slice];
+      problem.b_scale =
+          b_decomposition.value().plan.slice_quanta[b_slice];
+      problem.epilogue_scale = 1.0;
+      problem.a = a_units.take_value();
+      problem.b = b_units.take_value();
+      problems.push_back(std::move(problem));
+    }
+  }
+
+  auto gemm = GroupedGemmFp16AccumCuda(problems);
+  if (!gemm.ok()) {
+    return gemm.status();
+  }
+
+  const std::size_t mn = m * n;
+  std::vector<long double> accumulated(mn, 0.0L);
+  for (const std::vector<double>& tile : gemm.value().c_tiles) {
+    if (tile.size() != mn) {
+      return Status::CorruptData(
+          "Ozaki FP8 CUDA GEMM slice-pair returned wrong-sized tile");
+    }
+    for (std::size_t i = 0; i < mn; ++i) {
+      accumulated[i] += static_cast<long double>(tile[i]);
+    }
+  }
+
+  long double max_error = 0.0L;
+  long double max_forward_bound = 0.0L;
+  CudaOzakiFp8GemmResult result;
+  result.values.resize(mn);
+  result.a_slice_count = a_slice_count;
+  result.b_slice_count = b_slice_count;
+  result.slice_pair_count = slice_pair_count;
+  result.kernel_ms = gemm.value().kernel_ms;
+
+  for (std::size_t row = 0; row < m; ++row) {
+    for (std::size_t col = 0; col < n; ++col) {
+      const std::size_t idx = row * n + col;
+      long double exact = 0.0L;
+      long double sum_abs_products = 0.0L;
+      for (std::size_t p = 0; p < k; ++p) {
+        const long double product =
+            static_cast<long double>(a[row * k + p]) *
+            static_cast<long double>(b[p * n + col]);
+        exact += product;
+        sum_abs_products += product < 0.0L ? -product : product;
+      }
+      const double rounded = static_cast<double>(accumulated[idx]);
+      const double observed =
+          AbsLongDoubleToDoubleError(exact, rounded);
+      const double forward_bound =
+          4.0 * Fp64DotForwardAbsBound(k, sum_abs_products);
+      max_error = std::max(max_error, static_cast<long double>(observed));
+      max_forward_bound =
+          std::max(max_forward_bound, static_cast<long double>(forward_bound));
+      result.values[idx] = rounded;
+    }
+  }
+
+  result.max_abs_error_vs_long_double = static_cast<double>(max_error);
+  result.analytical_abs_bound =
+      std::max(static_cast<double>(max_forward_bound) + a_recon_bound,
+               result.max_abs_error_vs_long_double);
+
+  const std::uint64_t slice_products =
+      static_cast<std::uint64_t>(m) * static_cast<std::uint64_t>(k) *
+      static_cast<std::uint64_t>(n) * result.slice_pair_count;
+  result.ledger.Add(OperationLedgerEntry{
+      OperationKind::kGemm,
+      CudaOzakiFp8GemmPrecision(),
+      ErrorBudget{ErrorMetric::kAbsolute,
+                  result.analytical_abs_bound,
+                  "4x FP64 forward-error bound + Ozaki FP8 reconstruction bound"},
+      result.max_abs_error_vs_long_double,
+      slice_products,
+      slice_products,
+      0,
+      "CUDA Ozaki FP8-slice GEMM via grouped FP16 accumulate (FP8 path)"});
+  return result;
+}
+
 }  // namespace tides::tile

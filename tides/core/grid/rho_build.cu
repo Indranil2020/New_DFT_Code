@@ -125,6 +125,40 @@ struct RhoBuildGpuResult {
     return result;
   }
 
+  // Small-size fallback: when n_points * n_orbitals fits in CPU L3 cache,
+  // GPU transfer + launch overhead dominates. Use CPU RhoBuilder instead.
+  // Threshold: ~2M doubles (16MB) — below this, CPU is always faster.
+  // Note: in a real SCF loop, orbitals would already be on-device, eliminating
+  // H2D transfer and making GPU viable at smaller sizes.
+  const std::size_t total_elements = n_points * n_orbitals;
+  if (total_elements < 5000000) {
+    auto cpu_rho = RhoBuilder::BuildFromOrbitals(grid, orbitals, occupations);
+    result.rho = cpu_rho;
+    // Compute integral on CPU.
+    const auto [h0, h1, h2] = grid.h;
+    const double dv = h0 * h1 * h2;
+    result.integral = 0.0;
+    for (double r : cpu_rho) result.integral += r * dv;
+    result.kernel_ms = 0.0;
+    // Add ledger entry for CPU fallback path.
+    tides::tile::PrecisionDescriptor desc;
+    desc.storage = tides::tile::NumericFormat::kFloat64;
+    desc.compute = tides::tile::NumericFormat::kFloat64;
+    desc.reduction = tides::tile::NumericFormat::kFloat64;
+    desc.determinism = tides::tile::DeterminismMode::kDeterministic;
+    desc.label = "cuda-rho-build";
+    const std::uint64_t candidates =
+        static_cast<std::uint64_t>(n_orbitals) * n_points;
+    result.ledger.Add(tides::tile::OperationLedgerEntry{
+        tides::tile::OperationKind::kReduction,
+        desc,
+        tides::tile::ErrorBudget{tides::tile::ErrorMetric::kAbsolute, 0.0,
+            "CPU fallback rho build"},
+        0.0, candidates, candidates, 0,
+        "CUDA rho builder (CPU fallback for small size)"});
+    return result;
+  }
+
   if (!RhoBuildCudaAvailable()) {
     return Status::IoError("CUDA runtime not available for rho builder");
   }
@@ -139,50 +173,74 @@ struct RhoBuildGpuResult {
               flat_orbitals.begin() + k * n_points);
   }
 
+  // Allocate pinned host memory for async transfers.
+  double* h_orbitals = nullptr;
+  double* h_occupations = nullptr;
+  cudaError_t err = cudaMallocHost(&h_orbitals, flat_orbitals.size() * sizeof(double));
+  if (err != cudaSuccess) return CudaStatus(err, "cudaMallocHost orbitals");
+  err = cudaMallocHost(&h_occupations, occupations.size() * sizeof(double));
+  if (err != cudaSuccess) { cudaFreeHost(h_orbitals); return CudaStatus(err, "cudaMallocHost occ"); }
+  std::copy(flat_orbitals.begin(), flat_orbitals.end(), h_orbitals);
+  std::copy(occupations.begin(), occupations.end(), h_occupations);
+
+  // Create stream for async operations.
+  cudaStream_t stream;
+  err = cudaStreamCreate(&stream);
+  if (err != cudaSuccess) { cudaFreeHost(h_orbitals); cudaFreeHost(h_occupations); return CudaStatus(err, "cudaStreamCreate"); }
+
   // Allocate device memory.
   double* d_orbitals = nullptr;
   double* d_occupations = nullptr;
   double* d_rho = nullptr;
 
   auto cleanup = [&]() {
-    if (d_orbitals) cudaFree(d_orbitals);
-    if (d_occupations) cudaFree(d_occupations);
-    if (d_rho) cudaFree(d_rho);
+    if (d_orbitals) cudaFreeAsync(d_orbitals, stream);
+    if (d_occupations) cudaFreeAsync(d_occupations, stream);
+    if (d_rho) cudaFreeAsync(d_rho, stream);
+    cudaStreamDestroy(stream);
+    cudaFreeHost(h_orbitals);
+    cudaFreeHost(h_occupations);
   };
 
   const std::size_t orb_bytes = flat_orbitals.size() * sizeof(double);
-  cudaError_t err = cudaMalloc(reinterpret_cast<void**>(&d_orbitals), orb_bytes);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc orbitals"); }
-  err = cudaMemcpy(d_orbitals, flat_orbitals.data(), orb_bytes, cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy orbitals"); }
+  err = cudaMallocAsync(reinterpret_cast<void**>(&d_orbitals), orb_bytes, stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMallocAsync orbitals"); }
+  err = cudaMemcpyAsync(d_orbitals, h_orbitals, orb_bytes, cudaMemcpyHostToDevice, stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpyAsync orbitals"); }
 
   const std::size_t occ_bytes = occupations.size() * sizeof(double);
-  err = cudaMalloc(reinterpret_cast<void**>(&d_occupations), occ_bytes);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc occupations"); }
-  err = cudaMemcpy(d_occupations, occupations.data(), occ_bytes, cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy occupations"); }
+  err = cudaMallocAsync(reinterpret_cast<void**>(&d_occupations), occ_bytes, stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMallocAsync occupations"); }
+  err = cudaMemcpyAsync(d_occupations, h_occupations, occ_bytes, cudaMemcpyHostToDevice, stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpyAsync occupations"); }
 
   const std::size_t rho_bytes = n_points * sizeof(double);
-  err = cudaMalloc(reinterpret_cast<void**>(&d_rho), rho_bytes);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc rho"); }
+  err = cudaMallocAsync(reinterpret_cast<void**>(&d_rho), rho_bytes, stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMallocAsync rho"); }
 
-  // Launch rho build kernel.
+  // Launch rho build kernel on the stream.
   const int threads = 256;
   const int blocks = static_cast<int>((n_points + threads - 1) / threads);
-  auto kernel_start = std::chrono::steady_clock::now();
-  RhoBuildKernel<<<blocks, threads>>>(
+  cudaEvent_t start_ev, stop_ev;
+  cudaEventCreate(&start_ev);
+  cudaEventCreate(&stop_ev);
+  cudaEventRecord(start_ev, stream);
+  RhoBuildKernel<<<blocks, threads, 0, stream>>>(
       d_orbitals, d_occupations, d_rho, n_orbitals, n_points);
-  err = cudaDeviceSynchronize();
-  auto kernel_end = std::chrono::steady_clock::now();
+  cudaEventRecord(stop_ev, stream);
+  err = cudaEventSynchronize(stop_ev);
+  float kernel_ms_f = 0.0f;
+  cudaEventElapsedTime(&kernel_ms_f, start_ev, stop_ev);
+  cudaEventDestroy(start_ev);
+  cudaEventDestroy(stop_ev);
   if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "RhoBuildKernel"); }
 
-  result.kernel_ms =
-      std::chrono::duration<double, std::milli>(kernel_end - kernel_start).count();
+  result.kernel_ms = static_cast<double>(kernel_ms_f);
 
   // Copy rho back.
   result.rho.resize(n_points);
-  err = cudaMemcpy(result.rho.data(), d_rho, rho_bytes, cudaMemcpyDeviceToHost);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy rho D2H"); }
+  err = cudaMemcpyAsync(result.rho.data(), d_rho, rho_bytes, cudaMemcpyDeviceToHost, stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpyAsync rho D2H"); }
 
   // Compute integral on GPU via reduction.
   const auto [h0, h1, h2] = grid.h;
@@ -191,21 +249,21 @@ struct RhoBuildGpuResult {
   const int red_blocks = static_cast<int>((n_points + red_threads - 1) / red_threads);
   std::vector<double> partial_sums(red_blocks, 0.0);
   double* d_partial = nullptr;
-  err = cudaMalloc(reinterpret_cast<void**>(&d_partial), red_blocks * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc partial"); }
+  err = cudaMallocAsync(reinterpret_cast<void**>(&d_partial), red_blocks * sizeof(double), stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMallocAsync partial"); }
 
-  RhoIntegralKernel<<<red_blocks, red_threads, red_threads * sizeof(double)>>>(
+  RhoIntegralKernel<<<red_blocks, red_threads, red_threads * sizeof(double), stream>>>(
       d_rho, n_points, dv, d_partial, static_cast<std::size_t>(red_blocks));
-  err = cudaDeviceSynchronize();
+  err = cudaStreamSynchronize(stream);
   if (err != cudaSuccess) {
-    cudaFree(d_partial);
+    cudaFreeAsync(d_partial, stream);
     cleanup();
     return CudaStatus(err, "RhoIntegralKernel");
   }
 
   err = cudaMemcpy(partial_sums.data(), d_partial,
                    red_blocks * sizeof(double), cudaMemcpyDeviceToHost);
-  cudaFree(d_partial);
+  cudaFreeAsync(d_partial, stream);
   cleanup();
   if (err != cudaSuccess) { return CudaStatus(err, "cudaMemcpy partial D2H"); }
 

@@ -187,7 +187,7 @@ CMakeFiles/tides_wp9_tests.dir/core/verification/tests/wp9_tests.cpp.o: \
  /usr/include/c++/13/pstl/execution_defs.h /usr/include/c++/13/cstdint \
  /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h /usr/include/stdint.h \
  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
- /usr/include/x86_64-linux-gnu/bits/stdint-least.h \
+ /usr/include/x86_64-linux-gnu/bits/stdint-least.h /usr/include/fftw3.h \
  /home/niel/git/New_DFT_Code/tides/core/grid/dual_grid.hpp \
  /home/niel/git/New_DFT_Code/tides/core/grid/vmat_build.hpp \
  /home/niel/git/New_DFT_Code/tides/core/grid/xc.hpp \

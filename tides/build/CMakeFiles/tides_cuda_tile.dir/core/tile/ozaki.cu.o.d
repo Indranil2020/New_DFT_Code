@@ -190,6 +190,15 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/ozaki.cu.o : /home/niel/git/New_DFT_Cod
     /usr/include/c++/12/bits/stl_relops.h \
     /usr/include/c++/12/initializer_list \
     /home/niel/git/New_DFT_Code/tides/core/tile/ozaki.hpp \
+    /usr/include/cuda_fp8.h \
+    /usr/include/cuda_fp16.h \
+    /usr/include/cuda_fp16.hpp \
+    /usr/include/nv/target \
+    /usr/include/nv/detail/__target_macros \
+    /usr/include/nv/detail/__preprocessor \
+    /usr/include/cuda_bf16.h \
+    /usr/include/cuda_bf16.hpp \
+    /usr/include/cuda_fp8.hpp \
     /usr/include/c++/12/algorithm \
     /usr/include/c++/12/bits/stl_algo.h \
     /usr/include/c++/12/bits/algorithmfwd.h \

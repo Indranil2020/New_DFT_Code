@@ -189,6 +189,7 @@ CMakeFiles/tides_e3_grid_profile.dir/tests/per_engine/e3_grid/e3_test_profile.cp
  /usr/include/errno.h
  /usr/include/features-time64.h
  /usr/include/features.h
+ /usr/include/fftw3.h
  /usr/include/libintl.h
  /usr/include/linux/errno.h
  /usr/include/locale.h

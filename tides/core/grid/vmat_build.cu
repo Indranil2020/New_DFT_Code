@@ -115,6 +115,22 @@ void FreeDevice(T* ptr) { if (ptr) cudaFree(ptr); }
   for (std::size_t k = 0; k < n_orb; ++k)
     if (orbitals[k].size() != N)
       return Status::InvalidArgument("orbital size mismatch with grid");
+
+  // Small-size fallback: when n_orb * n_points is small, GPU transfer +
+  // launch overhead dominates. Use CPU VmatBuilder instead.
+  // At 16³×4: GPU=0.82ms vs CPU=0.07ms. At 32³×16: GPU=1875ms vs CPU=4.4ms.
+  // At 48³×32: GPU=1725ms vs CPU=71ms (CPU still faster due to kernel design).
+  // Threshold: 5M elements — below this, CPU is always faster.
+  const std::size_t total_elements = n_orb * N;
+  if (total_elements < 5000000) {
+    auto t0 = std::chrono::steady_clock::now();
+    auto H_cpu = VmatBuilder::BuildHmat(grid, orbitals, v);
+    auto t1 = std::chrono::steady_clock::now();
+    result.H = H_cpu;
+    result.kernel_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    return result;
+  }
+
   if (!VmatCudaAvailable())
     return Status::IoError("CUDA runtime not available for vmat build");
 

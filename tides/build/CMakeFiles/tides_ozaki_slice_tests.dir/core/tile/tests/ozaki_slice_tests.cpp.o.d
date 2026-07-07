@@ -2,7 +2,10 @@ CMakeFiles/tides_ozaki_slice_tests.dir/core/tile/tests/ozaki_slice_tests.cpp.o: 
  /home/niel/git/New_DFT_Code/tides/core/tile/tests/ozaki_slice_tests.cpp \
  /usr/include/stdc-predef.h \
  /home/niel/git/New_DFT_Code/tides/core/tile/ozaki.hpp \
- /usr/include/c++/13/algorithm /usr/include/c++/13/bits/stl_algobase.h \
+ /usr/include/cuda_fp8.h /usr/include/cuda_fp16.h \
+ /usr/include/cuda_fp16.hpp /usr/include/nv/target \
+ /usr/include/nv/detail/__target_macros \
+ /usr/include/nv/detail/__preprocessor /usr/include/c++/13/utility \
  /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h \
  /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h \
  /usr/include/features.h /usr/include/features-time64.h \
@@ -14,14 +17,28 @@ CMakeFiles/tides_ozaki_slice_tests.dir/core/tile/tests/ozaki_slice_tests.cpp.o: 
  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
  /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h \
  /usr/include/c++/13/pstl/pstl_config.h \
- /usr/include/c++/13/bits/functexcept.h \
- /usr/include/c++/13/bits/exception_defines.h \
- /usr/include/c++/13/bits/cpp_type_traits.h \
- /usr/include/c++/13/ext/type_traits.h \
- /usr/include/c++/13/ext/numeric_traits.h \
+ /usr/include/c++/13/bits/stl_relops.h \
  /usr/include/c++/13/bits/stl_pair.h /usr/include/c++/13/type_traits \
  /usr/include/c++/13/bits/move.h /usr/include/c++/13/bits/utility.h \
  /usr/include/c++/13/compare /usr/include/c++/13/concepts \
+ /usr/include/c++/13/initializer_list \
+ /usr/include/c++/13/ext/numeric_traits.h \
+ /usr/include/c++/13/bits/cpp_type_traits.h \
+ /usr/include/c++/13/ext/type_traits.h /usr/include/c++/13/cstring \
+ /usr/include/string.h \
+ /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
+ /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h \
+ /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
+ /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
+ /usr/include/strings.h \
+ /usr/include/x86_64-linux-gnu/bits/strings_fortified.h \
+ /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
+ /usr/include/cuda_bf16.h /usr/include/cuda_bf16.hpp \
+ /usr/include/vector_types.h /usr/include/crt/host_defines.h \
+ /usr/include/cuda_fp8.hpp /usr/include/c++/13/algorithm \
+ /usr/include/c++/13/bits/stl_algobase.h \
+ /usr/include/c++/13/bits/functexcept.h \
+ /usr/include/c++/13/bits/exception_defines.h \
  /usr/include/c++/13/bits/stl_iterator_base_types.h \
  /usr/include/c++/13/bits/iterator_concepts.h \
  /usr/include/c++/13/bits/ptr_traits.h \
@@ -36,18 +53,13 @@ CMakeFiles/tides_ozaki_slice_tests.dir/core/tile/tests/ozaki_slice_tests.cpp.o: 
  /usr/include/c++/13/bits/predefined_ops.h /usr/include/c++/13/bit \
  /usr/include/c++/13/bits/stl_algo.h \
  /usr/include/c++/13/bits/algorithmfwd.h \
- /usr/include/c++/13/initializer_list /usr/include/c++/13/bits/stl_heap.h \
+ /usr/include/c++/13/bits/stl_heap.h \
  /usr/include/c++/13/bits/uniform_int_dist.h \
  /usr/include/c++/13/bits/stl_tempbuf.h /usr/include/c++/13/cstdlib \
- /usr/include/stdlib.h \
- /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
- /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h \
- /usr/include/x86_64-linux-gnu/bits/waitflags.h \
+ /usr/include/stdlib.h /usr/include/x86_64-linux-gnu/bits/waitflags.h \
  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
  /usr/include/x86_64-linux-gnu/bits/floatn.h \
  /usr/include/x86_64-linux-gnu/bits/floatn-common.h \
- /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
- /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
  /usr/include/x86_64-linux-gnu/sys/types.h \
  /usr/include/x86_64-linux-gnu/bits/types.h \
  /usr/include/x86_64-linux-gnu/bits/typesizes.h \
@@ -173,8 +185,7 @@ CMakeFiles/tides_ozaki_slice_tests.dir/core/tile/tests/ozaki_slice_tests.cpp.o: 
  /usr/include/asm-generic/errno.h /usr/include/asm-generic/errno-base.h \
  /usr/include/x86_64-linux-gnu/bits/types/error_t.h \
  /usr/include/c++/13/bits/charconv.h \
- /usr/include/c++/13/bits/basic_string.tcc /usr/include/c++/13/utility \
- /usr/include/c++/13/bits/stl_relops.h \
+ /usr/include/c++/13/bits/basic_string.tcc \
  /home/niel/git/New_DFT_Code/tides/core/tile/f64e_reference.hpp \
  /home/niel/git/New_DFT_Code/tides/core/tile/precision.hpp \
  /usr/include/c++/13/iostream /usr/include/c++/13/ostream \

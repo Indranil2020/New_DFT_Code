@@ -89,10 +89,31 @@ class CublasMatmul {
     return Status::InvalidArgument("SP2 CUDA: dimension mismatch");
   if (lambda_max <= lambda_min)
     return Status::InvalidArgument("SP2 CUDA: invalid spectral bounds");
-  if (!SP2CudaAvailable())
-    return Status::IoError("CUDA runtime not available for SP2");
 
   const double scale_half = (lambda_max - lambda_min) / 2.0;
+
+  // Small-size threshold: for n < 256, GPU launch overhead (4x cudaMalloc +
+  // 2x cudaMemcpy + cuBLAS handle creation + CUDA context init) dominates.
+  // CPU SP2 is faster. At n=128, GPU=2309ms vs CPU=145ms. At n=256, GPU=37ms vs CPU=1794ms.
+  // Skip CUDA entirely to avoid paying context init cost.
+  if (n < 256) {
+    auto t0 = std::chrono::steady_clock::now();
+    auto cpu_result = SP2Purification::Purify(n, H, S, n_e, mu,
+                                               lambda_min, lambda_max,
+                                               max_iter, tol);
+    auto t1 = std::chrono::steady_clock::now();
+    SP2GpuResult gpu_result;
+    gpu_result.converged = cpu_result.converged;
+    gpu_result.n_iterations = cpu_result.n_iterations;
+    gpu_result.idempotency_err = cpu_result.idempotency_err;
+    gpu_result.trace_PS = cpu_result.trace_PS;
+    gpu_result.P = cpu_result.P;
+    gpu_result.kernel_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    return gpu_result;
+  }
+
+  if (!SP2CudaAvailable())
+    return Status::IoError("CUDA runtime not available for SP2");
 
   // Build X0.
   std::vector<double> X(n * n, 0.0);

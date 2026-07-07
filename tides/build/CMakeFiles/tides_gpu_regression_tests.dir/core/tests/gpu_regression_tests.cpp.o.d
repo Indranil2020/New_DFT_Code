@@ -182,7 +182,7 @@ CMakeFiles/tides_gpu_regression_tests.dir/core/tests/gpu_regression_tests.cpp.o:
  /usr/include/c++/13/bits/ranges_algo.h \
  /usr/include/c++/13/bits/ranges_algobase.h \
  /usr/include/c++/13/pstl/glue_algorithm_defs.h \
- /usr/include/c++/13/pstl/execution_defs.h \
+ /usr/include/c++/13/pstl/execution_defs.h /usr/include/fftw3.h \
  /home/niel/git/New_DFT_Code/tides/core/grid/poisson_fft_gpu.hpp \
  /home/niel/git/New_DFT_Code/tides/core/grid/xc.hpp \
  /home/niel/git/New_DFT_Code/tides/core/basis/atomgen/lda_xc.hpp \

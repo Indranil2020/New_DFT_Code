@@ -150,6 +150,7 @@ CMakeFiles/tides_cuda_grid.dir/core/grid/poisson_fft.cu.o
  /usr/include/errno.h
  /usr/include/features-time64.h
  /usr/include/features.h
+ /usr/include/fftw3.h
  /usr/include/library_types.h
  /usr/include/limits.h
  /usr/include/linux/errno.h

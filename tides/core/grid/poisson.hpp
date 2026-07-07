@@ -59,7 +59,6 @@ class PoissonSolver {
     return q * q * std::sqrt(alpha / (2.0 * M_PI));
   }
 
- private:
   // Direct N-body Coulomb sum for free BC, with self-term regularization.
   // The self-potential of charge in a cubic cell of side h is approximated as
   // phi_self = 2.3801 / h_eff (the potential at the center of a uniformly

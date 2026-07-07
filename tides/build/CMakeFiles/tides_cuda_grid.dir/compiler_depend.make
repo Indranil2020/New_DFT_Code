@@ -149,6 +149,7 @@ CMakeFiles/tides_cuda_grid.dir/core/grid/poisson_fft.cu.o: /home/niel/git/New_DF
   /usr/include/errno.h \
   /usr/include/features-time64.h \
   /usr/include/features.h \
+  /usr/include/fftw3.h \
   /usr/include/library_types.h \
   /usr/include/limits.h \
   /usr/include/linux/errno.h \
@@ -1516,6 +1517,14 @@ CMakeFiles/tides_cuda_grid.dir/core/grid/xc.cu.o: /home/niel/git/New_DFT_Code/ti
 
 /usr/include/driver_types.h:
 
+/home/niel/git/New_DFT_Code/tides/core/grid/xc.cu:
+
+/usr/include/x86_64-linux-gnu/bits/typesizes.h:
+
+/usr/include/c++/12/bits/memoryfwd.h:
+
+/usr/include/c++/12/bits/stl_pair.h:
+
 /usr/include/x86_64-linux-gnu/bits/math-vector.h:
 
 /usr/include/crt/sm_70_rt.hpp:
@@ -1579,6 +1588,12 @@ CMakeFiles/tides_cuda_grid.dir/core/grid/xc.cu.o: /home/niel/git/New_DFT_Code/ti
 /home/niel/git/New_DFT_Code/tides/core/grid/libxc_wrapper.hpp:
 
 /usr/include/errno.h:
+
+/usr/include/fftw3.h:
+
+/usr/include/x86_64-linux-gnu/bits/stdint-intn.h:
+
+/usr/include/x86_64-linux-gnu/bits/types.h:
 
 /usr/include/linux/errno.h:
 
@@ -1656,10 +1671,6 @@ CMakeFiles/tides_cuda_grid.dir/core/grid/xc.cu.o: /home/niel/git/New_DFT_Code/ti
 
 /usr/include/x86_64-linux-gnu/bits/select2.h:
 
-/usr/include/x86_64-linux-gnu/bits/stdint-intn.h:
-
-/usr/include/x86_64-linux-gnu/bits/types.h:
-
 /usr/include/x86_64-linux-gnu/bits/stdint-least.h:
 
 /usr/include/x86_64-linux-gnu/bits/strings_fortified.h:
@@ -1707,11 +1718,3 @@ CMakeFiles/tides_cuda_grid.dir/core/grid/xc.cu.o: /home/niel/git/New_DFT_Code/ti
 /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h:
-
-/home/niel/git/New_DFT_Code/tides/core/grid/xc.cu:
-
-/usr/include/c++/12/bits/memoryfwd.h:
-
-/usr/include/c++/12/bits/stl_pair.h:
-
-/usr/include/x86_64-linux-gnu/bits/typesizes.h:

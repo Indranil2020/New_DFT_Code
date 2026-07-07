@@ -181,4 +181,14 @@ CMakeFiles/tides_cuda_runtime_reduce_link_probe.dir/core/tile/reduce_f64e.cpp.o:
  /usr/include/c++/13/pstl/execution_defs.h \
  /home/niel/git/New_DFT_Code/tides/core/tile/f64e_reference.hpp \
  /home/niel/git/New_DFT_Code/tides/core/tile/gemm_grouped.hpp \
- /home/niel/git/New_DFT_Code/tides/core/tile/ozaki.hpp
+ /home/niel/git/New_DFT_Code/tides/core/tile/ozaki.hpp \
+ /usr/include/cuda_fp8.h /usr/include/cuda_fp16.h \
+ /usr/include/cuda_fp16.hpp /usr/include/nv/target \
+ /usr/include/nv/detail/__target_macros \
+ /usr/include/nv/detail/__preprocessor /usr/include/c++/13/cstring \
+ /usr/include/string.h /usr/include/strings.h \
+ /usr/include/x86_64-linux-gnu/bits/strings_fortified.h \
+ /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
+ /usr/include/cuda_bf16.h /usr/include/cuda_bf16.hpp \
+ /usr/include/vector_types.h /usr/include/crt/host_defines.h \
+ /usr/include/cuda_fp8.hpp

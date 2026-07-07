@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cuda_fp8.h>
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -15,6 +16,7 @@ namespace tides::tile {
 
 enum class OzakiSliceFormat : std::uint32_t {
   kFp16 = 0,
+  kFp8 = 1,
 };
 
 struct OzakiSlicePlan {
@@ -149,6 +151,168 @@ struct OzakiGemmResult {
   }
   return reconstructed;
 }
+
+[[nodiscard]] inline PrecisionDescriptor OzakiFp8ReferencePrecision() {
+  PrecisionDescriptor descriptor;
+  descriptor.storage = NumericFormat::kFloat16;
+  descriptor.compute = NumericFormat::kFloat64Emulated;
+  descriptor.reduction = NumericFormat::kFloat64Emulated;
+  descriptor.per_tile_scale = true;
+  descriptor.ordered_reductions = true;
+  descriptor.label = "ozaki-fp8-slice-reference";
+  return descriptor;
+}
+
+[[nodiscard]] inline Result<OzakiSlicePlan> BuildOzakiFp8SlicePlan(
+    const std::vector<double>& values, std::uint32_t max_slices = 32,
+    std::uint32_t target_mantissa_bits = 53) {
+  if (max_slices == 0) {
+    return Status::InvalidArgument("Ozaki max_slices must be nonzero");
+  }
+  if (target_mantissa_bits == 0) {
+    return Status::InvalidArgument(
+        "Ozaki target_mantissa_bits must be nonzero");
+  }
+
+  bool have_nonzero = false;
+  int min_exponent = 0;
+  int max_exponent = 0;
+  for (const double value : values) {
+    if (!std::isfinite(value)) {
+      return Status::InvalidArgument("Ozaki slicing requires finite values");
+    }
+    if (value == 0.0) {
+      continue;
+    }
+    int exponent = 0;
+    std::frexp(std::abs(value), &exponent);
+    if (!have_nonzero) {
+      min_exponent = exponent;
+      max_exponent = exponent;
+      have_nonzero = true;
+    } else {
+      min_exponent = std::min(min_exponent, exponent);
+      max_exponent = std::max(max_exponent, exponent);
+    }
+  }
+
+  OzakiSlicePlan plan;
+  plan.format = OzakiSliceFormat::kFp8;
+  plan.mantissa_bits_per_slice = 3;
+  plan.min_exponent = min_exponent;
+  plan.max_exponent = max_exponent;
+  plan.exponent_span = have_nonzero ? max_exponent - min_exponent : 0;
+  const std::uint32_t span_bits =
+      static_cast<std::uint32_t>(std::max(0, plan.exponent_span));
+  const std::uint32_t required_bits = target_mantissa_bits + span_bits;
+  plan.slice_count = have_nonzero
+                         ? CeilDivU32(required_bits,
+                                      plan.mantissa_bits_per_slice)
+                         : 1;
+  if (plan.slice_count > max_slices) {
+    return Status::OutOfRange("Ozaki FP8 slice plan exceeds max_slices");
+  }
+
+  plan.slice_quanta.reserve(plan.slice_count);
+  for (std::uint32_t slice = 0; slice < plan.slice_count; ++slice) {
+    const int exponent =
+        plan.max_exponent -
+        static_cast<int>((slice + 1) * plan.mantissa_bits_per_slice);
+    const double quantum = std::ldexp(1.0, exponent);
+    if (quantum == 0.0 || !std::isfinite(quantum)) {
+      return Status::OutOfRange(
+          "Ozaki FP8 slice quantum is outside FP64 range");
+    }
+    plan.slice_quanta.push_back(quantum);
+  }
+  return plan;
+}
+
+[[nodiscard]] inline Result<OzakiDecomposition> DecomposeOzakiFp8Reference(
+    const std::vector<double>& values, std::uint32_t max_slices = 32,
+    std::uint32_t target_mantissa_bits = 53) {
+  auto plan_result =
+      BuildOzakiFp8SlicePlan(values, max_slices, target_mantissa_bits);
+  if (!plan_result.ok()) {
+    return plan_result.status();
+  }
+  OzakiDecomposition result;
+  result.plan = plan_result.take_value();
+  result.value_count = values.size();
+  result.slices.assign(values.size() * result.plan.slice_count, 0.0);
+
+  const double max_units =
+      std::ldexp(1.0, static_cast<int>(result.plan.mantissa_bits_per_slice));
+  for (std::size_t value_index = 0; value_index < values.size();
+       ++value_index) {
+    double residual = values[value_index];
+    for (std::uint32_t slice = 0; slice < result.plan.slice_count; ++slice) {
+      const double quantum = result.plan.slice_quanta[slice];
+      const double units = std::nearbyint(residual / quantum);
+      if (!std::isfinite(units) || std::abs(units) > max_units) {
+        return Status::OutOfRange(
+            "Ozaki FP8 slice unit exceeds mantissa contract");
+      }
+      const double chunk = units * quantum;
+      result.slices[static_cast<std::size_t>(slice) * values.size() +
+                    value_index] = chunk;
+      residual -= chunk;
+    }
+  }
+
+  auto reconstructed =
+      ReconstructOzakiSlices(result.plan, values.size(), result.slices);
+  if (!reconstructed.ok()) {
+    return reconstructed.status();
+  }
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    const double error = std::abs(values[i] - reconstructed.value()[i]);
+    result.max_reconstruction_abs_error =
+        std::max(result.max_reconstruction_abs_error, error);
+  }
+
+  const std::uint64_t slice_terms =
+      static_cast<std::uint64_t>(values.size()) * result.plan.slice_count;
+  result.ledger.Add(OperationLedgerEntry{
+      OperationKind::kPrecisionTransform,
+      OzakiFp8ReferencePrecision(),
+      ErrorBudget{ErrorMetric::kAbsolute,
+                  result.max_reconstruction_abs_error,
+                  "max absolute reconstruction error after FP8-style slices"},
+      result.max_reconstruction_abs_error,
+      slice_terms,
+      slice_terms,
+      0,
+      "CPU Ozaki FP8-style operand slicing reference"});
+  return result;
+}
+
+[[nodiscard]] inline PrecisionDescriptor CudaOzakiFp8GemmPrecision() {
+  PrecisionDescriptor descriptor;
+  descriptor.storage = NumericFormat::kFloat16;
+  descriptor.compute = NumericFormat::kFloat64Emulated;
+  descriptor.reduction = NumericFormat::kFloat64Emulated;
+  descriptor.determinism = DeterminismMode::kDeterministic;
+  descriptor.per_tile_scale = true;
+  descriptor.ordered_reductions = true;
+  descriptor.label = "cuda-ozaki-fp8-slice-gemm";
+  return descriptor;
+}
+
+struct CudaOzakiFp8GemmResult {
+  std::vector<double> values;
+  double max_abs_error_vs_long_double = 0.0;
+  double analytical_abs_bound = 0.0;
+  double kernel_ms = 0.0;
+  std::uint32_t a_slice_count = 0;
+  std::uint32_t b_slice_count = 0;
+  std::uint32_t slice_pair_count = 0;
+  OperationLedger ledger;
+};
+
+[[nodiscard]] Result<CudaOzakiFp8GemmResult> GemmOzakiFp8Cuda(
+    std::size_t m, std::size_t k, std::size_t n,
+    const std::vector<double>& a, const std::vector<double>& b);
 
 [[nodiscard]] inline Result<OzakiDecomposition> DecomposeOzakiFp16Reference(
     const std::vector<double>& values, std::uint32_t max_slices = 16,

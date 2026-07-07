@@ -158,6 +158,7 @@ CMakeFiles/tides_poisson_tests.dir/core/grid/tests/poisson_tests.cpp.o
  /usr/include/errno.h
  /usr/include/features-time64.h
  /usr/include/features.h
+ /usr/include/fftw3.h
  /usr/include/libintl.h
  /usr/include/linux/errno.h
  /usr/include/locale.h

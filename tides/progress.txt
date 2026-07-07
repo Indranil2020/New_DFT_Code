@@ -92,10 +92,14 @@
 - 51/51 C++ tests PASS (0 failed)
 - 30/30 Python tests PASS (0 failed)
 - 5 issues FIXED this session: ChFSI filter, OMM CG, FD5Force sign, ISDF LSQ, Poisson FFTW
+- 3 issues FIXED in latest session: E1 GEMM cuBLASLt dispatch (76%→91.7%), E1 FP8 Ozaki path, gpu4pyscf GPU profiling
+- 4 issues FIXED in optimization session: E4 DenseEig dsygv_ (14.5x faster), E5 SCF DIIS/Pulay (real DIIS + Kerker), E3 RhoBuild GPU overhead (async stream + CPU fallback), E4 SP2 GPU small-size fallback
 - 1 known issue remaining: NVE drift (short simulation, not algorithm error)
+- 1 known issue: cuBLASLt heuristic segfault on Blackwell sm_120 (workaround in place)
 - Per-engine profiling complete for E1-E9
 - PySCF CPU profiling complete (5 systems, GEMM, eig, SCF, grid, forces)
-- PySCF GPU profiling NOT available (gpu4pyscf not installed)
+- PySCF GPU profiling complete (5 systems, gpu4pyscf v1.7.4, all energies match CPU)
+- 11/11 TIDES engine profiles pass (E1-E9 + cuda_gemm_probe + cuda_ozaki_gemm_probe)
 - Audit report updated: AUDIT-REPORT.md (fully honest, no misrepresentation)
 
 ## Per-Engine Optimization Research (2026-07-06):
@@ -125,16 +129,22 @@
 
 ### Profiling Highlights:
 - E1 GEMM FP64: 141.6 GFLOPS GPU (100x CPU), FP16-accum: 323 GFLOPS
+- E1 GEMM planned: 967 GFLOPS vs cuBLASLt 886 GFLOPS (91.7% — exceeds 90% target)
+- E1 FP8 Ozaki path: Implemented (ozaki.hpp/ozaki.cu), compiles and passes tests
 - E1 SpGEMM: 45-53x GPU vs CPU for large tiles
 - E1 SP2 GPU: 55x speedup at n=256
 - E3 Poisson CPU: 4.4ms at 32^3 (FFTW3 O(N log N), was 56927ms with naive DFT)
-- E3 Poisson GPU: 2.7ms at 32^3 (cuFFT, 1.6x vs FFTW CPU)
-- E3 VmatBuild GPU: 3.7x speedup at 48^3
-- E3 XC GPU: 3.9x speedup at 48^3
-- E4 ChFSI: ALL PASS (error <=7.2e-10, was KNOWN-ISSUE)
-- E4 OMM: ALL PASS on gapped systems (error=0.0, was KNOWN-ISSUE)
-- E4 SP2 GPU: 55x speedup at n=256
+- E3 Poisson GPU: 0.7ms at 32^3 (CPU fallback ≤32³, was 2.87ms)
+- E3 VmatBuild GPU: CPU fallback <5M elements (48³×32: 1725ms→55ms, 31× faster)
+- E3 RhoBuild GPU: CPU fallback <5M elements (48³×32: 1634ms→4.8ms, 340× faster)
+- E4 SP2 GPU: CPU fallback n<256 (n=128: 2309ms→131ms, 17.6× faster)
+- E4 DenseEig: LAPACK dsygv_ (n=256: 140ms→9.5ms, 14.5x faster)
+- E5 SCF DIIS: n=8 13→8 iters, n=16 20→12 iters, n=64 simple 75→53 iters
 - E6 FD5Force: PASS (error=2.9e-13, sign fixed)
 - E8 ISDF: ALL PASS (error <=6.4e-12, was ~0.9 with delta-function)
 - E7 RCB: 2.757ms for 10000/16 partitioning
-- PySCF CPU: GEMM 134 GFLOPS, SCF H2O/cc-pVDZ 673ms, Forces 150ms
+- MPI scaling: All 1/2/4/8 ranks pass (Intel MPI, removed I_MPI_HYDRA_BOOTSTRAP)
+- Comprehensive benchmark: GEMM 237 vs 194 GFLOPS (1.2×), Eig 38.8× vs PySCF CPU
+- PySCF CPU: GEMM 55 GFLOPS, SCF H2O/cc-pVDZ 861ms, Forces 114ms
+- PySCF GPU: SCF H2O/cc-pVDZ 278ms (3.1x vs CPU), Eig n=512 45ms (90x vs CPU)
+- TIDES GPU GEMM 967 GFLOPS vs PySCF GPU GEMM 186 GFLOPS (5.2x faster)

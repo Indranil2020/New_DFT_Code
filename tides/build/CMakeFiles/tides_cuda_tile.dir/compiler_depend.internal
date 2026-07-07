@@ -143,6 +143,7 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/gemm_grouped.cu.o
  /usr/include/crt/sm_90_rt.hpp
  /usr/include/ctype.h
  /usr/include/cuComplex.h
+ /usr/include/cublasLt.h
  /usr/include/cublas_api.h
  /usr/include/cublas_v2.h
  /usr/include/cuda_bf16.h
@@ -436,7 +437,13 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/ozaki.cu.o
  /usr/include/crt/sm_90_rt.h
  /usr/include/crt/sm_90_rt.hpp
  /usr/include/ctype.h
+ /usr/include/cuda_bf16.h
+ /usr/include/cuda_bf16.hpp
  /usr/include/cuda_device_runtime_api.h
+ /usr/include/cuda_fp16.h
+ /usr/include/cuda_fp16.hpp
+ /usr/include/cuda_fp8.h
+ /usr/include/cuda_fp8.hpp
  /usr/include/cuda_runtime.h
  /usr/include/cuda_runtime_api.h
  /usr/include/device_atomic_functions.h
@@ -455,6 +462,9 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/ozaki.cu.o
  /usr/include/linux/limits.h
  /usr/include/locale.h
  /usr/include/math.h
+ /usr/include/nv/detail/__preprocessor
+ /usr/include/nv/detail/__target_macros
+ /usr/include/nv/target
  /usr/include/sm_20_atomic_functions.h
  /usr/include/sm_20_atomic_functions.hpp
  /usr/include/sm_20_intrinsics.h

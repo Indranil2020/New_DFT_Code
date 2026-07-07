@@ -1,5 +1,6 @@
 #include "tile/gemm_grouped.hpp"
 
+#include <cublasLt.h>
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
@@ -711,31 +712,79 @@ OperationLedgerEntry CudaMixedGemmLedgerEntry(std::uint64_t products,
       "CUDA FP16-store FP32-accumulate grouped tile GEMM reference kernel"};
 }
 
-Status CreateCublasHandle(cublasHandle_t* handle, cudaStream_t stream) {
-  cublasStatus_t status = cublasCreate(handle);
+Status CreateCublasLtHandle(cublasLtHandle_t* handle, cudaStream_t stream) {
+  (void)stream;
+  cublasStatus_t status = cublasLtCreate(handle);
   if (status != CUBLAS_STATUS_SUCCESS) {
-    return CublasStatus(status, "cublasCreate");
-  }
-  status = cublasSetMathMode(*handle, CUBLAS_TENSOR_OP_MATH);
-  if (status != CUBLAS_STATUS_SUCCESS) {
-    cublasDestroy(*handle);
-    *handle = nullptr;
-    return CublasStatus(status, "cublasSetMathMode");
-  }
-  status = cublasSetStream(*handle, stream);
-  if (status != CUBLAS_STATUS_SUCCESS) {
-    cublasDestroy(*handle);
-    *handle = nullptr;
-    return CublasStatus(status, "cublasSetStream");
+    return CublasStatus(status, "cublasLtCreate");
   }
   return Status::Ok();
 }
 
-Status RunMixedCublasBuckets(
-    cublasHandle_t handle,
+struct CublasLtMatmulPref {
+  cublasLtMatmulPreference_t pref = nullptr;
+  ~CublasLtMatmulPref() {
+    if (pref != nullptr) cublasLtMatmulPreferenceDestroy(pref);
+  }
+};
+
+struct CublasLtMatmulDescHolder {
+  cublasLtMatmulDesc_t desc = nullptr;
+  ~CublasLtMatmulDescHolder() {
+    if (desc != nullptr) cublasLtMatmulDescDestroy(desc);
+  }
+};
+
+struct CublasLtLayoutHolder {
+  cublasLtMatrixLayout_t layout = nullptr;
+  ~CublasLtLayoutHolder() {
+    if (layout != nullptr) cublasLtMatrixLayoutDestroy(layout);
+  }
+};
+
+Status SetLtBatchAttr(cublasLtMatrixLayout_t layout, int batch_count,
+                      long long stride) {
+  cublasStatus_t status = cublasLtMatrixLayoutSetAttribute(
+      layout, CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, &batch_count,
+      sizeof(batch_count));
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    return CublasStatus(status, "cublasLtMatrixLayoutSetAttribute batch_count");
+  }
+  status = cublasLtMatrixLayoutSetAttribute(
+      layout, CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, &stride,
+      sizeof(stride));
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    return CublasStatus(status, "cublasLtMatrixLayoutSetAttribute stride");
+  }
+  return Status::Ok();
+}
+
+Status RunMixedCublasLtBuckets(
+    cublasLtHandle_t handle,
     const std::vector<DeviceMixedShapeBucket>& device_buckets) {
   const float alpha = 1.0F;
   const float beta = 0.0F;
+  const cublasOperation_t no_transpose = CUBLAS_OP_N;
+
+  CublasLtMatmulDescHolder op_holder;
+  cublasStatus_t status = cublasLtMatmulDescCreate(&op_holder.desc,
+                                                    CUBLAS_COMPUTE_32F,
+                                                    CUDA_R_32F);
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    return CublasStatus(status, "cublasLtMatmulDescCreate");
+  }
+  status = cublasLtMatmulDescSetAttribute(
+      op_holder.desc, CUBLASLT_MATMUL_DESC_TRANSA, &no_transpose,
+      sizeof(no_transpose));
+  if (status == CUBLAS_STATUS_SUCCESS) {
+    status = cublasLtMatmulDescSetAttribute(
+        op_holder.desc, CUBLASLT_MATMUL_DESC_TRANSB, &no_transpose,
+        sizeof(no_transpose));
+  }
+  if (status != CUBLAS_STATUS_SUCCESS) {
+    return CublasStatus(status, "cublasLtMatmulDescSetAttribute transpose");
+  }
+
   for (const DeviceMixedShapeBucket& bucket : device_buckets) {
     const int m = static_cast<int>(bucket.n);
     const int n = static_cast<int>(bucket.m);
@@ -747,15 +796,35 @@ Status RunMixedCublasBuckets(
     const long long c_stride =
         static_cast<long long>(bucket.m) * bucket.n;
     const int batch_count = static_cast<int>(bucket.count);
-    const cublasStatus_t status = cublasGemmStridedBatchedEx(
-        handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, bucket.b,
-        CUDA_R_16F, m, b_stride, bucket.a, CUDA_R_16F, k, a_stride, &beta,
-        bucket.c, CUDA_R_32F, m, c_stride, batch_count, CUBLAS_COMPUTE_32F,
-        CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+
+    CublasLtLayoutHolder a_desc, b_desc, c_desc;
+    status = cublasLtMatrixLayoutCreate(&a_desc.layout, CUDA_R_16F, m, k, m);
+    if (status == CUBLAS_STATUS_SUCCESS) {
+      status = cublasLtMatrixLayoutCreate(&b_desc.layout, CUDA_R_16F, k, n, k);
+    }
+    if (status == CUBLAS_STATUS_SUCCESS) {
+      status = cublasLtMatrixLayoutCreate(&c_desc.layout, CUDA_R_32F, m, n, m);
+    }
     if (status != CUBLAS_STATUS_SUCCESS) {
-      return CublasStatus(status, "cublasGemmStridedBatchedEx");
+      return CublasStatus(status, "cublasLtMatrixLayoutCreate");
+    }
+
+    Status attr_status = SetLtBatchAttr(a_desc.layout, batch_count, b_stride);
+    if (!attr_status.ok()) return attr_status;
+    attr_status = SetLtBatchAttr(b_desc.layout, batch_count, a_stride);
+    if (!attr_status.ok()) return attr_status;
+    attr_status = SetLtBatchAttr(c_desc.layout, batch_count, c_stride);
+    if (!attr_status.ok()) return attr_status;
+
+    status = cublasLtMatmul(handle, op_holder.desc, &alpha, bucket.b,
+                            a_desc.layout, bucket.a, b_desc.layout, &beta,
+                            bucket.c, c_desc.layout, bucket.c, c_desc.layout,
+                            nullptr, nullptr, 0, nullptr);
+    if (status != CUBLAS_STATUS_SUCCESS) {
+      return CublasStatus(status, "cublasLtMatmul");
     }
   }
+
   return Status::Ok();
 }
 
@@ -782,7 +851,7 @@ Status LaunchMixedScaleKernel(const PackedMixedProblems& packed,
   return Status::Ok();
 }
 
-Status TimedRunMixedCublasAndScale(cublasHandle_t handle,
+Status TimedRunMixedCublasLtAndScale(cublasLtHandle_t handle,
                                    const PackedMixedProblems& packed,
                                    const DevicePackedMixedProblems& device,
                                    const std::vector<DeviceMixedShapeBucket>&
@@ -808,7 +877,7 @@ Status TimedRunMixedCublasAndScale(cublasHandle_t handle,
     return CudaStatus(error, "cudaEventCreate mixed stop");
   }
   cudaEventRecord(start, stream);
-  Status status = RunMixedCublasBuckets(handle, device_buckets);
+  Status status = RunMixedCublasLtBuckets(handle, device_buckets);
   if (!status.ok()) {
     cudaEventDestroy(start);
     cudaEventDestroy(after_gemm);
@@ -849,7 +918,7 @@ struct CudaGroupedGemmFp16AccumPlan::Impl {
   PackedMixedProblems packed;
   DevicePackedMixedProblems device;
   std::vector<DeviceMixedShapeBucket> cublas_buckets;
-  cublasHandle_t handle = nullptr;
+  cublasLtHandle_t handle = nullptr;
 };
 
 CudaGroupedGemmFp16AccumPlan::CudaGroupedGemmFp16AccumPlan() = default;
@@ -860,7 +929,7 @@ CudaGroupedGemmFp16AccumPlan::CudaGroupedGemmFp16AccumPlan(Impl* impl)
 CudaGroupedGemmFp16AccumPlan::~CudaGroupedGemmFp16AccumPlan() {
   if (impl_ != nullptr) {
     if (impl_->handle != nullptr) {
-      cublasDestroy(impl_->handle);
+      cublasLtDestroy(impl_->handle);
     }
     FreeDeviceMixedShapeBuckets(&impl_->cublas_buckets);
     FreeDevicePackedMixedProblems(&impl_->device);
@@ -880,7 +949,7 @@ CudaGroupedGemmFp16AccumPlan& CudaGroupedGemmFp16AccumPlan::operator=(
   if (this != &other) {
     if (impl_ != nullptr) {
       if (impl_->handle != nullptr) {
-        cublasDestroy(impl_->handle);
+        cublasLtDestroy(impl_->handle);
       }
       FreeDeviceMixedShapeBuckets(&impl_->cublas_buckets);
       FreeDevicePackedMixedProblems(&impl_->device);
@@ -1029,8 +1098,8 @@ Result<CudaGroupedGemmResult> GroupedGemmFp16AccumCuda(
     return status;
   }
 
-  cublasHandle_t handle = nullptr;
-  status = CreateCublasHandle(&handle, nullptr);
+  cublasLtHandle_t handle = nullptr;
+  status = CreateCublasLtHandle(&handle, nullptr);
   if (!status.ok()) {
     FreeDeviceMixedShapeBuckets(&cublas_buckets);
     FreeDevicePackedMixedProblems(&device);
@@ -1039,10 +1108,10 @@ Result<CudaGroupedGemmResult> GroupedGemmFp16AccumCuda(
 
   double kernel_ms = 0.0;
   double postprocess_ms = 0.0;
-  status = TimedRunMixedCublasAndScale(handle, packed, device, cublas_buckets,
+  status = TimedRunMixedCublasLtAndScale(handle, packed, device, cublas_buckets,
                                        nullptr, &kernel_ms, &postprocess_ms);
   if (!status.ok()) {
-    cublasDestroy(handle);
+    cublasLtDestroy(handle);
     FreeDeviceMixedShapeBuckets(&cublas_buckets);
     FreeDevicePackedMixedProblems(&device);
     return status;
@@ -1052,13 +1121,13 @@ Result<CudaGroupedGemmResult> GroupedGemmFp16AccumCuda(
                      packed.c_all.size() * sizeof(double),
                      cudaMemcpyDeviceToHost);
   if (error != cudaSuccess) {
-    cublasDestroy(handle);
+    cublasLtDestroy(handle);
     FreeDeviceMixedShapeBuckets(&cublas_buckets);
     FreeDevicePackedMixedProblems(&device);
     return CudaStatus(error, "cudaMemcpy mixed D2H");
   }
 
-  cublasDestroy(handle);
+  cublasLtDestroy(handle);
   FreeDeviceMixedShapeBuckets(&cublas_buckets);
   FreeDevicePackedMixedProblems(&device);
 
@@ -1101,7 +1170,7 @@ Result<CudaGroupedGemmFp16AccumPlan> BuildGroupedGemmFp16AccumCudaPlan(
     delete impl;
     return bucket_status;
   }
-  const Status handle_status = CreateCublasHandle(&impl->handle, nullptr);
+  const Status handle_status = CreateCublasLtHandle(&impl->handle, nullptr);
   if (!handle_status.ok()) {
     FreeDeviceMixedShapeBuckets(&impl->cublas_buckets);
     FreeDevicePackedMixedProblems(&impl->device);
@@ -1119,10 +1188,10 @@ Result<CudaGroupedGemmResult> RunGroupedGemmFp16AccumCudaPlan(
 
   PackedMixedProblems& packed = plan.impl_->packed;
   DevicePackedMixedProblems& device = plan.impl_->device;
-  cublasHandle_t handle = plan.impl_->handle;
+  cublasLtHandle_t handle = plan.impl_->handle;
   double kernel_ms = 0.0;
   double postprocess_ms = 0.0;
-  Status status = TimedRunMixedCublasAndScale(
+  Status status = TimedRunMixedCublasLtAndScale(
       handle, packed, device, plan.impl_->cublas_buckets, nullptr, &kernel_ms,
       &postprocess_ms);
   if (!status.ok()) {

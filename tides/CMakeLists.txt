@@ -96,7 +96,7 @@ if(TIDES_ENABLE_CUDA)
       core/tile/gemm_grouped.cu
       core/tile/ozaki.cu
       core/tile/spgemm_filtered.cu)
-    target_link_libraries(tides_cuda_tile PUBLIC tides_core cublas)
+    target_link_libraries(tides_cuda_tile PUBLIC tides_core cublas cublasLt)
     target_compile_options(tides_cuda_tile PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
     set_target_properties(tides_cuda_tile PROPERTIES

@@ -13,9 +13,21 @@ Outputs: bench/optimization/pyscf_vs_tides_ledger.json
 """
 
 import json
+import os
+import subprocess
+import sys
 import time
 import numpy as np
 from pathlib import Path
+
+# Fix cuSPARSE/nvJitLink version mismatch by preloading the correct library
+_nvjitlink = Path.home() / ".local" / "lib" / "python3.12" / "site-packages" / "nvidia" / "nvjitlink" / "lib" / "libnvJitLink.so.12"
+if _nvjitlink.exists():
+    _nvjitlink_str = str(_nvjitlink)
+    current_preload = os.environ.get("LD_PRELOAD", "")
+    if _nvjitlink_str not in current_preload:
+        os.environ["LD_PRELOAD"] = _nvjitlink_str + (":" + current_preload if current_preload else "")
+        os.execve(sys.executable, [sys.executable, __file__] + sys.argv[1:], os.environ)
 
 # PySCF imports
 from pyscf import gto, scf, dft, lib
@@ -23,17 +35,32 @@ from pyscf.dft import numint
 from pyscf.grad import rhf as rhf_grad
 
 # Try GPU-accelerated PySCF
+GPU_PYSCF = False
 try:
     import cupy
-    from pyscf.dft import rks as rks_gpu
     GPU_PYSCF = True
-except ImportError:
-    GPU_PYSCF = False
+except (ImportError, OSError, RuntimeError):
+    pass
 
 import pyscf
 PYSCF_VERSION = pyscf.__version__
 
+BUILD_DIR = Path(__file__).parent.parent / "build"
 LEDGER_PATH = Path(__file__).parent / "optimization" / "pyscf_vs_tides_ledger.json"
+
+TIDES_EXES = {
+    "E1_tile": "tides_e1_tile_profile",
+    "E2_basis": "tides_e2_basis_profile",
+    "E3_grid": "tides_e3_grid_profile",
+    "E4_solvers": "tides_e4_solvers_profile",
+    "E5_scf": "tides_e5_scf_profile",
+    "E6_dynamics": "tides_e6_dynamics_profile",
+    "E7_parallel": "tides_e7_parallel_profile",
+    "E8_hybrids": "tides_e8_hybrids_profile",
+    "E9_verification": "tides_e9_verification_profile",
+    "cuda_gemm_probe": "tides_cuda_gemm_probe",
+    "cuda_ozaki_gemm_probe": "tides_ozaki_gemm_probe",
+}
 
 
 def time_fn(fn, warmup=1, repeats=3):
@@ -203,7 +230,11 @@ def main():
         results["eig"]["cpu"].append(r)
         print(f"  CPU n={n}: {r['time_s']*1000:.2f} ms")
         if GPU_PYSCF:
-            r = profile_eig_gpu(n)
+            r = None
+            try:
+                r = profile_eig_gpu(n)
+            except (ImportError, OSError, RuntimeError) as ex:
+                print(f"  GPU n={n}: ERROR: {ex}")
             if r:
                 results["eig"]["gpu"].append(r)
                 print(f"  GPU n={n}: {r['time_s']*1000:.2f} ms")
@@ -249,6 +280,31 @@ def main():
         json.dump(results, f, indent=2)
     print(f"\nLedger written to: {LEDGER_PATH}")
 
+    # --- TIDES Engine Profiles ---
+    print("\n--- TIDES Engine Profiles ---")
+    results["tides_engines"] = {}
+    for label, exe_name in TIDES_EXES.items():
+        exe_path = BUILD_DIR / exe_name
+        if not exe_path.exists():
+            print(f"  {label}: SKIP (not built: {exe_name})")
+            results["tides_engines"][label] = {"status": "not_built"}
+            continue
+        print(f"  {label}: running {exe_name}...")
+        proc = subprocess.run(
+            [str(exe_path)], capture_output=True, text=True, timeout=120
+        )
+        entry = {
+            "status": "pass" if proc.returncode == 0 else "fail",
+            "returncode": proc.returncode,
+            "stdout": proc.stdout[:5000],
+            "stderr": proc.stderr[:2000],
+        }
+        results["tides_engines"][label] = entry
+        status_str = "PASS" if proc.returncode == 0 else f"FAIL (rc={proc.returncode})"
+        print(f"    -> {status_str}")
+        if proc.returncode != 0 and proc.stderr:
+            print(f"    stderr: {proc.stderr[:200]}")
+
     # --- Summary ---
     print("\n" + "=" * 70)
     print("SUMMARY")
@@ -263,6 +319,9 @@ def main():
         print(f"SCF GPU: {len(results['scf']['gpu'])} systems profiled")
     else:
         print("SCF GPU: NOT AVAILABLE (no GPU PySCF backend)")
+    tides_pass = sum(1 for v in results["tides_engines"].values() if v.get("status") == "pass")
+    tides_total = len(results["tides_engines"])
+    print(f"TIDES engines: {tides_pass}/{tides_total} passed")
 
 
 if __name__ == "__main__":

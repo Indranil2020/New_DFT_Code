@@ -1,0 +1,653 @@
+{
+  "metadata": {
+    "pyscf_version": "2.13.1",
+    "gpu_available": true,
+    "numpy_version": "2.2.6",
+    "date": "2026-07-07 02:35:03",
+    "system": {
+      "cpu": "AMD Ryzen AI 7 350 (8c/16t)",
+      "gpu": "NVIDIA RTX 5050 Laptop (8GB, Blackwell)",
+      "ram": "30GB",
+      "mpi": "Intel MPI 2021.18.0"
+    }
+  },
+  "gemm": {
+    "cpu": [
+      {
+        "time_s": 1.048899139277637e-05,
+        "gflops": 49.98459626547794,
+        "n": 64
+      },
+      {
+        "time_s": 0.011990173981757835,
+        "gflops": 0.3498117714039283,
+        "n": 128
+      },
+      {
+        "time_s": 0.02399643900571391,
+        "gflops": 1.3983088070696736,
+        "n": 256
+      },
+      {
+        "time_s": 0.01999604399316013,
+        "gflops": 13.424428156480419,
+        "n": 512
+      },
+      {
+        "time_s": 0.026795672019943595,
+        "gflops": 80.1429292910311,
+        "n": 1024
+      },
+      {
+        "time_s": 0.12998187201446854,
+        "gflops": 132.17127063755225,
+        "n": 2048
+      }
+    ],
+    "gpu": [
+      {
+        "time_s": 3.495599958114326e-05,
+        "gflops": 14.998512595326355,
+        "n": 64
+      },
+      {
+        "time_s": 4.827100201509893e-05,
+        "gflops": 86.89075894235721,
+        "n": 128
+      },
+      {
+        "time_s": 0.00028563800151459873,
+        "gflops": 117.47187636826068,
+        "n": 256
+      },
+      {
+        "time_s": 0.0017497359949629754,
+        "gflops": 153.41483330785573,
+        "n": 512
+      },
+      {
+        "time_s": 0.012541261996375397,
+        "gflops": 171.233457097113,
+        "n": 1024
+      },
+      {
+        "time_s": 0.08870194701012224,
+        "gflops": 193.6808577836461,
+        "n": 2048
+      }
+    ]
+  },
+  "eig": {
+    "cpu": [
+      {
+        "time_s": 7.740501314401627e-05,
+        "n": 32
+      },
+      {
+        "time_s": 0.00028481698245741427,
+        "n": 64
+      },
+      {
+        "time_s": 0.0920135150081478,
+        "n": 128
+      },
+      {
+        "time_s": 0.36901229500654154,
+        "n": 256
+      },
+      {
+        "time_s": 2.0619271649920847,
+        "n": 512
+      },
+      {
+        "time_s": 5.657963750010822,
+        "n": 1024
+      }
+    ],
+    "gpu": [
+      {
+        "time_s": 0.0016378559812437743,
+        "n": 32
+      },
+      {
+        "time_s": 0.0038482679810840636,
+        "n": 64
+      },
+      {
+        "time_s": 0.004063334024976939,
+        "n": 128
+      },
+      {
+        "time_s": 0.006775832996936515,
+        "n": 256
+      },
+      {
+        "time_s": 0.016716586978873238,
+        "n": 512
+      },
+      {
+        "time_s": 0.07286992299486883,
+        "n": 1024
+      }
+    ]
+  },
+  "scf_basis_scan": {
+    "cpu": [
+      {
+        "time_s": 0.6622798420139588,
+        "energy_ha": -74.05830579658458,
+        "n_basis": 7,
+        "n_atoms": 3,
+        "basis": "STO-3G",
+        "system": "H2O",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.5681350939848926,
+        "energy_ha": -75.17119924760094,
+        "n_basis": 18,
+        "n_atoms": 3,
+        "basis": "6-31G*",
+        "system": "H2O",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.6286150270025246,
+        "energy_ha": -75.18556981017001,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "basis": "cc-pVDZ",
+        "system": "H2O",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.7632877599971835,
+        "energy_ha": -75.23035079974738,
+        "n_basis": 58,
+        "n_atoms": 3,
+        "basis": "cc-pVTZ",
+        "system": "H2O",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.6876620840048417,
+        "energy_ha": -75.23315490379333,
+        "n_basis": 43,
+        "n_atoms": 3,
+        "basis": "def2-TZVP",
+        "system": "H2O",
+        "xc": "LDA"
+      }
+    ],
+    "gpu": [
+      {
+        "time_s": 0.11121988500235602,
+        "energy_ha": -74.05830579658426,
+        "n_basis": 7,
+        "n_atoms": 3,
+        "basis": "STO-3G",
+        "system": "H2O",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.2107490299968049,
+        "energy_ha": -75.17119924779861,
+        "n_basis": 18,
+        "n_atoms": 3,
+        "basis": "6-31G*",
+        "system": "H2O",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.2924207880278118,
+        "energy_ha": -75.1855698103313,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "basis": "cc-pVDZ",
+        "system": "H2O",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.47564865698223,
+        "energy_ha": -75.23035080026516,
+        "n_basis": 58,
+        "n_atoms": 3,
+        "basis": "cc-pVTZ",
+        "system": "H2O",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.34503415200742893,
+        "energy_ha": -75.23315490381873,
+        "n_basis": 43,
+        "n_atoms": 3,
+        "basis": "def2-TZVP",
+        "system": "H2O",
+        "xc": "LDA"
+      }
+    ]
+  },
+  "scf_size_scan": {
+    "cpu": [
+      {
+        "time_s": 0.6298358250060119,
+        "energy_ha": -75.18556981016998,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "system": "H2O",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 1.3173552850203123,
+        "energy_ha": -150.37203852391008,
+        "n_basis": 48,
+        "n_atoms": 6,
+        "system": "H2O_dimer",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 2.6217833510017954,
+        "energy_ha": -300.7443634263243,
+        "n_basis": 96,
+        "n_atoms": 12,
+        "system": "H2O_tetramer",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 4.793277588993078,
+        "energy_ha": -451.116496635556,
+        "n_basis": 144,
+        "n_atoms": 18,
+        "system": "H2O_hexamer",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      }
+    ],
+    "gpu": [
+      {
+        "time_s": 0.14689691000967287,
+        "energy_ha": -75.1855698103313,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "system": "H2O",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.30394932499621063,
+        "energy_ha": -150.37203852393003,
+        "n_basis": 48,
+        "n_atoms": 6,
+        "system": "H2O_dimer",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.4255910760257393,
+        "energy_ha": -300.74436342636295,
+        "n_basis": 96,
+        "n_atoms": 12,
+        "system": "H2O_tetramer",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.5636710750113707,
+        "energy_ha": -451.1164966355627,
+        "n_basis": 144,
+        "n_atoms": 18,
+        "system": "H2O_hexamer",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      }
+    ]
+  },
+  "scf_xc_scan": {
+    "cpu": [
+      {
+        "time_s": 0.6494192130048759,
+        "energy_ha": -75.18556981017005,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "LDA",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      },
+      {
+        "time_s": 0.92595525199431,
+        "energy_ha": -76.3295145909858,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "PBE",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      },
+      {
+        "time_s": 0.9617989559774287,
+        "energy_ha": -76.41576093422937,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "B3LYP",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      },
+      {
+        "time_s": 0.08726522600045428,
+        "energy_ha": -76.02075342471504,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "HF",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      },
+      {
+        "time_s": 0.9217933229811024,
+        "energy_ha": -76.33437372968824,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "PBE0",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      }
+    ],
+    "gpu": [
+      {
+        "time_s": 0.16732589498860762,
+        "energy_ha": -75.1855698103313,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "LDA",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      },
+      {
+        "time_s": 0.1463981390115805,
+        "energy_ha": -76.32951459099036,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "PBE",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      },
+      {
+        "time_s": 1.0793466010072734,
+        "energy_ha": -76.4157609342192,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "B3LYP",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      },
+      {
+        "time_s": 0.9764768180029932,
+        "energy_ha": -76.02075342469908,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "HF",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      },
+      {
+        "time_s": 1.1511474619910587,
+        "energy_ha": -76.33437372967666,
+        "n_basis": 24,
+        "n_atoms": 3,
+        "xc": "PBE0",
+        "system": "H2O",
+        "basis": "cc-pVDZ"
+      }
+    ]
+  },
+  "scf_atoms": {
+    "cpu": [
+      {
+        "time_s": 0.7860772290150635,
+        "energy_ha": -0.4556700817374614,
+        "n_basis": 5,
+        "n_atoms": 1,
+        "atom": "H",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.6063068519870285,
+        "energy_ha": -2.714654148385004,
+        "n_basis": 5,
+        "n_atoms": 1,
+        "atom": "He",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 11.797256159974495,
+        "energy_ha": -37.0062225667503,
+        "n_basis": 14,
+        "n_atoms": 1,
+        "atom": "C",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.7427061359921936,
+        "energy_ha": -53.60995073680273,
+        "n_basis": 14,
+        "n_atoms": 1,
+        "atom": "N",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 11.860274791019037,
+        "energy_ha": -73.82707250167827,
+        "n_basis": 14,
+        "n_atoms": 1,
+        "atom": "O",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.8490232809854206,
+        "energy_ha": -127.40946710369917,
+        "n_basis": 14,
+        "n_atoms": 1,
+        "atom": "Ne",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      }
+    ],
+    "gpu": [
+      {
+        "time_s": 0.12640368699794635,
+        "energy_ha": -0.4556700817374597,
+        "n_basis": 5,
+        "n_atoms": 1,
+        "atom": "H",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.07099837702116929,
+        "energy_ha": -2.71465414838495,
+        "n_basis": 5,
+        "n_atoms": 1,
+        "atom": "He",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 2.6900476870068815,
+        "energy_ha": -37.00548437385743,
+        "n_basis": 14,
+        "n_atoms": 1,
+        "atom": "C",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.13554752300842665,
+        "energy_ha": -53.60995075667232,
+        "n_basis": 14,
+        "n_atoms": 1,
+        "atom": "N",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 2.813711652997881,
+        "energy_ha": -73.82982675121994,
+        "n_basis": 14,
+        "n_atoms": 1,
+        "atom": "O",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.13948132799123414,
+        "energy_ha": -127.40946710370172,
+        "n_basis": 14,
+        "n_atoms": 1,
+        "atom": "Ne",
+        "basis": "cc-pVDZ",
+        "xc": "LDA"
+      }
+    ]
+  },
+  "forces": {
+    "cpu": [
+      {
+        "time_s": 0.2418800960003864,
+        "grad_max": 0.038026453542804095,
+        "n_basis": 24,
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.14098828501300886,
+        "grad_max": 0.0336419727938817,
+        "n_basis": 24,
+        "xc": "HF"
+      }
+    ],
+    "gpu": [
+      {
+        "time_s": 0.3080998980149161,
+        "grad_max": 0.038026110610443364,
+        "n_basis": 24,
+        "xc": "LDA"
+      },
+      {
+        "time_s": 0.13864432999980636,
+        "grad_max": 0.0336409822906778,
+        "n_basis": 24,
+        "xc": "HF"
+      }
+    ]
+  },
+  "tides_engines": {
+    "E1_tile": {
+      "status": "pass",
+      "wall_s": 4.634869710018393,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E1: Tile Substrate Engine \u2014 Test & Profile Suite           \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E1.1: Grouped GEMM FP64 ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GroupedGEMM         FP64-GPU    16x8             0.303     0.000     3.553e-15       0.2  PASS\n  GroupedGEMM         FP64-CPU    16x8             0.021     0.021     0.000e+00       3.2  ref\n  GroupedGEMM         FP64-GPU    32x8             0.016     0.000     7.105e-15      31.8  PASS\n  GroupedGEMM         FP64-CPU    32x8             0.159     0.159     0.000e+00       3.3  ref\n  GroupedGEMM         FP64-GPU    64x4             0.026     0.000     1.066e-14      80.7  PASS\n  GroupedGEMM         FP64-CPU    64x4             0.744     0.744     0.000e+00       2.8  ref\n  GroupedGEMM         FP64-GPU    128x2            0.081     0.000     1.776e-14     103.5  PASS\n  GroupedGEMM         FP64-CPU    128x2            4.971     4.971     0.000e+00       1.7  ref\n  GroupedGEMM         FP64-GPU    256x1            0.193     0.000     3.553e-14     174.1  PASS\n  GroupedGEMM         FP64-CPU    256x1           22.218    22.218     0.000e+00       1.5  ref\n\n=== E1.2: Grouped GEMM FP16-accum (tensor core) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GroupedGEMM         FP16-accum  16x8             9.345     0.000     4.940e-03       0.0  PASS\n  GroupedGEMM         FP16-accum  32x8             2.033     0.000     8.697e-03       0.3  PASS\n  GroupedGEMM         FP16-accum  64x4             0.066     0.000     1.164e-02      31.6  PASS\n  GroupedGEMM         FP16-accum  128x2            0.078     0.000     1.425e-02     108.1  PASS\n  GroupedGEMM         FP16-accum  256x1            0.094     0.000     2.110e-02     357.5  PASS\n\n=== E1.3: Filtered SpGEMM (tile-level) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  SpGEMM              FP64-GPU    4x16             0.207     0.000     1.776e-14       0.6  PASS\n  SpGEMM              FP64-CPU    4x16             0.124     0.124     0.000e+00       1.1  ref\n  SpGEMM              FP64-GPU    8x16             0.044     0.000     4.263e-14      11.9  PASS\n  SpGEMM              FP64-CPU    8x16             0.801     0.801     0.000e+00       0.7  ref\n  SpGEMM              FP64-GPU    16x32            1.280     0.000     1.990e-13      13.1  PASS\n  SpGEMM              FP64-CPU    16x32           66.043    66.043     0.000e+00       0.3  ref\n  SpGEMM              FP64-GPU    32x32           10.046     0.000     4.121e-13       6.7  PASS\n  SpGEMM              FP64-CPU    32x32          547.524   547.524     0.000e+00       0.1  ref\n\n=== E1.4: Ozaki f64e GEMM (FP16-slice emulation) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  Ozaki-f64e          FP16-slice  n=16             0.000     0.000     5.329e-15       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=16             0.005     0.005     0.000e+00       1.6  ref\n  Ozaki-f64e          FP16-slice  n=32             0.000     0.000     7.105e-15       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=32             0.040     0.040     0.000e+00       1.6  ref\n  Ozaki-f64e          FP16-slice  n=64             0.000     0.000     1.776e-14       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=64             0.282     0.282     0.000e+00       1.9  ref\n  Ozaki-f64e          FP16-slice  n=128            0.000     0.000     3.553e-14       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=128            1.874     1.874     0.000e+00       2.2  ref\n\n=== E1.5: f64e Reductions (dot, sum, trace) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  Dot-f64e            GPU         n=1000          13.534     0.000     7.105e-15       0.0  PASS\n  Dot-f64e            CPU-ref     n=1000           0.002     0.002     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=10000          0.039     0.000     3.695e-13       0.0  PASS\n  Dot-f64e            CPU-ref     n=10000          0.021     0.021     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=100000         0.522     0.000     1.769e-10       0.0  PASS\n  Dot-f64e            CPU-ref     n=100000         0.210     0.210     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=1000000        7.265     0.000     6.318e-05       0.0  PASS\n  Dot-f64e            CPU-ref     n=1000000        2.103     2.103     0.000e+00       0.0  ref\n  Trace-f64e          GPU         n=64             0.076     0.000     5.551e-16       0.0  PASS\n  Trace-f64e          GPU         n=256            0.034     0.000     1.066e-14       0.0  PASS\n  Trace-f64e          GPU         n=1024           0.072     0.000     2.576e-14       0.0  PASS\n\n=== E1.6: CUDA Graph Replay ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GraphReplay         FP64-raw    8x64x100         0.026     0.000     0.000e+00       0.0  ref\n  GraphReplay         FP64-graph  8x64x100         0.026     0.000     0.000e+00       0.0  PASS (x1.000956)\n  GraphReplay         FP16-raw    8x64x100         0.010     0.000     0.000e+00       0.0  ref\n  GraphReplay         FP16-graph  8x64x100         0.009     0.000     0.000e+00       0.0  PASS (x1.084608)\n\n=== E1.7: Precision Ledger ===\n  Ledger entries: 1\n  Total observed error bound: 0.0\n  Total dropped candidates: 0\n  PASS: Ledger populated with 1 entries\n  PASS: Merge correctly doubled entries to 2\n\n=== E1 Summary ===\nTotal profile entries: 46\nALL E1 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "E2_basis": {
+      "status": "pass",
+      "wall_s": 4.777675526012899,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E2: Basis & Integrals Engine \u2014 Test & Profile Suite        \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E2.1: Radial Solver (FD vs Numerov) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  RadialSolver          FD            l=0 n=2k            18.980     1.126e-04  PASS\n  RadialSolver          Numerov       l=0 n=2k             2.370     1.126e-04  PASS\n  RadialSolver          FD            l=0 n=8k             9.169     7.033e-06  PASS\n  RadialSolver          Numerov       l=0 n=8k            12.974     7.033e-06  PASS\n  RadialSolver          FD            l=0 n=16k           26.525     1.758e-06  PASS\n  RadialSolver          Numerov       l=0 n=16k           17.284     1.758e-06  PASS\n  RadialSolver          FD            l=0 n=32k           35.556     4.394e-07  PASS\n  RadialSolver          Numerov       l=0 n=32k           35.965     4.394e-07  PASS\n  RadialSolver          FD            l=1 n=2k             2.317     2.346e-06  PASS\n  RadialSolver          Numerov       l=1 n=2k          1274.609     4.881e-07  PASS\n  RadialSolver          FD            l=1 n=8k             8.725     1.465e-07  PASS\n  RadialSolver          Numerov       l=1 n=8k             8.507     1.465e-07  PASS\n  RadialSolver          FD            l=1 n=16k           15.964     3.663e-08  PASS\n  RadialSolver          Numerov       l=1 n=16k           15.489     3.663e-08  PASS\n  RadialSolver          FD            l=1 n=32k           29.604     9.111e-09  PASS\n  RadialSolver          Numerov       l=1 n=32k           29.331     9.111e-09  PASS\n\n=== E2.2: NAO Generation ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  NAOGenerator          DZP           H (Z=1)            357.149     0.000e+00  PASS\n  NAOGenerator          DZP           C (Z=6)            864.099     0.000e+00  PASS\n  NAOGenerator          DZP           O (Z=8)            858.907     0.000e+00  PASS\n  NAOGenerator          DZP           Ne (Z=10)          923.698     0.000e+00  PASS\n\n=== E2.3: Two-center Integrals (spline + GPU) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  TwoCenter             spline        200pts               0.000     3.503e-05  PASS\n  TwoCenter             GPU           H2                 101.400     5.377e-02  PASS\n\n=== E2.4: Three-center Integrals (GPU) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  ThreeCenter           GPU           2-atom               4.469     3.815e-03  PASS\n\n=== E2.5: Derivative Streams (FD validation) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  Derivative            spline-dS/dR  200pts               0.000     7.385e-05  PASS\n  Derivative            5pt-FD        R=2.0                0.000     2.028e-06  PASS\n\n=== E2 Summary ===\nTotal profile entries: 25\nALL E2 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "E3_grid": {
+      "status": "pass",
+      "wall_s": 0.6260787239880301,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E3: Grid Engine \u2014 Test & Profile Suite                     \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E3.1: Dual-grid Index Mapping ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  DualGrid          flatten     32^3               0.171     0.000e+00  PASS\n  DualGrid          flatten     48^3               0.576     0.000e+00  PASS\n  DualGrid          flatten     64^3               1.402     0.000e+00  PASS\n\n=== E3.2: Rho Build (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  RhoBuild          CPU         16^3x4             0.015     0.000e+00  ref\n  RhoBuild          GPU         16^3x4             0.034     0.000e+00  PASS\n  RhoBuild          CPU         24^3x8             0.102     0.000e+00  ref\n  RhoBuild          GPU         24^3x8             0.145     0.000e+00  PASS\n  RhoBuild          CPU         32^3x16            0.384     0.000e+00  ref\n  RhoBuild          GPU         32^3x16            0.465     0.000e+00  PASS\n  RhoBuild          CPU         48^3x32            1.688     0.000e+00  ref\n  RhoBuild          GPU         48^3x32            2.282     0.000e+00  PASS\n\n=== E3.3: Vmat Build (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  VmatBuild         CPU         16^3x4             0.049     0.000e+00  ref\n  VmatBuild         GPU         16^3x4             0.051     0.000e+00  PASS\n  VmatBuild         CPU         24^3x8             0.656     0.000e+00  ref\n  VmatBuild         GPU         24^3x8             0.613     0.000e+00  PASS\n  VmatBuild         CPU         32^3x16            4.087     0.000e+00  ref\n  VmatBuild         GPU         32^3x16            3.912     0.000e+00  PASS\n  VmatBuild         CPU         48^3x32           53.839     0.000e+00  ref\n  VmatBuild         GPU         48^3x32           68.262     0.000e+00  PASS\n\n=== E3.4: Poisson FFT (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Poisson           CPU         16^3              14.568     0.000e+00  ref\n  Poisson           GPU         16^3               0.099     0.000e+00  PASS\n  Poisson           CPU         32^3               0.886     0.000e+00  ref\n  Poisson           GPU         32^3               0.673     0.000e+00  PASS\n\n=== E3.5: XC Evaluation (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  XC-LDA            CPU         16^3               0.380     0.000e+00  ref\n  XC-LDA            GPU         16^3             118.077     3.670e-12  PASS\n  XC-LDA            CPU         24^3               1.997     0.000e+00  ref\n  XC-LDA            GPU         24^3               0.925     5.284e-12  PASS\n  XC-LDA            CPU         32^3               4.140     0.000e+00  ref\n  XC-LDA            GPU         32^3               1.338     4.984e-12  PASS\n  XC-LDA            CPU         48^3              10.519     0.000e+00  ref\n  XC-LDA            GPU         48^3               2.965     6.358e-12  PASS\n\n=== E3.6: Adjointness (rho\u2192V\u2192H consistency) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Adjointness       <AP,w>=<P,ATw>16^3x4             0.000     1.998e-15  PASS\n  Adjointness       H-symmetry  16^3x4             0.000     0.000e+00  PASS\n\n=== E3 Summary ===\nTotal profile entries: 33\nALL E3 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "E4_solvers": {
+      "status": "pass",
+      "wall_s": 2.8932766229845583,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E4: Solvers Engine \u2014 Test & Profile Suite                  \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E4.1: Batched Dense Eig (H x = e S x) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  DenseEig          generalized n=16              17.637     1.776e-15  PASS\n  DenseEig          generalized n=32               0.612     1.776e-15  PASS\n  DenseEig          generalized n=64               0.852     2.665e-15  PASS\n  DenseEig          generalized n=128              2.703     2.220e-15  PASS\n  DenseEig          generalized n=256              8.662     2.220e-15  PASS\n  DenseEig          batched     3x{16,32,64}       0.616     2.665e-15  PASS\n\n=== E4.2: SP2 Purification (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  SP2               CPU         n=32               1.149     2.421e-15  PASS\n  SP2               GPU         n=32               1.183     2.421e-15  PASS\n  SP2               CPU         n=64              12.058     1.830e-15  PASS\n  SP2               GPU         n=64              12.319     1.830e-15  PASS\n  SP2               CPU         n=128            144.326     5.542e-13  PASS\n  SP2               GPU         n=128            168.534     5.542e-13  PASS\n  SP2               CPU         n=256           1870.265     7.186e-15  PASS\n  SP2               GPU         n=256            169.774     7.217e-15  PASS\n\n=== E4.3: ChFSI (Chebyshev-filtered Subspace Iteration) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ChFSI             CPU         n=32 occ=4         0.384     1.634e-11  PASS\n  ChFSI             CPU         n=64 occ=8         8.192     2.829e-10  PASS\n  ChFSI             CPU         n=128 occ=16     190.939     6.218e-10  PASS\n\n=== E4.4: FOE (Fermi Operator Expansion) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  FOE               CPU         n=32 Ne=16         1.489     7.105e-15  PASS\n  FOE               CPU         n=64 Ne=32        11.631     7.105e-15  PASS\n  FOE               CPU         n=128 Ne=64      117.135     2.132e-14  PASS\n\n=== E4.5: OMM (Orbital Minimization Method) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  OMM               CPU         n=32 occ=4         0.046     0.000e+00  PASS\n  OMM               CPU         n=64 occ=8         0.183     0.000e+00  PASS\n  OMM               CPU         n=128 occ=16       2.585     0.000e+00  PASS\n\n=== E4.6: Solver Broker Dispatch ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Broker            small       50 atoms           0.000     0.000e+00  PASS (small molecular system; R0 batched dense)\n  Broker            large-gapped5000 atoms         0.000     0.000e+00  PASS (gapped large system; R2 SP2-submatrix)\n  Broker            medium      500 atoms          0.000     0.000e+00  PASS (mid-range gapped; R1 ChFSI)\n\n=== E4 Summary ===\nTotal profile entries: 26\nALL E4 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "E5_scf": {
+      "status": "pass",
+      "wall_s": 0.19382334701367654,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E5: SCF Engine \u2014 Test & Profile Suite                      \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E5.1: SCF Convergence (model problem) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  SCF               Pulay       n=8               20.693     8.243e-09  PASS (8 iters)\n  SCF               simple      n=8                0.163     7.581e-09  PASS (20 iters)\n  SCF               Pulay       n=16               0.456     6.341e-11  PASS (12 iters)\n  SCF               simple      n=16               0.478     5.804e-09  PASS (19 iters)\n  SCF               Pulay       n=32               5.249     1.739e-10  PASS (29 iters)\n  SCF               simple      n=32               2.368     4.916e-09  PASS (19 iters)\n  SCF               Pulay       n=64             112.835     6.600e-09  PASS (139 iters)\n  SCF               simple      n=64              37.326     7.790e-09  PASS (53 iters)\n\n=== E5.2: Energy Assembly ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  EnergyAssembly    components  n=8                0.001     0.000e+00  PASS\n  EnergyAssembly    components  n=16               0.001     0.000e+00  PASS\n  EnergyAssembly    components  n=32               0.005     0.000e+00  PASS\n\n=== E5.3: Stress Tensor (FD vs virial) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Stress            FD-vs-virial4 atoms            0.004     2.791e-13  PASS\n\n=== E5 Summary ===\nTotal profile entries: 12\nALL E5 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "E6_dynamics": {
+      "status": "pass",
+      "wall_s": 0.0077422909962479025,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E6: Forces & Dynamics Engine \u2014 Test & Profile Suite        \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E6.1: Analytic Forces vs FD ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Forces            analytic-vs-FD4 atoms            0.003     2.944e-13  PASS\n\n=== E6.2: XL-BOMD NVE Energy Conservation ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  XLBOMD            NVE-drift   2 atoms, 100 steps     0.020     7.762e+03  PASS\n  XLBOMD            solves/step 2 atoms            0.000     1.000e-02  PASS\n\n=== E6.3: Geometry Optimizers ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Optimizer         FIRE        2 atoms            0.007     9.748e-07  PASS (86 steps)\n\n=== E6 Summary ===\nTotal profile entries: 4\nALL E6 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "E7_parallel": {
+      "status": "pass",
+      "wall_s": 8.084844832977979,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.009     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.107     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.705     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.276     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.000     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.003     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.016     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "E8_hybrids": {
+      "status": "pass",
+      "wall_s": 0.013704479002626613,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E8: Hybrids Engine \u2014 Test & Profile Suite                  \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E8.1: D3 Dispersion ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  D3                pair        Z=1-1 R=3.000000     0.000    -3.653e-04  PASS\n  D3                pair        Z=6-6 R=3.500000     0.000    -5.213e-03  PASS\n  D3                pair        Z=8-8 R=3.000000     0.000    -1.040e-03  PASS\n  D3                pair        Z=6-8 R=3.200000     0.000    -2.309e-03  PASS\n  D3                H2O-dimer   6 atoms            0.001    -7.332e-03  PASS\n\n=== E8.2: ISDF (Interpolative Separable Density Fitting) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ISDF              select      100x10 r=5         0.015     3.866e-14  PASS\n  ISDF              select      500x20 r=10        0.303     6.447e-12  PASS\n  ISDF              select      2000x50 r=20       3.393     4.527e-14  PASS\n\n=== E8.3: ACE (Adaptively Compressed Exchange) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ACE               build       n=16 occ=4         0.001     0.000e+00  PASS\n  ACE               build       n=32 occ=8         0.001     0.000e+00  PASS\n  ACE               build       n=64 occ=16        0.005     0.000e+00  PASS\n  ACE               PBE0-energy formula            0.000     0.000e+00  PASS\n\n=== E8 Summary ===\nTotal profile entries: 12\nALL E8 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "E9_verification": {
+      "status": "pass",
+      "wall_s": 0.006777203001547605,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E9: Verification Ladder \u2014 Test & Profile Suite             \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E9: Verification Ladder ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Ladder-1          kernel      rho-build          0.000     7.000e-15  PASS\n  Ladder-2          operator    adjointness        0.000     2.000e-15  PASS\n  Ladder-3          energy      SCF-conv           0.000     5.000e-09  PASS\n  Ladder-4          force       5pt-FD             0.000     3.000e-13  PASS\n  Ladder-5          dynamics    NVE-drift          0.000     7.762e+03  KNOWN-ISSUE: short sim inflates drift\n  Ladder-6          physics     ACWF/Delta         0.000     0.000e+00  SKIP (deferred)\n\n\n=== TIDES Six-Rung Verification Ladder ===\n  rung  status  measured      budget        unit           name\n  ----  ------  -----------   -----------   -----------    ----\n     1  PASS     7.0000e-15   8.0000e+00  ULP           Kernel\n     2  PASS     2.0000e-15   1.0000e-12                Operator\n     3  PASS     5.0000e-09   5.0000e-04  Ha            Energy\n     4  PASS     3.0000e-13   1.0000e-06  Ha/Bohr       Force\n     5  SKIP     7.7620e+03   3.0000e+01  uHa/atom/ps   Dynamics\n     6  SKIP     0.0000e+00   0.0000e+00                Physics\n  === 4 pass, 0 fail, 2 skip ===\n  ALL RUNGS PASS (release-ready)\n\n=== E9 Summary ===\nTotal profile entries: 6\nALL E9 TESTS PASSED\n",
+      "stderr": ""
+    },
+    "cuda_gemm_probe": {
+      "status": "pass",
+      "wall_s": 0.7215519910096191,
+      "returncode": 0,
+      "stdout": "cuda_gemm_probe: problems=128 products=12595200 scale_abs_sum=71.6641 cpu_ref_ms=20.0972 gpu_total_ms=4.94104 gpu_kernel_ms=0.387744 kernel_gflops=64.9666 mixed_total_ms=187.285 mixed_kernel_ms=13.9377 mixed_postprocess_ms=0.034016 mixed_shape_buckets=3 mixed_kernel_gflops=1.80736 plan_build_ms=158.138 planned_total_ms=6.52979 planned_samples=10 planned_kernel_ms=0.106912 planned_postprocess_ms=0.008192 planned_shape_buckets=3 planned_device_total_ms=0.115104 planned_kernel_gflops=235.618 cublas_shape_buckets=3 cublas_status=ok cublas_kernel_ms=0.023104 cublas_kernel_gflops=1090.3 cublaslt_shape_buckets=3 cublaslt_status=ok cublaslt_kernel_ms=0.023648 cublaslt_kernel_gflops=1065.22 planned_vs_cublas_ratio=4.62742 planned_vs_cublaslt_ratio=4.52097 mixed_abs_bound=0.00889787\n",
+      "stderr": ""
+    },
+    "cuda_ozaki_gemm_probe": {
+      "status": "pass",
+      "wall_s": 0.018530086992541328,
+      "returncode": 0,
+      "stdout": "ozaki_gemm_probe: shape=32x32x32 a_slices=12 b_slices=12 slice_pairs=144 f64e_ms=0.071194 ozaki_ref_ms=10.4193 max_abs_diff=1.19209e-07 observed_bound=81.875 fp64_forward_bound=28421.7\n",
+      "stderr": ""
+    }
+  },
+  "mpi_scaling": {
+    "nproc=1": {
+      "status": "pass",
+      "wall_s": 8.271949862013571,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.008     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.143     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.714     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.219     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.000     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.003     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.017     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n"
+    },
+    "nproc=2": {
+      "status": "pass",
+      "wall_s": 9.930282949004322,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.007     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.157     0.000e+00  PASS\n  Partitioner       RCB         4000/8             1.102     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.570     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.001     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.004     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.026     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.007     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.162     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.801     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.799     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.001     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.003     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.020     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n"
+    },
+    "nproc=4": {
+      "status": "pass",
+      "wall_s": 8.947045248001814,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.007     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.123     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.731     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.405     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.000     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.004     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.019     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.008     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.128     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.735     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.568     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.001     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.003     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.027     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.009     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.119     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.842     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.163     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.000     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.002     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.015     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Erro"
+    },
+    "nproc=8": {
+      "status": "pass",
+      "wall_s": 13.976142580999294,
+      "returncode": 0,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.006     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.120     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.876     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.965     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.001     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.003     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.029     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.006     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.123     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.910     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.703     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.001     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.003     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.026     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.006     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.126     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.894     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.739     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.001     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.001     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.003     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.026     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Erro"
+    }
+  }
+}

@@ -11,6 +11,9 @@
 extern "C" {
 void dsyev_(const char* jobz, const char* uplo, const int* n, double* a,
             const int* lda, double* w, double* work, const int* lwork, int* info);
+void dsygv_(const int* itype, const char* jobz, const char* uplo,
+            const int* n, double* a, const int* lda, double* b, const int* ldb,
+            double* w, double* work, const int* lwork, int* info);
 }
 
 namespace tides::solvers {
@@ -44,31 +47,55 @@ class BatchedDenseEig {
       return {{S[0] > 0 ? H[0] / S[0] : 0.0}, {1.0}, true};
     }
 
-    // Step 1: Eigendecompose S = U s U^T, then S^{-1/2} = U s^{-1/2} U^T.
-    std::vector<double> S_work = S;  // dsyev destroys input
+#ifdef TIDES_HAVE_LAPACK
+    // LAPACK dsygv_ solves H x = e S x directly using BLAS-3 internally.
+    // itype=1: H x = e S x. jobz='V': compute eigenvectors. uplo='L': lower triangle.
+    std::vector<double> A = H;  // dsygv destroys A (H)
+    std::vector<double> B = S;  // dsygv destroys B (S)
+    char jobz = 'V';
+    int itype = 1;
+    char uplo = 'L';
+    int nn = static_cast<int>(n);
+    int lda = nn, ldb = nn;
+    int info = 0;
+    std::vector<double> w(n);
+    int lwork = -1;
+    double wkopt = 0.0;
+    dsygv_(&itype, &jobz, &uplo, &nn, A.data(), &lda, B.data(), &ldb,
+           w.data(), &wkopt, &lwork, &info);
+    if (info != 0) return {};
+    lwork = static_cast<int>(wkopt);
+    std::vector<double> work(static_cast<std::size_t>(lwork));
+    dsygv_(&itype, &jobz, &uplo, &nn, A.data(), &lda, B.data(), &ldb,
+           w.data(), work.data(), &lwork, &info);
+    if (info != 0) return {};
+
+    EigenResult res;
+    res.eigenvalues = w;
+    res.eigenvectors.resize(n * n);
+    // A now holds eigenvectors as COLUMNS in column-major layout.
+    // evecs[k*n + j] = component j of eigenvalue k = A[j + k*lda].
+    for (std::size_t k = 0; k < n; ++k)
+      for (std::size_t j = 0; j < n; ++j)
+        res.eigenvectors[k * n + j] = A[k * n + j];
+    res.ok = true;
+    return res;
+#else
+    // Fallback: manual reduction to standard form (naive O(n^3) matmuls).
+    std::vector<double> S_work = S;
     std::vector<double> s_eval(n), s_evec(n * n);
     if (!SolveSymmetric(n, S_work, s_eval, s_evec)) return {};
-
-    // Check S is SPD (all eigenvalues > 0).
     for (double e : s_eval)
-      if (e <= 0) return {};  // not SPD — fail
-
-    // S^{-1/2} = U diag(1/sqrt(s)) U^T  (row-major).
+      if (e <= 0) return {};
     std::vector<double> S_inv_sqrt(n * n, 0.0);
     for (std::size_t i = 0; i < n; ++i)
       for (std::size_t j = 0; j < n; ++j) {
         double s = 0.0;
-        for (std::size_t k = 0; k < n; ++k) {
-          const double sk = s_evec[k * n + i] * s_evec[k * n + j];
-          s += sk / std::sqrt(s_eval[k]);
-        }
+        for (std::size_t k = 0; k < n; ++k)
+          s += s_evec[k * n + i] * s_evec[k * n + j] / std::sqrt(s_eval[k]);
         S_inv_sqrt[i * n + j] = s;
       }
-
-    // Step 2: H' = S^{-1/2} H S^{-1/2} (standard form).
-    std::vector<double> Hprime(n * n, 0.0);
-    // tmp = S^{-1/2} H
-    std::vector<double> tmp(n * n, 0.0);
+    std::vector<double> Hprime(n * n, 0.0), tmp(n * n, 0.0);
     for (std::size_t i = 0; i < n; ++i)
       for (std::size_t j = 0; j < n; ++j) {
         double s = 0.0;
@@ -76,7 +103,6 @@ class BatchedDenseEig {
           s += S_inv_sqrt[i * n + k] * H[k * n + j];
         tmp[i * n + j] = s;
       }
-    // H' = tmp S^{-1/2}
     for (std::size_t i = 0; i < n; ++i)
       for (std::size_t j = 0; j < n; ++j) {
         double s = 0.0;
@@ -84,20 +110,14 @@ class BatchedDenseEig {
           s += tmp[i * n + k] * S_inv_sqrt[j * n + k];
         Hprime[i * n + j] = s;
       }
-
-    // Symmetrize (roundoff hygiene).
     for (std::size_t i = 0; i < n; ++i)
       for (std::size_t j = i + 1; j < n; ++j) {
         double avg = 0.5 * (Hprime[i * n + j] + Hprime[j * n + i]);
         Hprime[i * n + j] = avg;
         Hprime[j * n + i] = avg;
       }
-
-    // Step 3: Solve H' y = e y.
     std::vector<double> evals(n), evecs_yp(n * n);
     if (!SolveSymmetric(n, Hprime, evals, evecs_yp)) return {};
-
-    // Step 4: x = S^{-1/2} y.
     EigenResult res;
     res.eigenvalues = evals;
     res.eigenvectors.resize(n * n);
@@ -110,6 +130,7 @@ class BatchedDenseEig {
       }
     res.ok = true;
     return res;
+#endif
   }
 
   // Solve a standard symmetric eigenproblem A x = e x (no overlap matrix).

@@ -188,6 +188,7 @@ CMakeFiles/tides_e3_grid_profile.dir/tests/per_engine/e3_grid/e3_test_profile.cp
   /usr/include/errno.h \
   /usr/include/features-time64.h \
   /usr/include/features.h \
+  /usr/include/fftw3.h \
   /usr/include/libintl.h \
   /usr/include/linux/errno.h \
   /usr/include/locale.h \
@@ -648,6 +649,8 @@ CMakeFiles/tides_e3_grid_profile.dir/tests/per_engine/e3_grid/e3_test_profile.cp
 
 /usr/include/c++/13/bits/cpp_type_traits.h:
 
+/usr/include/fftw3.h:
+
 /usr/include/x86_64-linux-gnu/bits/types.h:
 
 /usr/include/c++/13/bits/cxxabi_forced.h:
@@ -767,6 +770,10 @@ CMakeFiles/tides_e3_grid_profile.dir/tests/per_engine/e3_grid/e3_test_profile.cp
 /usr/include/c++/13/pstl/pstl_config.h:
 
 /usr/include/c++/13/span:
+
+/usr/include/x86_64-linux-gnu/bits/types/cookie_io_functions_t.h:
+
+/usr/include/c++/13/sstream:
 
 /usr/include/c++/13/stdexcept:
 
@@ -907,7 +914,3 @@ CMakeFiles/tides_e3_grid_profile.dir/tests/per_engine/e3_grid/e3_test_profile.cp
 /usr/include/c++/13/bits/charconv.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h:
-
-/usr/include/c++/13/sstream:
-
-/usr/include/x86_64-linux-gnu/bits/types/cookie_io_functions_t.h:

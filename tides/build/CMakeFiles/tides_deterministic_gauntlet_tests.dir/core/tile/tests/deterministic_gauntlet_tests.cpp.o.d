@@ -220,6 +220,12 @@ CMakeFiles/tides_deterministic_gauntlet_tests.dir/core/tile/tests/deterministic_
  /usr/include/x86_64-linux-gnu/c++/13/bits/c++io.h \
  /usr/include/c++/13/bits/fstream.tcc \
  /home/niel/git/New_DFT_Code/tides/core/tile/ozaki.hpp \
+ /usr/include/cuda_fp8.h /usr/include/cuda_fp16.h \
+ /usr/include/cuda_fp16.hpp /usr/include/nv/target \
+ /usr/include/nv/detail/__target_macros \
+ /usr/include/nv/detail/__preprocessor /usr/include/cuda_bf16.h \
+ /usr/include/cuda_bf16.hpp /usr/include/vector_types.h \
+ /usr/include/crt/host_defines.h /usr/include/cuda_fp8.hpp \
  /home/niel/git/New_DFT_Code/tides/core/tile/spgemm_filtered.hpp \
  /usr/include/c++/13/map /usr/include/c++/13/bits/stl_tree.h \
  /usr/include/c++/13/ext/aligned_buffer.h \

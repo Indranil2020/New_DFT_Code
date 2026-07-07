@@ -142,6 +142,7 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/gemm_grouped.cu.o: /home/niel/git/New_D
   /usr/include/crt/sm_90_rt.hpp \
   /usr/include/ctype.h \
   /usr/include/cuComplex.h \
+  /usr/include/cublasLt.h \
   /usr/include/cublas_api.h \
   /usr/include/cublas_v2.h \
   /usr/include/cuda_bf16.h \
@@ -434,7 +435,13 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/ozaki.cu.o: /home/niel/git/New_DFT_Code
   /usr/include/crt/sm_90_rt.h \
   /usr/include/crt/sm_90_rt.hpp \
   /usr/include/ctype.h \
+  /usr/include/cuda_bf16.h \
+  /usr/include/cuda_bf16.hpp \
   /usr/include/cuda_device_runtime_api.h \
+  /usr/include/cuda_fp16.h \
+  /usr/include/cuda_fp16.hpp \
+  /usr/include/cuda_fp8.h \
+  /usr/include/cuda_fp8.hpp \
   /usr/include/cuda_runtime.h \
   /usr/include/cuda_runtime_api.h \
   /usr/include/device_atomic_functions.h \
@@ -453,6 +460,9 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/ozaki.cu.o: /home/niel/git/New_DFT_Code
   /usr/include/linux/limits.h \
   /usr/include/locale.h \
   /usr/include/math.h \
+  /usr/include/nv/detail/__preprocessor \
+  /usr/include/nv/detail/__target_macros \
+  /usr/include/nv/target \
   /usr/include/sm_20_atomic_functions.h \
   /usr/include/sm_20_atomic_functions.hpp \
   /usr/include/sm_20_intrinsics.h \
@@ -953,6 +963,8 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o: /home/niel/git/Ne
 
 /home/niel/git/New_DFT_Code/tides/core/tile/spgemm_filtered.cu:
 
+/usr/include/cuda_fp8.hpp:
+
 /home/niel/git/New_DFT_Code/tides/core/tile/ozaki.hpp:
 
 /home/niel/git/New_DFT_Code/tides/core/tile/f64e_reference.hpp:
@@ -1020,6 +1032,8 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o: /home/niel/git/Ne
 /usr/include/x86_64-linux-gnu/bits/types/__mbstate_t.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h:
 
 /usr/include/c++/12/utility:
 
@@ -1158,6 +1172,8 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o: /home/niel/git/Ne
 /usr/include/features.h:
 
 /usr/include/c++/12/cassert:
+
+/usr/include/cuda_fp8.h:
 
 /usr/include/c++/12/bits/this_thread_sleep.h:
 
@@ -1349,8 +1365,6 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o: /home/niel/git/Ne
 
 /usr/include/c++/12/bits/functional_hash.h:
 
-/usr/include/stdio.h:
-
 /usr/include/limits.h:
 
 /usr/include/c++/12/bits/alloc_traits.h:
@@ -1440,6 +1454,10 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o: /home/niel/git/Ne
 /usr/include/ctype.h:
 
 /usr/include/cuComplex.h:
+
+/usr/include/stdio.h:
+
+/usr/include/cublasLt.h:
 
 /usr/include/sm_32_intrinsics.hpp:
 
@@ -1588,8 +1606,6 @@ CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o: /home/niel/git/Ne
 /usr/include/time.h:
 
 /usr/include/x86_64-linux-gnu/bits/setjmp.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h:
 
 /usr/include/x86_64-linux-gnu/bits/stdint-intn.h:
 
