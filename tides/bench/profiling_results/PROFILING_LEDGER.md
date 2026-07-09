@@ -322,3 +322,70 @@ correctness but don't constitute competitive benchmarks.
 | Eigendecomp n=1024 | 75.6 ms | 75.6 ms (cupy) | 4.6x vs CPU |
 
 All 46 E1 tests PASS. No regressions.
+
+## 16. Per-Operation Profiling (2026-07-10)
+
+### Methodology
+Instrumented PySCF/gpu4pyscf SCF methods (`get_hcore`, `get_ovlp`, `get_veff`, `get_fock`, `eig`, `make_rdm1`, `get_jk`, `nr_rks`, `eval_ao`) with per-call timing. Warmup run discarded. Systems: H2O, NH3, C6H6, H2O_8mer, H2O_16mer (cc-pVDZ, LDA, density fitting).
+
+### Key Finding: XC Evaluation Dominates Everything
+
+**CPU SCF breakdown (48 atoms, H2O_16mer, 22699 ms total):**
+| Operation | Total ms | % SCF | Calls |
+|---|---|---|---|
+| veff_coulomb_xc | 20238 | 89.2% | 3 |
+| xc_nr_rks | 18953 | 83.5% | 3 |
+| eigendecomposition | 2284 | 10.1% | 3 |
+| j_matrix | 1282 | 5.6% | 3 |
+| xc_eval_ao | 2050 | 9.0% | 63 |
+
+**GPU SCF breakdown (48 atoms, H2O_16mer, 1219 ms total):**
+| Operation | Total ms | % SCF | Calls |
+|---|---|---|---|
+| veff_coulomb_xc | 1078 | 88.4% | 2 |
+| xc_nr_rks | 1066 | 87.5% | 2 |
+| hcore | 64 | 5.2% | 1 |
+| overlap | 39 | 3.2% | 2 |
+| eigendecomposition | 18 | 1.5% | 1 |
+
+### Bottleneck Hierarchy
+
+1. **XC grid integration (`nr_rks`)** — 80-90% of SCF on both CPU and GPU. This is the `veff` call which includes Coulomb + XC. The XC part (`nr_rks`) alone is 72-87%.
+2. **Eigendecomposition** — becomes significant at large sizes on CPU (10% at 48 atoms), but GPU handles it in <2%.
+3. **Coulomb (J) matrix** — 5-18% on CPU, <2% on GPU (density fitting + GPU acceleration).
+4. **hcore / overlap** — one-time cost, 25-30% for small systems on GPU (GPU kernel launch overhead dominates).
+
+### TIDES GPU Kernel Bottlenecks (slowest)
+
+| Kernel | Variant | Size | Kernel ms | GFLOPS |
+|---|---|---|---|---|
+| GroupedGEMM | FP16-accum | 16x8 | 53.9 | 0.0 (first-call JIT) |
+| SpGEMM | FP64-GPU | 32x32 | 15.3 | 140.0 |
+| Dot-f64e | GPU | n=1000 | 4.3 | 0.0 (first-call JIT) |
+| Trace-f64e | GPU | n=64 | 2.1 | 0.0 (first-call JIT) |
+| SpGEMM | FP64-GPU | 16x32 | 1.8 | 146.3 |
+
+### CPU vs GPU Speedup Per Operation (H2O_16mer, 48 atoms)
+
+| Operation | CPU ms | GPU ms | Speedup |
+|---|---|---|---|
+| veff_coulomb_xc | 20238 | 1078 | 18.8x |
+| xc_nr_rks | 18953 | 1066 | 17.8x |
+| eigendecomposition | 2284 | 18 | 127x |
+| j_matrix | 1282 | 11 | 120x |
+| hcore | 68 | 64 | 1.1x |
+| overlap | 25 | 39 | 0.6x (GPU slower) |
+| **Total SCF** | **22699** | **1219** | **18.6x** |
+
+### Optimization Priorities (ranked by impact)
+
+1. **XC grid integration** — 80-90% of SCF. TIDES GPU XC kernel (`xc.cu`) needs to match gpu4pyscf's `nr_rks` performance. Current TIDES uses CPU libxc for PBE; LDA path has GPU kernel.
+2. **WMMA first-call JIT** — 53.9ms one-time cost for FP16 GEMM. Amortized in SCF loops but hurts single-call benchmarks.
+3. **SpGEMM 32x32** — 15.3ms at 140 GFLOPS. cuBLASLt is near-optimal here; further gains require algorithmic changes (e.g., tensor core FP16 path).
+4. **Small-system GPU overhead** — hcore/overlap take 30% of GPU SCF for H2O (3 atoms) due to kernel launch overhead. CUDA Graphs can help.
+
+### Files Generated
+- `bench/profiling_results/operation_profile.json` — Structured per-operation timing data
+- `bench/profiling_results/operation_profile.md` — Detailed per-operation profiling report
+- `bench/profiling_results/operation_profile.log` — Raw profiler output
+- `bench/operation_profiler.py` — Reusable profiler script
