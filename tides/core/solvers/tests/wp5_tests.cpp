@@ -314,9 +314,87 @@ int TestTruncation() {
 
 }  // namespace
 
+// T5.3: Batched multi-block SP2 — all blocks advance together.
+int TestSP2Batch() {
+  std::cout << "\n=== T5.3: Batched multi-block SP2 ===\n";
+  const int n = 20;
+  const std::size_t n_occ = 10;
+  const double gap = 2.0;
+  std::vector<double> H(n * n), S(n * n);
+  BuildGappedSystem(n, n_occ, gap, 7, H, S);
+  const double n_e = static_cast<double>(n_occ);
+
+  auto ref = BatchedDenseEig::SolveGeneralized(n, H, S);
+  if (!ref.ok) return Fail("T5.3: dense reference failed");
+  const double mu = 0.5 * (ref.eigenvalues[n_occ - 1] + ref.eigenvalues[n_occ]);
+
+  // Build submatrix blocks with radius=2.
+  auto nl = SubmatrixBuilder::ChainNeighborList(n, 2);
+
+  // Sequential submatrix purification (T5.2 reference).
+  auto sub_seq = SubmatrixBuilder::BuildAndPurify(n, H, S, n_e, mu, nl,
+                                                   ref.eigenvalues[0],
+                                                   ref.eigenvalues[n - 1]);
+
+  // Batched submatrix purification (T5.3).
+  auto sub_batch = SubmatrixBuilder::BuildAndPurifyBatched(
+      n, H, S, n_e, mu, nl, ref.eigenvalues[0], ref.eigenvalues[n - 1]);
+
+  // Compare: batched should produce identical results to sequential.
+  double max_diff = 0.0;
+  for (std::size_t i = 0; i < static_cast<std::size_t>(n) * n; ++i)
+    max_diff = std::max(max_diff, std::fabs(sub_seq.P[i] - sub_batch.P[i]));
+
+  std::cout << "  n=" << n
+            << " n_submatrices=" << sub_batch.n_submatrices
+            << " max_block_err=" << sub_batch.max_block_error
+            << " max_diff(seq vs batch)=" << max_diff << '\n';
+
+  if (sub_batch.n_submatrices != sub_seq.n_submatrices)
+    return Fail("T5.3: submatrix count mismatch");
+  if (sub_batch.max_block_error > 1e-6)
+    return Fail("T5.3: block not idempotent");
+  if (max_diff > 1e-10)
+    return Fail("T5.3: batched vs sequential mismatch");
+
+  // Also test PurifyBatch directly: 3 independent blocks of different sizes.
+  std::vector<SP2Purification::BatchBlock> blocks(3);
+  for (int b = 0; b < 3; ++b) {
+    int bn = 10 + b * 5;
+    std::vector<double> bH(bn * bn), bS(bn * bn);
+    BuildGappedSystem(bn, bn / 2, 2.0, 7 + b, bH, bS);
+    auto bref = BatchedDenseEig::SolveGeneralized(bn, bH, bS);
+    if (!bref.ok) return Fail("T5.3: block dense reference failed");
+    double bmu = 0.5 * (bref.eigenvalues[bn / 2 - 1] + bref.eigenvalues[bn / 2]);
+    blocks[b].n = bn;
+    blocks[b].H = bH;
+    blocks[b].S = bS;
+    blocks[b].n_e = bn / 2;
+    blocks[b].mu = bmu;
+    blocks[b].lambda_min = bref.eigenvalues[0];
+    blocks[b].lambda_max = bref.eigenvalues[bn - 1];
+  }
+
+  auto batch_res = SP2Purification::PurifyBatch(blocks);
+  bool all_conv = true;
+  for (std::size_t b = 0; b < batch_res.size(); ++b) {
+    if (!batch_res[b].converged) all_conv = false;
+    std::cout << "  block " << b << " n=" << blocks[b].n
+              << " iters=" << batch_res[b].n_iterations
+              << " idem_err=" << batch_res[b].idempotency_err
+              << " tr(PS)=" << batch_res[b].trace_PS
+              << " target=" << blocks[b].n_e << '\n';
+  }
+  if (!all_conv) return Fail("T5.3: not all blocks converged");
+
+  std::cout << "T5.3: GREEN (batched SP2 matches sequential; all blocks idempotent)\n";
+  return 0;
+}
+
 int main() {
   if (TestSP2()) return 1;
   if (TestSubmatrix()) return 1;
+  if (TestSP2Batch()) return 1;
   if (TestFOE()) return 1;
   if (TestFermiSearch()) return 1;
   if (TestTruncation()) return 1;

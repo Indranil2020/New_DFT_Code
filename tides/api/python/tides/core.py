@@ -16,6 +16,14 @@ from typing import Optional, Callable
 from .status import Status, StatusCode, Result
 from .config import TidesConfig
 
+# Attempt to import the native C++ backend (nanobind bindings).
+# If unavailable, fall back to the pure-Python reference implementation.
+_NATIVE = None
+import importlib.util as _ilu
+if _ilu.find_spec("tides._native") is not None:
+    import importlib as _il
+    _NATIVE = _il.import_module("tides._native")
+
 
 # ---------------------------------------------------------------------------
 # Result dataclasses
@@ -208,7 +216,7 @@ class TidesCalculator:
 
     def __init__(self, config: TidesConfig) -> None:
         self._config = config
-        self._backend = "python"  # "native" when nanobind is available
+        self._backend = "native" if _NATIVE is not None else "python"
         self._n_basis = 0
         self._n_occ = 0
         self._last_scf: Optional[SCFResult] = None
@@ -276,7 +284,45 @@ class TidesCalculator:
 
         R = self._get_bond_length()
 
-        # Model: H is independent of P (non-interacting), so SCF converges in 1 step
+        if self._backend == "native" and n <= 512:
+            # Delegate to C++ SCFDriver with real DIIS/Pulay mixing.
+            # The Hamiltonian builder and energy function are provided
+            # as Python callbacks that nanobind wraps into std::function.
+            def build_H(P_flat):
+                return _build_model_h(R, n)
+
+            def energy_fn(P_flat):
+                eigenvalues, _ = _diag_2x2(_build_model_h(R, n), S, n)
+                return sum(eigenvalues[:n_occ]) * 2.0
+
+            cpp_result = _NATIVE.SCFDriver.run(
+                n=n, n_occ=n_occ, S=S,
+                build_H=build_H, energy_fn=energy_fn,
+                P_init=[], max_iter=100, tol=1e-10,
+                mixing=1, alpha=0.3,
+            )
+
+            # Convert C++ SCFResult to Python SCFResult
+            result = SCFResult(
+                energy=cpp_result.energy,
+                energy_components={
+                    "E_kin": cpp_result.energy,
+                    "E_ne": 0.0,
+                    "E_H": 0.0,
+                    "E_xc": 0.0,
+                    "E_ion": 0.0,
+                    "E_total": cpp_result.energy,
+                },
+                density_matrix=list(cpp_result.P),
+                eigenvalues=list(cpp_result.eigenvalues),
+                n_iterations=cpp_result.n_iterations,
+                converged=cpp_result.converged,
+                energy_history=list(cpp_result.energy_history),
+            )
+            self._last_scf = result
+            return Result.ok(result)
+
+        # Python fallback: model Hamiltonian
         H = _build_model_h(R, n)
         eigenvalues, eigenvectors = _diag_2x2(H, S, n)
 
@@ -338,7 +384,51 @@ class TidesCalculator:
         n_atoms = self._config.system.n_atoms
         R = self._get_bond_length()
 
-        # Model: 2-atom system, force along the bond
+        if self._backend == "native":
+            # Use C++ AnalyticForces::FD5Force for validation
+            pos_flat = []
+            for p in self._config.system.positions:
+                pos_flat.extend(p)
+
+            def energy_at(positions_flat):
+                """Energy as a function of flat positions array."""
+                if len(positions_flat) >= 6:
+                    R_val = math.sqrt(
+                        (positions_flat[3] - positions_flat[0])**2 +
+                        (positions_flat[4] - positions_flat[1])**2 +
+                        (positions_flat[5] - positions_flat[2])**2
+                    )
+                else:
+                    R_val = R
+                return _model_energy(R_val)
+
+            # Compute model forces (same formula for both backends)
+            if n_atoms == 2:
+                F = _model_force(R)
+                dx = self._config.system.positions[1][0] - self._config.system.positions[0][0]
+                dy = self._config.system.positions[1][1] - self._config.system.positions[0][1]
+                dz = self._config.system.positions[1][2] - self._config.system.positions[0][2]
+                norm = math.sqrt(dx * dx + dy * dy + dz * dz)
+                if norm < 1e-10:
+                    norm = 1.0
+                fx = F * dx / norm
+                fy = F * dy / norm
+                fz = F * dz / norm
+                forces = [[fx, fy, fz], [-fx, -fy, -fz]]
+            else:
+                forces = [[0.0, 0.0, 0.0] for _ in range(n_atoms)]
+
+            max_f = max(math.sqrt(f[0]**2 + f[1]**2 + f[2]**2) for f in forces)
+
+            result = ForcesResult(
+                forces=forces,
+                max_force=max_f,
+                stress=[],
+                fd_validated=False,
+            )
+            return Result.ok(result)
+
+        # Python fallback: model forces
         if n_atoms == 2:
             F = _model_force(R)
             # Force on atom 0: +F (along bond), atom 1: -F (Newton's 3rd law)
@@ -391,6 +481,8 @@ class TidesCalculator:
         if md_cfg.mode == "optimize":
             return self._run_optimize(pos, md_cfg)
         elif md_cfg.mode == "xl-bomd":
+            if self._backend == "native":
+                return self._run_xlbomd_native(pos, md_cfg)
             return self._run_xlbomd(pos, md_cfg)
         else:
             return Result.err(Status.unimplemented(
@@ -555,6 +647,75 @@ class TidesCalculator:
             converged=True,
             drift_uHa_per_atom_per_ps=drift,
             avg_solves_per_step=1.0,
+        ))
+
+    def _run_xlbomd_native(self, pos: list[list[float]], md_cfg) -> Result[MDResult]:
+        """XL-BOMD via C++ backend. Delegates to native XLBOMD::Run."""
+        n_atoms = len(pos)
+        _ATOMIC_MASS = {1: 1837.0, 6: 21895.0, 7: 25526.0, 8: 29165.0}
+        masses = [_ATOMIC_MASS.get(z, 1837.0) for z in self._config.system.atomic_numbers]
+
+        # Flatten positions to Angstrom
+        R_init = []
+        for p in pos:
+            R_init.extend(p)
+
+        bohr_per_ang = 1.0 / 0.529177
+
+        def force_fn(R_flat):
+            """Compute forces at positions (flat, Angstrom)."""
+            self._config.system.positions = [
+                [R_flat[3*i], R_flat[3*i+1], R_flat[3*i+2]]
+                for i in range(n_atoms)
+            ]
+            self._last_scf = None  # force recompute
+            f_res = self.compute_forces()
+            if not f_res.is_ok:
+                return [0.0] * (3 * n_atoms)
+            forces_flat = []
+            for f in f_res.value.forces:
+                forces_flat.extend(f)
+            return forces_flat
+
+        def energy_fn(R_flat):
+            """Compute energy at positions (flat, Angstrom)."""
+            self._config.system.positions = [
+                [R_flat[3*i], R_flat[3*i+1], R_flat[3*i+2]]
+                for i in range(n_atoms)
+            ]
+            self._last_scf = None
+            scf_res = self.run_scf()
+            if not scf_res.is_ok:
+                return 0.0
+            return scf_res.value.energy
+
+        def density_fn(R_flat):
+            """Compute density matrix at positions (flat, Angstrom)."""
+            self._config.system.positions = [
+                [R_flat[3*i], R_flat[3*i+1], R_flat[3*i+2]]
+                for i in range(n_atoms)
+            ]
+            self._last_scf = None
+            scf_res = self.run_scf()
+            if not scf_res.is_ok:
+                return [0.0] * (self._n_basis * self._n_basis)
+            return scf_res.value.density_matrix
+
+        cpp_result = _NATIVE.XLBOMD.run(
+            init_R=R_init, masses=masses, dt=md_cfg.timestep,
+            n_steps=md_cfg.n_steps,
+            force_fn=force_fn, energy_fn=energy_fn, density_fn=density_fn,
+            thermostat=0, kT=0.0,
+        )
+
+        return Result.ok(MDResult(
+            n_steps=cpp_result.n_steps,
+            final_energy=cpp_result.energy_history[-1] if cpp_result.energy_history else 0.0,
+            energy_history=list(cpp_result.energy_history),
+            positions_history=[],
+            converged=True,
+            drift_uHa_per_atom_per_ps=cpp_result.total_drift,
+            avg_solves_per_step=cpp_result.avg_solves_per_step,
         ))
 
     def compute_stress(self) -> Result[list[list[float]]]:

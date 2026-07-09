@@ -94,7 +94,8 @@ class LibxcFunctional {
   LdaResult EvalLDA(const std::vector<double>& rho, std::size_t np) const {
     LdaResult res;
     res.eps_xc.resize(np, 0.0);
-    res.vrho.resize(np, 0.0);
+    const int nspin = (func_ != nullptr) ? func_->nspin : 1;
+    res.vrho.resize(static_cast<std::size_t>(nspin) * np, 0.0);
     if (func_ == nullptr) return res;
     xc_lda_exc_vxc(func_, np, rho.data(), res.eps_xc.data(), res.vrho.data());
     return res;
@@ -115,8 +116,10 @@ class LibxcFunctional {
                      std::size_t np) const {
     GgaResult res;
     res.eps_xc.resize(np, 0.0);
-    res.vrho.resize(np, 0.0);
-    res.vsigma.resize(np, 0.0);
+    const int nspin = (func_ != nullptr) ? func_->nspin : 1;
+    const int nsigma = (nspin == 2) ? 3 : 1;
+    res.vrho.resize(static_cast<std::size_t>(nspin) * np, 0.0);
+    res.vsigma.resize(static_cast<std::size_t>(nsigma) * np, 0.0);
     if (func_ == nullptr) return res;
     xc_gga_exc_vxc(func_, np, rho.data(), sigma.data(),
                    res.eps_xc.data(), res.vrho.data(), res.vsigma.data());

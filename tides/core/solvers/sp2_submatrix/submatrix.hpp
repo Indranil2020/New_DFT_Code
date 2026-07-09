@@ -90,6 +90,74 @@ class SubmatrixBuilder {
     return res;
   }
 
+  // T5.3: Batched submatrix purification — all blocks advance together
+  // through SP2 iterations, enabling grouped GEMM on GPU.
+  static SubmatrixResult BuildAndPurifyBatched(
+      std::size_t n, const std::vector<double>& H,
+      const std::vector<double>& S, double n_e, double mu,
+      const std::vector<std::vector<std::size_t>>& neighbor_list,
+      double lambda_min, double lambda_max) {
+    SubmatrixResult res;
+    res.P.assign(n * n, 0.0);
+    res.n_submatrices = 0;
+    res.max_block_error = 0.0;
+
+    const std::size_t n_atoms = neighbor_list.size();
+    if (n_atoms == 0 || n == 0) return res;
+
+    // Build all submatrix blocks.
+    std::vector<SP2Purification::BatchBlock> blocks;
+    std::vector<std::vector<std::size_t>> all_indices;
+
+    for (std::size_t a = 0; a < n_atoms; ++a) {
+      std::vector<std::size_t> indices = {a};
+      for (std::size_t nb : neighbor_list[a]) {
+        if (nb < n && nb != a) indices.push_back(nb);
+      }
+      std::sort(indices.begin(), indices.end());
+      indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+
+      const std::size_t block_n = indices.size();
+      if (block_n == 0) continue;
+
+      std::vector<double> H_block(block_n * block_n, 0.0);
+      std::vector<double> S_block(block_n * block_n, 0.0);
+      for (std::size_t i = 0; i < block_n; ++i)
+        for (std::size_t j = 0; j < block_n; ++j) {
+          H_block[i * block_n + j] = H[indices[i] * n + indices[j]];
+          S_block[i * block_n + j] = S[indices[i] * n + indices[j]];
+        }
+
+      SP2Purification::BatchBlock blk;
+      blk.n = block_n;
+      blk.H = std::move(H_block);
+      blk.S = std::move(S_block);
+      blk.n_e = n_e;
+      blk.mu = mu;
+      blk.lambda_min = lambda_min;
+      blk.lambda_max = lambda_max;
+      blocks.push_back(std::move(blk));
+      all_indices.push_back(std::move(indices));
+    }
+
+    // Batched purification: all blocks advance through SP2 iterations together.
+    auto batch_results = SP2Purification::PurifyBatch(blocks);
+
+    // Write back results.
+    for (std::size_t b = 0; b < batch_results.size(); ++b) {
+      res.n_submatrices++;
+      const auto& idx = all_indices[b];
+      const std::size_t block_n = idx.size();
+      for (std::size_t i = 0; i < block_n; ++i)
+        for (std::size_t j = 0; j < block_n; ++j)
+          res.P[idx[i] * n + idx[j]] = batch_results[b].P[i * block_n + j];
+      res.max_block_error = std::max(res.max_block_error,
+                                     batch_results[b].idempotency_err);
+    }
+
+    return res;
+  }
+
   // Build a simple distance-based neighbor list for a 1D chain (proxy for
   // a-Si:H linear systems). Atom i's neighbors are i-1 and i+1 (and optionally
   // i-2, i+2 for larger radius).

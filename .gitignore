@@ -1,0 +1,31 @@
+# Build artifacts
+tides/build/
+*/build/
+build/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Profiling output (large binary files)
+*.nsys-rep
+*.sqlite
+*.ncu-rep
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# HDF5 roundtrip test data
+tilemat_hdf5_roundtrip/
+
+# Compiled objects
+*.o
+*.so
+*.a

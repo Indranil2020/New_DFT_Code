@@ -1,6 +1,10 @@
 #pragma once
 
-#include <cuda_fp8.h>
+#if defined(__CUDACC__) || defined(USE_CUDA)
+#  if defined(CUDART_VERSION) && CUDART_VERSION >= 12000
+#    include <cuda_fp8.h>
+#  endif
+#endif
 #include <algorithm>
 #include <cmath>
 #include <cstddef>

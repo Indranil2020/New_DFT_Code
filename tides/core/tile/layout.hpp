@@ -21,6 +21,7 @@ namespace tides::tile {
 
 enum class DType : std::uint32_t {
   kFloat64 = 1,
+  kComplex128 = 2,
 };
 
 enum class ScaleMode : std::uint32_t {

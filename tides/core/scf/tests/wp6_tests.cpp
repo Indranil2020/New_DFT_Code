@@ -143,7 +143,7 @@ int TestForces() {
 int TestXLBOMD() {
   std::cout << "\n=== T6.5: XL-BOMD [GB2] ===\n";
   // Simple 1-atom "molecule" with a harmonic well: E = 0.5 k (R - R0)^2.
-  const double R0 = 1.0, k = 1.0, mass = 1.0;
+  const double R0 = 1.0, k = 1.0, mass = 1837.0;  // H atom mass in a.u.
   auto energy_fn = [&](const std::vector<double>& R) -> double {
     double dx = R[0] - R0;
     return 0.5 * k * dx * dx;
@@ -154,22 +154,29 @@ int TestXLBOMD() {
   auto density_fn = [&](const std::vector<double>& R) -> std::vector<double> {
     return {1.0};  // dummy density (1x1)
   };
-  std::vector<double> init_R = {R0 + 0.1};  // displaced from equilibrium
+  // XLBOMD expects 3*n_atoms coordinates (flat 3D positions).
+  std::vector<double> init_R = {R0 + 0.1, 0.0, 0.0};  // displaced along x
   std::vector<double> masses = {mass};
 
-  auto res = tides::dynamics::XLBOMD::Run(init_R, masses, 0.5, 100,
+  auto res = tides::dynamics::XLBOMD::Run(init_R, masses, 0.25, 1000,
                                           force_fn, energy_fn, density_fn,
                                           0, 0.0);
-  // For NVE, the total energy should be approximately conserved (the drift
-  // depends on the timestep and the potential smoothness).
-  // For a harmonic well with dt=0.5 fs, the drift should be small.
+  // For NVE, the total energy should be approximately conserved.
+  // With 1000 steps at dt=0.25 fs, the linear-regression drift should be
+  // well below the GB2 gate budget of 30 uHa/atom/ps for a harmonic well.
   std::cout << "  n_steps=" << res.n_steps
             << " avg_solves/step=" << res.avg_solves_per_step
             << " total_drift=" << res.total_drift << " uHa/atom/ps\n";
   // The observable: ~1 solve/step (the XL-BOMD design).
   if (res.avg_solves_per_step > 2.0)
     return Fail("T6.5: more than ~1 solve/step");
-  std::cout << "T6.5: GREEN (~1 solve/step, XL-BOMD runs)\n";
+  // GB2 gate: drift <= 30 uHa/atom/ps
+  if (!std::isfinite(res.total_drift))
+    return Fail("T6.5: GB2 gate FAIL — drift is NaN/inf");
+  if (res.total_drift > 30.0)
+    return Fail("T6.5: GB2 gate FAIL — drift > 30 uHa/atom/ps");
+  std::cout << "T6.5: GREEN (~1 solve/step, drift=" << res.total_drift
+            << " uHa/atom/ps <= 30, GB2 PASS)\n";
   return 0;
 }
 

@@ -1,0 +1,141 @@
+{
+  "metadata": {
+    "date": "2026-07-09 10:50:07",
+    "pyscf_version": "2.11.0",
+    "mpi_available": true,
+    "mpi_size": 4,
+    "mpi_rank": 0
+  },
+  "scf": [
+    {
+      "energy_ha": -75.18980681150715,
+      "scf_time_s": 5.136150207137689,
+      "n_basis": 24,
+      "n_atoms": 3,
+      "system": "H2O",
+      "basis": "cc-pVDZ",
+      "xc": "LDA",
+      "mpi_size": 4
+    },
+    {
+      "energy_ha": -39.502448482918325,
+      "scf_time_s": 7.285926840966567,
+      "n_basis": 34,
+      "n_atoms": 5,
+      "system": "CH4",
+      "basis": "cc-pVDZ",
+      "xc": "LDA",
+      "mpi_size": 4
+    },
+    {
+      "energy_ha": -227.41875200068245,
+      "scf_time_s": 18.124227846972644,
+      "n_basis": 114,
+      "n_atoms": 12,
+      "system": "C6H6",
+      "basis": "cc-pVDZ",
+      "xc": "LDA",
+      "mpi_size": 4
+    },
+    {
+      "energy_ha": -375.48727743008016,
+      "scf_time_s": 536.7282738140784,
+      "n_basis": 180,
+      "n_atoms": 18,
+      "system": "C10H8",
+      "basis": "cc-pVDZ",
+      "xc": "LDA",
+      "mpi_size": 4
+    },
+    {
+      "energy_ha": -601.4887998145423,
+      "scf_time_s": 33.9037999920547,
+      "n_basis": 192,
+      "n_atoms": 24,
+      "system": "H2O_8mer",
+      "basis": "cc-pVDZ",
+      "xc": "LDA",
+      "mpi_size": 4
+    },
+    {
+      "energy_ha": -1202.9772003340818,
+      "scf_time_s": 104.92007375811227,
+      "n_basis": 384,
+      "n_atoms": 48,
+      "system": "H2O_16mer",
+      "basis": "cc-pVDZ",
+      "xc": "LDA",
+      "mpi_size": 4
+    },
+    {
+      "energy_ha": -75.189806811507,
+      "scf_time_s": 4.607718026032671,
+      "n_basis": 24,
+      "n_atoms": 3,
+      "system": "H2O",
+      "basis": "cc-pVDZ",
+      "xc": "LDA",
+      "mpi_size": 4
+    },
+    {
+      "energy_ha": -75.24290188459022,
+      "scf_time_s": 5.211745682172477,
+      "n_basis": 59,
+      "n_atoms": 3,
+      "system": "H2O",
+      "basis": "def2-TZVPP",
+      "xc": "LDA",
+      "mpi_size": 4
+    }
+  ],
+  "gradients": [
+    {
+      "grad_time_s": 2.3531006688717753,
+      "grad_max": 0.040151310524251915,
+      "n_atoms": 3,
+      "system": "H2O",
+      "mpi_size": 4
+    },
+    {
+      "grad_time_s": 3.416502882959321,
+      "grad_max": 0.02328336808464182,
+      "n_atoms": 5,
+      "system": "CH4",
+      "mpi_size": 4
+    },
+    {
+      "grad_time_s": 18.951002663001418,
+      "grad_max": 0.024715450976880327,
+      "n_atoms": 12,
+      "system": "C6H6",
+      "mpi_size": 4
+    },
+    {
+      "grad_time_s": 69.72304146108218,
+      "grad_max": 1.5707601861860985,
+      "n_atoms": 18,
+      "system": "C10H8",
+      "mpi_size": 4
+    },
+    {
+      "grad_time_s": 36.41870530694723,
+      "grad_max": 0.037858737221606376,
+      "n_atoms": 24,
+      "system": "H2O_8mer",
+      "mpi_size": 4
+    },
+    {
+      "grad_time_s": 191.4687531720847,
+      "grad_max": 0.037858250724698284,
+      "n_atoms": 48,
+      "system": "H2O_16mer",
+      "mpi_size": 4
+    }
+  ],
+  "tides_e7_parallel": {
+    "status": "pass",
+    "wall_s": 12.773819596040994,
+    "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.005     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.115     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.654     0.000e+00  PASS\n  Partitioner       RCB         10000/16           1.983     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.000     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.000     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.005     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.019     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n",
+    "stderr": ""
+  }
+}

@@ -135,15 +135,27 @@ class XLBOMD {
     res.final_state = state;
     res.avg_solves_per_step = static_cast<double>(state.n_solves) / n_steps;
 
-    // Compute drift: |dE/dt| per atom in uHa/atom/ps.
-    if (n_steps > 1 && res.energy_history.size() >= 2) {
-      double E_start = res.energy_history[0];
-      double E_end = res.energy_history.back();
-      double dt_ps = state.time * 0.02419;  // a.u. -> ps (1 a.u. = 0.02419 fs = 2.419e-5 ps)
-      double dE = std::fabs(E_end - E_start);
-      res.total_drift = dE / n_atoms * 1e6;  // uHa/atom
-      if (dt_ps > 0)
-        state.drift_uHa_per_atom_per_ps = res.total_drift / dt_ps;
+    // Compute drift via linear regression slope (robust to oscillation).
+    // slope is dE/d(step_index). Convert to uHa/atom/ps:
+    //   drift = |slope| * 1e6 / n_atoms / (dt_fs * 1e-3)
+    if (n_steps > 1 && res.energy_history.size() >= 3) {
+      const std::size_t n = res.energy_history.size();
+      double t_mean = static_cast<double>(n - 1) / 2.0;
+      double e_mean = 0.0;
+      for (std::size_t i = 0; i < n; ++i)
+        e_mean += res.energy_history[i];
+      e_mean /= static_cast<double>(n);
+      double num = 0.0, den = 0.0;
+      for (std::size_t i = 0; i < n; ++i) {
+        double t = static_cast<double>(i);
+        num += (t - t_mean) * (res.energy_history[i] - e_mean);
+        den += (t - t_mean) * (t - t_mean);
+      }
+      double slope = (den > 0.0) ? num / den : 0.0;
+      double dt_ps = dt * 1e-3;  // fs -> ps per step
+      if (dt_ps > 0.0)
+        state.drift_uHa_per_atom_per_ps =
+            std::fabs(slope) * 1e6 / static_cast<double>(n_atoms) / dt_ps;
       res.total_drift = state.drift_uHa_per_atom_per_ps;
     }
 

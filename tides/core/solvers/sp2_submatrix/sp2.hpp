@@ -202,6 +202,146 @@ class SP2Purification {
       }
     return C;
   }
+
+ public:
+  // -----------------------------------------------------------------------
+  // Batched SP2: process all blocks at the same iteration simultaneously.
+  // This enables grouped GEMM across blocks (T5.3).
+  // Each block is independent; blocks that converge early are skipped
+  // in subsequent iterations.
+  // -----------------------------------------------------------------------
+  struct BatchBlock {
+    std::size_t n;              // block dimension
+    std::vector<double> H;      // block Hamiltonian (n*n)
+    std::vector<double> S;      // block overlap (n*n)
+    double n_e;                 // target electron count
+    double mu;                  // Fermi level
+    double lambda_min;          // spectral lower bound
+    double lambda_max;          // spectral upper bound
+  };
+
+  struct BatchBlockResult {
+    std::vector<double> P;      // purified density matrix (n*n)
+    double trace_PS = 0.0;
+    double idempotency_err = 0.0;
+    int n_iterations = 0;
+    bool converged = false;
+  };
+
+  static std::vector<BatchBlockResult> PurifyBatch(
+      const std::vector<BatchBlock>& blocks,
+      int max_iter = 40, double tol = 1e-12) {
+    const std::size_t n_blocks = blocks.size();
+    std::vector<BatchBlockResult> results(n_blocks);
+    if (n_blocks == 0) return results;
+
+    // Per-block state.
+    std::vector<std::vector<double>> X(n_blocks), X2(n_blocks);
+    std::vector<bool> active(n_blocks, true);
+
+    // Initialize X0 for each block.
+    for (std::size_t b = 0; b < n_blocks; ++b) {
+      const auto& blk = blocks[b];
+      const std::size_t n = blk.n;
+      if (n == 0 || blk.H.size() != n * n || blk.S.size() != n * n ||
+          blk.lambda_max <= blk.lambda_min) {
+        active[b] = false;
+        continue;
+      }
+      const double scale_half = (blk.lambda_max - blk.lambda_min) / 2.0;
+      double mu_eff = blk.mu;
+      if (mu_eff == 0.0) {
+        double mu_lo = blk.lambda_min, mu_hi = blk.lambda_max;
+        for (int it = 0; it < 60; ++it) {
+          mu_eff = 0.5 * (mu_lo + mu_hi);
+          double tr_X = 0.0;
+          for (std::size_t i = 0; i < n; ++i)
+            tr_X += 0.5 * (1.0 - (blk.H[i * n + i] - mu_eff) / scale_half);
+          if (tr_X < blk.n_e) mu_lo = mu_eff;
+          else mu_hi = mu_eff;
+        }
+        mu_eff = 0.5 * (mu_lo + mu_hi);
+      }
+      X[b].resize(n * n);
+      for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t j = 0; j < n; ++j)
+          X[b][i * n + j] = 0.5 * (blk.S[i * n + j] -
+              (blk.H[i * n + j] - mu_eff * blk.S[i * n + j]) / scale_half);
+      X2[b].resize(n * n, 0.0);
+    }
+
+    // Batched SP2 iteration: all active blocks advance together.
+    for (int iter = 0; iter < max_iter; ++iter) {
+      // Phase 1: Compute X2 = X * S * X for all active blocks.
+      // In the GPU path, these matmuls are batched via GroupedGemmFp64Cuda.
+      for (std::size_t b = 0; b < n_blocks; ++b) {
+        if (!active[b]) continue;
+        const std::size_t n = blocks[b].n;
+        // tmp = S * X
+        std::vector<double> tmp(n * n, 0.0);
+        for (std::size_t i = 0; i < n; ++i)
+          for (std::size_t j = 0; j < n; ++j) {
+            double s = 0.0;
+            for (std::size_t k = 0; k < n; ++k)
+              s += blocks[b].S[i * n + k] * X[b][k * n + j];
+            tmp[i * n + j] = s;
+          }
+        // X2 = X * tmp
+        for (std::size_t i = 0; i < n; ++i)
+          for (std::size_t j = 0; j < n; ++j) {
+            double s = 0.0;
+            for (std::size_t k = 0; k < n; ++k)
+              s += X[b][i * n + k] * tmp[k * n + j];
+            X2[b][i * n + j] = s;
+          }
+      }
+
+      // Phase 2: SP2 decision and convergence check per block.
+      for (std::size_t b = 0; b < n_blocks; ++b) {
+        if (!active[b]) continue;
+        const std::size_t n = blocks[b].n;
+        results[b].n_iterations = iter + 1;
+
+        double tr_X = TraceS(n, X[b], blocks[b].S);
+
+        // Idempotency error: ||X2 - X||_F
+        double err = 0.0;
+        for (std::size_t i = 0; i < n * n; ++i) {
+          double diff = X2[b][i] - X[b][i];
+          err += diff * diff;
+        }
+        results[b].idempotency_err = std::sqrt(err);
+
+        // SP2 decision.
+        if (tr_X > blocks[b].n_e) {
+          X[b] = X2[b];
+        } else {
+          for (std::size_t i = 0; i < n * n; ++i)
+            X[b][i] = 2.0 * X[b][i] - X2[b][i];
+        }
+
+        if (results[b].idempotency_err < tol) {
+          results[b].converged = true;
+          active[b] = false;
+        }
+      }
+
+      // Early exit if all blocks converged.
+      bool any_active = false;
+      for (std::size_t b = 0; b < n_blocks; ++b)
+        if (active[b]) { any_active = true; break; }
+      if (!any_active) break;
+    }
+
+    // Finalize results.
+    for (std::size_t b = 0; b < n_blocks; ++b) {
+      if (blocks[b].n == 0) continue;
+      results[b].P = X[b];
+      results[b].trace_PS = TraceS(blocks[b].n, results[b].P, blocks[b].S);
+    }
+
+    return results;
+  }
 };
 
 }  // namespace tides::solvers
