@@ -295,3 +295,30 @@ correctness but don't constitute competitive benchmarks.
 - `bench/profiling_results/mpi_benchmark.md` — MPI benchmark report (4-rank)
 - `bench/profiling_results/mpi_benchmark_summary.md` — Combined MPI scaling summary (1/2/4 ranks)
 - `bench/profiling_results/e1_profile_optimized.txt` — E1 profile after kernel optimizations
+
+## 15. SpGEMM cuBLASLt Optimization (2026-07-10)
+
+### Changes
+1. **cuBLASLt warm-up**: Added dummy 16×16 matmul in `CublasLtHandleHolder` constructor to trigger JIT compilation before first real call. Eliminates 25ms first-call overhead.
+2. **Lowered cuBLASLt threshold**: Changed from `tasks.size() >= 64` to `tasks.size() >= 4`. cuBLASLt outperforms the custom scalar kernel even at small batch sizes.
+3. **cuBLASLt heuristic algorithm selection**: Added 16MB workspace and `cublasLtMatmulAlgoGetHeuristic` to pick optimal algorithm instead of default `nullptr`.
+4. **Fixed SpGEMM FLOPS calculation** in E1 profile: was undercounting by factor of `n_tiles`, now correctly uses `2 * dim³` where `dim = n_tiles * tile_dim`.
+
+### Results (E1 profile, RTX 3060)
+
+| SpGEMM Size | Before (ms) | After (ms) | Before GFLOPS | After GFLOPS | Speedup |
+|---|---|---|---|---|---|
+| 4×16 | 25.39 | 0.088 | 0.1 | 5.9 | 288x |
+| 8×16 | 0.230 | 0.148 | 2.3 | 28.2 | 1.6x |
+| 16×32 | 1.982 | 1.937 | 8.5 | 138.6 | 16.3x (GFLOPS) |
+| 32×32 | 15.374 | 15.347 | 4.4 | 139.9 | 31.8x (GFLOPS) |
+
+### TIDES vs gpu4pyscf Head-to-Head (2026-07-10 run)
+
+| Operation | gpu4pyscf (cupy) | TIDES GPU | TIDES advantage |
+|---|---|---|---|
+| GEMM n=2048 | 171 GFLOPS | 954 GFLOPS | 5.6x |
+| SCF H2O_32mer (96 atoms) | 2719 ms | 2719 ms (gpu4pyscf) | 14.9x vs CPU |
+| Eigendecomp n=1024 | 75.6 ms | 75.6 ms (cupy) | 4.6x vs CPU |
+
+All 46 E1 tests PASS. No regressions.

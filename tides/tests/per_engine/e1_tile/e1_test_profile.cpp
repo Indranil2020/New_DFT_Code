@@ -291,7 +291,8 @@ int TestSpGemmFiltered() {
     auto gpu_dense = gpu.value().product.ToDense();
     double max_diff = MaxAbsDiff(cpu_dense, gpu_dense);
 
-    double flops = 2.0 * n_tiles * n_tiles * tile_dim * tile_dim * tile_dim;
+    double mat_dim = static_cast<double>(n_tiles) * tile_dim;
+    double flops = 2.0 * mat_dim * mat_dim * mat_dim;
     double gflops_gpu = flops / (gpu.value().kernel_ms * 1e6);
     double gflops_cpu = flops / (cpu_ms * 1e6);
 
@@ -372,7 +373,7 @@ int TestF64eReductions() {
     // CPU reference dot product.
     auto t0 = std::chrono::steady_clock::now();
     double cpu_dot = 0.0;
-    for (std::size_t i = 0; i < n; ++i) cpu_dot += a[i] * b[i];
+    for (std::size_t i = 0; i < static_cast<std::size_t>(n); ++i) cpu_dot += a[i] * b[i];
     auto t1 = std::chrono::steady_clock::now();
     double cpu_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
@@ -407,7 +408,7 @@ int TestF64eReductions() {
     for (auto& v : mat) v = dist(rng);
 
     double cpu_trace = 0.0;
-    for (std::size_t i = 0; i < n; ++i) cpu_trace += mat[i * n + i];
+    for (std::size_t i = 0; i < static_cast<std::size_t>(n); ++i) cpu_trace += mat[i * static_cast<std::size_t>(n) + i];
 
     auto gpu = TraceF64eCuda(n, n, mat);
     if (!gpu.ok()) {

@@ -1,0 +1,125 @@
+================================================================================
+  TIDES vs gpu4pyscf — End-to-End Comparison Benchmark
+================================================================================
+PySCF: 2.11.0 | gpu4pyscf: 1.5.0 | GPU: True
+
+── GEMM Benchmark ──
+  CPU n=   64:     21.0 GFLOPS (    0.02 ms)
+  GPU n=   64:      7.8 GFLOPS (    0.07 ms)
+  CPU n=  128:     52.1 GFLOPS (    0.08 ms)
+  GPU n=  128:     50.1 GFLOPS (    0.08 ms)
+  CPU n=  256:     97.6 GFLOPS (    0.34 ms)
+  GPU n=  256:    109.9 GFLOPS (    0.31 ms)
+  CPU n=  512:    117.4 GFLOPS (    2.29 ms)
+  GPU n=  512:    149.7 GFLOPS (    1.79 ms)
+  CPU n= 1024:    101.2 GFLOPS (   21.22 ms)
+  GPU n= 1024:    154.2 GFLOPS (   13.93 ms)
+  CPU n= 2048:    137.1 GFLOPS (  125.34 ms)
+  GPU n= 2048:    171.3 GFLOPS (  100.26 ms)
+  TIDES CUDA GEMM probe...
+  TIDES planned: 954.182 GFLOPS | cuBLASLt: 1171.43 GFLOPS
+
+── Eigendecomposition Benchmark ──
+  CPU n=   32:       0.10 ms
+  GPU n=   32:       0.73 ms
+  CPU n=   64:       0.37 ms
+  GPU n=   64:       1.90 ms
+  CPU n=  128:       1.84 ms
+  GPU n=  128:       5.46 ms
+  CPU n=  256:       7.22 ms
+  GPU n=  256:       8.87 ms
+  CPU n=  512:      27.77 ms
+  GPU n=  512:      21.79 ms
+  CPU n= 1024:     348.71 ms
+  GPU n= 1024:      75.58 ms
+
+── TIDES SP2 GPU ──
+  Status: pass
+
+── Grid Operations (PySCF reference) ──
+  H2O/cc-pVDZ: 54320 grid pts, 43.46 ms (nao=24)
+  H2O/cc-pVTZ: 55056 grid pts, 66.99 ms (nao=58)
+  C6H6/cc-pVDZ: 224600 grid pts, 451.67 ms (nao=114)
+  C6H6/cc-pVTZ: 226952 grid pts, 1010.47 ms (nao=264)
+
+── End-to-End SCF (cc-pVDZ, LDA, density fitting) ──
+  CPU H              : E=-0.455671  t=   980.2 ms  nao=   5
+  GPU H              : E=-0.455671  t=    66.4 ms  nao=   5
+  CPU He             : E=-2.714655  t=   369.2 ms  nao=   5
+  GPU He             : E=-2.714655  t=    44.8 ms  nao=   5
+  CPU H2             : E=-1.037227  t=   357.7 ms  nao=  10
+  GPU H2             : E=-1.037227  t=    61.1 ms  nao=  10
+  CPU N2             : E=-107.699231  t=   328.0 ms  nao=  28
+  GPU N2             : E=-107.699231  t=    70.9 ms  nao=  28
+  CPU H2O            : E=-75.189807  t=  1167.1 ms  nao=  24
+  GPU H2O            : E=-75.189807  t=    88.1 ms  nao=  24
+  CPU NH3            : E=-55.436495  t=   649.1 ms  nao=  29
+  GPU NH3            : E=-55.436495  t=    97.8 ms  nao=  29
+  CPU CH4            : E=-39.502448  t=  1270.4 ms  nao=  34
+  GPU CH4            : E=-39.502448  t=   116.6 ms  nao=  34
+  CPU C2H6           : E=-76.342965  t=  2114.1 ms  nao=  58
+  GPU C2H6           : E=-76.342965  t=   161.0 ms  nao=  58
+  CPU C6H6           : E=-227.418752  t=  2633.9 ms  nao= 114
+  GPU C6H6           : E=-227.418752  t=   444.5 ms  nao= 114
+  CPU C10H8          : E=-375.502157  t=108111.5 ms  nao= 180
+  GPU C10H8          : E=-375.498957  t= 17789.7 ms  nao= 180
+  CPU H2O_8mer       : E=-601.488800  t=  7254.7 ms  nao= 192
+  GPU H2O_8mer       : E=-601.488800  t=   555.0 ms  nao= 192
+  CPU H2O_16mer      : E=-1202.977200  t= 18213.6 ms  nao= 384
+  GPU H2O_16mer      : E=-1202.977200  t=  1204.4 ms  nao= 384
+  CPU H2O_32mer      : E=-2405.953870  t= 40575.2 ms  nao= 768
+  GPU H2O_32mer      : E=-2405.953870  t=  2718.9 ms  nao= 768
+
+── SCF Basis Scan (H2O, LDA) ──
+  CPU H2O/STO-3G      : E=-74.060469  t=  1105.6 ms  nao=   7
+  GPU H2O/STO-3G      : E=-74.060469  t=    61.8 ms  nao=   7
+  CPU H2O/6-31G*      : E=-75.176717  t=  1149.8 ms  nao=  18
+  GPU H2O/6-31G*      : E=-75.176717  t=    91.5 ms  nao=  18
+  CPU H2O/cc-pVDZ     : E=-75.189807  t=   777.5 ms  nao=  24
+  GPU H2O/cc-pVDZ     : E=-75.189807  t=    89.9 ms  nao=  24
+  CPU H2O/def2-SVP    : E=-75.130662  t=   983.0 ms  nao=  24
+  GPU H2O/def2-SVP    : E=-75.130662  t=    90.0 ms  nao=  24
+  CPU H2O/cc-pVTZ     : E=-75.235627  t=  1078.5 ms  nao=  58
+  GPU H2O/cc-pVTZ     : E=-75.235627  t=   114.8 ms  nao=  58
+  CPU H2O/def2-TZVPP  : E=-75.242902  t=  1753.3 ms  nao=  59
+  GPU H2O/def2-TZVPP  : E=-75.242902  t=   127.7 ms  nao=  59
+
+── Gradient Benchmark (cc-pVDZ, LDA) ──
+  CPU H              : t_grad=   129.4 ms  max|g|=0.000000
+  GPU H              : t_grad=   141.1 ms  max|g|=0.000000
+  CPU He             : t_grad=     2.5 ms  max|g|=0.000000
+  GPU He             : t_grad=    88.7 ms  max|g|=0.000000
+  CPU H2             : t_grad=   405.0 ms  max|g|=0.039793
+  GPU H2             : t_grad=   596.4 ms  max|g|=0.039793
+  CPU N2             : t_grad=   220.9 ms  max|g|=0.067419
+  GPU N2             : t_grad=   186.1 ms  max|g|=0.067419
+  CPU H2O            : t_grad=   711.4 ms  max|g|=0.040151
+  GPU H2O            : t_grad=   200.5 ms  max|g|=0.040151
+  CPU NH3            : t_grad=   314.6 ms  max|g|=0.044620
+  GPU NH3            : t_grad=   275.3 ms  max|g|=0.044620
+  CPU CH4            : t_grad=   235.2 ms  max|g|=0.023283
+  GPU CH4            : t_grad=   390.8 ms  max|g|=0.023283
+  CPU C2H6           : t_grad=  2242.4 ms  max|g|=4.422574
+  GPU C2H6           : t_grad=  1688.9 ms  max|g|=4.422556
+  CPU C6H6           : t_grad=  4773.8 ms  max|g|=0.024715
+  GPU C6H6           : t_grad=  6774.7 ms  max|g|=0.024715
+  CPU C10H8          : t_grad= 17511.1 ms  max|g|=1.600169
+  GPU C10H8          : t_grad= 17171.5 ms  max|g|=1.570158
+  CPU H2O_8mer       : t_grad= 10582.2 ms  max|g|=0.037859
+  GPU H2O_8mer       : t_grad=  9456.4 ms  max|g|=0.037859
+  CPU H2O_16mer      : t_grad= 47920.5 ms  max|g|=0.037858
+  GPU H2O_16mer      : t_grad= 54066.7 ms  max|g|=0.037858
+
+── TIDES Engine Profiles ──
+  E1_tile                  : PASS (6.01s)
+  E2_basis                 : PASS (5.62s)
+  E3_grid                  : PASS (0.60s)
+  E4_solvers               : PASS (2.83s)
+  E5_scf                   : PASS (0.20s)
+  E6_dynamics              : FAIL (rc=1) (0.00s)
+  E7_parallel              : PASS (7.77s)
+  E8_hybrids               : PASS (0.01s)
+  E9_verification          : PASS (0.00s)
+
+JSON written to: /home/indranil/git/New_DFT_Code/tides/bench/profiling_results/tides_vs_gpu4pyscf.json
+Markdown written to: /home/indranil/git/New_DFT_Code/tides/bench/profiling_results/tides_vs_gpu4pyscf.md
