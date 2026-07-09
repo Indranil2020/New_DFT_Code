@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/tides_atomgen_eigensolver_tests.dir/core/basis/atomgen/tests/eigensolver_tests.cpp.o -o tides_atomgen_eigensolver_tests 

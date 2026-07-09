@@ -104,26 +104,33 @@ The mixed-precision path shows 951.9 GFLOPS when planned, confirming tensor core
 
 Status: PASS — SP2 GPU achieves 51x speedup at n=256 (from E4 profile).
 
-## 4. End-to-End SCF: PySCF CPU vs gpu4pyscf (cc-pVDZ, LDA, density fitting)
+## 4. End-to-End SCF: PySCF CPU vs gpu4pyscf vs TIDES (cc-pVDZ, LDA, density fitting)
 
-| System | Atoms | nao | CPU (ms) | GPU (ms) | Speedup |
-|---|---|---|---|---|---|
-| H | 1 | 5 | 808 | 129 | 6.3x |
-| He | 1 | 5 | 1693 | 94 | 18.0x |
-| H2 | 2 | 10 | 1462 | 109 | 13.4x |
-| N2 | 2 | 28 | 1530 | 119 | 12.9x |
-| H2O | 3 | 24 | 2344 | 173 | 13.6x |
-| NH3 | 4 | 29 | 2604 | 138 | 18.9x |
-| CH4 | 5 | 34 | 1760 | 168 | 10.5x |
-| C2H6 | 8 | 58 | 4720 | 239 | 19.8x |
-| C6H6 | 12 | 114 | 7550 | 544 | 13.9x |
-| C10H8 | 18 | 180 | 254370 | 20544 | 12.4x |
-| H2O_8mer | 24 | 192 | 19832 | 666 | 29.8x |
-| H2O_16mer | 48 | 384 | 62418 | 2663 | 23.4x |
-| H2O_32mer | 96 | 768 | 110558 | 2859 | 38.7x |
+| System | Atoms | nao | PySCF CPU (ms) | gpu4pyscf (ms) | TIDES (ms) | TIDES vs CPU | TIDES vs GPU |
+|---|---|---|---|---|---|---|---|
+| H | 1 | 5 | 808 | 129 | — | — | — |
+| He | 1 | 5 | 1693 | 94 | — | — | — |
+| H2 | 2 | 10 | 1462 | 109 | — | — | — |
+| N2 | 2 | 28 | 1530 | 119 | — | — | — |
+| H2O | 3 | 24 | 2344 | 173 | — | — | — |
+| NH3 | 4 | 29 | 2604 | 138 | — | — | — |
+| CH4 | 5 | 34 | 1760 | 168 | — | — | — |
+| C2H6 | 8 | 58 | 4720 | 239 | — | — | — |
+| C6H6 | 12 | 114 | 7550 | 544 | — | — | — |
+| C10H8 | 18 | 180 | 254370 | 20544 | — | — | — |
+| H2O_8mer | 24 | 192 | 19832 | 666 | — | — | — |
+| H2O_16mer | 48 | 384 | 62418 | 2663 | — | — | — |
+| H2O_32mer | 96 | 768 | 110558 | 2859 | — | — | — |
 
 **Key finding**: gpu4pyscf achieves 10-39x speedup over CPU PySCF on RTX 3060.
 Speedup increases with system size, peaking at 38.7x for 96-atom water cluster.
+
+**TIDES gap**: TIDES end-to-end SCF results are not yet available for this comparison.
+The Python API (`api/python/`) currently uses a model Hamiltonian — nanobind bindings
+to the real C++ engine are not yet wired. The TIDES C++ SCF driver (E5) passes
+internally but cannot be invoked on the same PySCF molecules/basis sets.
+**Action needed**: Wire nanobind bindings to C++ SCF driver, then re-run this benchmark
+with TIDES as a third column. This is the critical path for apples-to-apples comparison.
 
 ## 5. Basis Set Scan (H2O, LDA)
 
@@ -242,7 +249,28 @@ H2D transfer is 624MB — significant overhead for small problems.
 - SpGEMM edge=32 bug was critical — shared memory load assumed 1:1 thread-to-element mapping
 - For SCF iterations, plan reuse is essential: one-shot 0.5 GFLOPS vs planned 973 GFLOPS
 
-## 12. Optimization Recommendations
+## 12. Benchmark Campaign Status (vs 61-piecewise-matrix.md criteria)
+
+| # | TIDES module | Criteria | Results status | Notes |
+|---|---|---|---|---|
+| 1 | NAO H/S build | atoms/s vs ABACUS/SIESTA/CP2K | **Not run** | E2 basis profile passes but no competitor comparison |
+| 2 | rho/V grid ops | %HBM roofline vs GPAW/SPARC | **Partial** | E3 grid profile passes; roofline_analysis.cpp exists but not run vs competitors |
+| 3 | Poisson all BCs | time vs BigDFT/cuFFT | **Partial** | GPU cuFFT solver implemented (poisson_fft.cu); not benchmarked vs BigDFT |
+| 4 | Dense eig bridge | time vs ELPA/cuSOLVERMp | **Not run** | E4 solver profile passes; no external comparison |
+| 5 | ChFSI | time/SCF vs DFT-FE/SPARC | **Not run** | ChFSI implemented in E4; no end-to-end SCF comparison |
+| 6 | SP2-submatrix | time vs CP2K/NTPoly | **Partial** | SP2 GPU 51x speedup at n=256 (E4); no CP2K comparison |
+| 7 | FOE/SQ metals | time vs SPARC-SQ/CheSS | **Not run** | FOE implemented in E4; no metallic system benchmark |
+| 8 | Hybrids ISDF+ACE | time vs CP2K ADMM/QE ACE | **Not run** | E8 passes; no HSE06 benchmark |
+| 9 | MD engine | steps/s vs CP2K/GPAW/DFTB+ | **Not run** | E6 dynamics FAIL (NVE drift); no competitor comparison |
+| 10 | Small-molecule e2e | batched mol/h vs GPU4PySCF | **Gap** | PySCF/gpu4pyscf benchmarked; TIDES not in comparison (nanobind not wired) |
+| 11 | Accuracy e2e | meV/atom vs all-electron refs | **Not run** | E9 verification passes; no ACWF/S22 comparison |
+| 12 | Scaling | weak/strong vs CONQUEST/CP2K | **Not run** | Phase C target |
+
+**Summary**: 2/12 partial, 0/12 complete. The main blocker is item 10 (nanobind wiring)
+which would unblock items 5, 9, and 11. The piecewise engine profiles (E1-E9) verify
+correctness but don't constitute competitive benchmarks.
+
+## 13. Optimization Recommendations
 
 1. **SpGEMM output kernel** dominates E1 (71.2%) — optimize memory access patterns
 2. **H2D transfers** are significant (624MB) — use pinned memory, reduce transfers
@@ -252,7 +280,7 @@ H2D transfer is 624MB — significant overhead for small problems.
 6. **Gradient computation** in gpu4pyscf falls back to CPU on RTX 3060 — opportunity for TIDES GPU force kernel
 7. **Large system scaling**: gpu4pyscf achieves 38.7x speedup at 96 atoms — TIDES needs end-to-end SCF to compete
 
-## 13. Files Generated
+## 14. Files Generated
 
 - `bench/profiling_results/engine_profiles_raw.txt` — Raw E1-E9 + CUDA probe output
 - `bench/profiling_results/nsys_e1_tile.nsys-rep` — nsys profile for E1

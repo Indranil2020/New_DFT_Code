@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/tides_ozaki_gemm_probe.dir/core/tile/tests/ozaki_gemm_probe.cpp.o -o tides_ozaki_gemm_probe 

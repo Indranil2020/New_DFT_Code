@@ -2,6 +2,7 @@
 tides/build/
 */build/
 build/
+build-cuda/
 
 # Python cache
 __pycache__/
@@ -29,3 +30,9 @@ tilemat_hdf5_roundtrip/
 *.o
 *.so
 *.a
+
+# Test logs
+Testing/Temporary/
+
+# CMake API reply cache
+.cmake/api/

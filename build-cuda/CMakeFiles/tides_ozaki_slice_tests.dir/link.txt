@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/tides_ozaki_slice_tests.dir/core/tile/tests/ozaki_slice_tests.cpp.o -o tides_ozaki_slice_tests 

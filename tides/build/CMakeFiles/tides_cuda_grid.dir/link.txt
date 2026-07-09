@@ -1,2 +1,0 @@
-/usr/bin/ar qc libtides_cuda_grid.a CMakeFiles/tides_cuda_grid.dir/core/grid/rho_build.cu.o CMakeFiles/tides_cuda_grid.dir/core/grid/poisson_fft.cu.o CMakeFiles/tides_cuda_grid.dir/core/grid/vmat_build.cu.o CMakeFiles/tides_cuda_grid.dir/core/grid/xc.cu.o
-/usr/bin/ranlib libtides_cuda_grid.a

@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/tides_spgemm_filtered_tests.dir/core/tile/tests/spgemm_filtered_tests.cpp.o -o tides_spgemm_filtered_tests 

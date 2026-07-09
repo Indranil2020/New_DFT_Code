@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/tides_ops_tests.dir/core/tile/tests/ops_tests.cpp.o -o tides_ops_tests 

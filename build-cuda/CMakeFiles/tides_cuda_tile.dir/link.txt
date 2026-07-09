@@ -1,2 +1,0 @@
-/usr/bin/ar qc libtides_cuda_tile.a CMakeFiles/tides_cuda_tile.dir/core/tile/gemm_grouped.cu.o CMakeFiles/tides_cuda_tile.dir/core/tile/ozaki.cu.o CMakeFiles/tides_cuda_tile.dir/core/tile/spgemm_filtered.cu.o
-/usr/bin/ranlib libtides_cuda_tile.a
