@@ -1,0 +1,188 @@
+[
+  {
+    "system": "H2O",
+    "basis": "6-31G",
+    "n_basis": 13,
+    "n_elec": 10,
+    "pyscf_full": {
+      "energy_ha": -75.14955759463197,
+      "scf_time_s": 0.48772470001131296,
+      "n_basis": 13,
+      "n_iter": 1
+    },
+    "tides_full": {
+      "energy_ha": -45.66356167841186,
+      "scf_time_s": 0.10904212109744549,
+      "n_basis": 13,
+      "n_iter": 27,
+      "converged": true
+    },
+    "tides_loop_only": {
+      "scf_loop_time_s": 0.00011961115524172783,
+      "n_basis": 13,
+      "n_iter": 2,
+      "converged": true
+    },
+    "pyscf_eig_dm": {
+      "eig_dm_time_s": 6.527639925479889e-05,
+      "n_basis": 13
+    },
+    "speedup_full": 4.472810094875702,
+    "energy_diff_ha": 29.485995916220112
+  },
+  {
+    "system": "H2O",
+    "basis": "cc-pVDZ",
+    "n_basis": 24,
+    "n_elec": 10,
+    "pyscf_full": {
+      "energy_ha": -75.18833102822155,
+      "scf_time_s": 0.35024056304246187,
+      "n_basis": 24,
+      "n_iter": 1
+    },
+    "tides_full": {
+      "energy_ha": -44.34032658515486,
+      "scf_time_s": 1.7167860590852797,
+      "n_basis": 24,
+      "n_iter": 21,
+      "converged": true
+    },
+    "tides_loop_only": {
+      "scf_loop_time_s": 0.00025594839826226234,
+      "n_basis": 24,
+      "n_iter": 2,
+      "converged": true
+    },
+    "pyscf_eig_dm": {
+      "eig_dm_time_s": 0.0001222933176904917,
+      "n_basis": 24
+    },
+    "speedup_full": 0.20400944030793997,
+    "energy_diff_ha": 30.848004443066692
+  },
+  {
+    "system": "NH3",
+    "basis": "6-31G",
+    "n_basis": 15,
+    "n_elec": 10,
+    "pyscf_full": {
+      "energy_ha": -55.380588162728394,
+      "scf_time_s": 0.33363915514200926,
+      "n_basis": 15,
+      "n_iter": 1
+    },
+    "tides_full": {
+      "energy_ha": -31.07425373581826,
+      "scf_time_s": 5.659311787690967,
+      "n_basis": 15,
+      "n_iter": 20,
+      "converged": true
+    },
+    "tides_loop_only": {
+      "scf_loop_time_s": 0.00013609929010272026,
+      "n_basis": 15,
+      "n_iter": 2,
+      "converged": true
+    },
+    "pyscf_eig_dm": {
+      "eig_dm_time_s": 6.818012334406376e-05,
+      "n_basis": 15
+    },
+    "speedup_full": 0.05895401555144499,
+    "energy_diff_ha": 24.306334426910134
+  },
+  {
+    "system": "CH4",
+    "basis": "6-31G",
+    "n_basis": 17,
+    "n_elec": 10,
+    "pyscf_full": {
+      "energy_ha": -39.35801028550405,
+      "scf_time_s": 0.347372196149081,
+      "n_basis": 17,
+      "n_iter": 1
+    },
+    "tides_full": {
+      "energy_ha": -19.901616590505025,
+      "scf_time_s": 5.7386241001077,
+      "n_basis": 17,
+      "n_iter": 21,
+      "converged": true
+    },
+    "tides_loop_only": {
+      "scf_loop_time_s": 0.00021325191482901573,
+      "n_basis": 17,
+      "n_iter": 2,
+      "converged": true
+    },
+    "pyscf_eig_dm": {
+      "eig_dm_time_s": 7.833358831703663e-05,
+      "n_basis": 17
+    },
+    "speedup_full": 0.06053231403370046,
+    "energy_diff_ha": 19.456393694999026
+  },
+  {
+    "system": "C2H6",
+    "basis": "6-31G",
+    "n_basis": 30,
+    "n_elec": 18,
+    "pyscf_full": {
+      "energy_ha": -77.62119959141617,
+      "scf_time_s": 0.36554906563833356,
+      "n_basis": 30,
+      "n_iter": 1
+    },
+    "tides_full": {
+      "energy_ha": -36.56262151281401,
+      "scf_time_s": 12.36248880205676,
+      "n_basis": 30,
+      "n_iter": 28,
+      "converged": true
+    },
+    "tides_loop_only": {
+      "scf_loop_time_s": 0.0005046529695391655,
+      "n_basis": 30,
+      "n_iter": 2,
+      "converged": true
+    },
+    "pyscf_eig_dm": {
+      "eig_dm_time_s": 0.00016522491350769996,
+      "n_basis": 30
+    },
+    "speedup_full": 0.029569213084141826,
+    "energy_diff_ha": 41.05857807860216
+  },
+  {
+    "system": "benzene",
+    "basis": "6-31G",
+    "n_basis": 66,
+    "n_elec": 42,
+    "pyscf_full": {
+      "energy_ha": -226.38087731432358,
+      "scf_time_s": 2.098170000128448,
+      "n_basis": 66,
+      "n_iter": 4
+    },
+    "tides_full": {
+      "energy_ha": -120.71046790899902,
+      "scf_time_s": 57.774533873889595,
+      "n_basis": 66,
+      "n_iter": 100,
+      "converged": false
+    },
+    "tides_loop_only": {
+      "scf_loop_time_s": 0.009706857148557901,
+      "n_basis": 66,
+      "n_iter": 2,
+      "converged": true
+    },
+    "pyscf_eig_dm": {
+      "eig_dm_time_s": 0.0007688845973461867,
+      "n_basis": 66
+    },
+    "speedup_full": 0.03631651974394703,
+    "energy_diff_ha": 105.67040940532456
+  }
+]

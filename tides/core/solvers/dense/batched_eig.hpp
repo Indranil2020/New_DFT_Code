@@ -11,9 +11,19 @@
 extern "C" {
 void dsyev_(const char* jobz, const char* uplo, const int* n, double* a,
             const int* lda, double* w, double* work, const int* lwork, int* info);
+void dsyevd_(const char* jobz, const char* uplo, const int* n, double* a,
+             const int* lda, double* w, double* work, const int* lwork,
+             int* iwork, const int* liwork, int* info);
 void dsygv_(const int* itype, const char* jobz, const char* uplo,
             const int* n, double* a, const int* lda, double* b, const int* ldb,
             double* w, double* work, const int* lwork, int* info);
+void dsygvd_(const int* itype, const char* jobz, const char* uplo,
+             const int* n, double* a, const int* lda, double* b, const int* ldb,
+             double* w, double* work, const int* lwork,
+             int* iwork, const int* liwork, int* info);
+void dsyrk_(const char* uplo, const char* trans, const int* n, const int* k,
+            const double* alpha, const double* a, const int* lda,
+            const double* beta, double* c, const int* ldc);
 }
 
 namespace tides::solvers {
@@ -50,8 +60,8 @@ class BatchedDenseEig {
 #ifdef TIDES_HAVE_LAPACK
     // LAPACK dsygv_ solves H x = e S x directly using BLAS-3 internally.
     // itype=1: H x = e S x. jobz='V': compute eigenvectors. uplo='L': lower triangle.
-    std::vector<double> A = H;  // dsygv destroys A (H)
-    std::vector<double> B = S;  // dsygv destroys B (S)
+    std::vector<double> A = H;  // dsygvd destroys A (H)
+    std::vector<double> B = S;  // dsygvd destroys B (S)
     char jobz = 'V';
     int itype = 1;
     char uplo = 'L';
@@ -59,15 +69,18 @@ class BatchedDenseEig {
     int lda = nn, ldb = nn;
     int info = 0;
     std::vector<double> w(n);
-    int lwork = -1;
+    int lwork = -1, liwork = -1;
     double wkopt = 0.0;
-    dsygv_(&itype, &jobz, &uplo, &nn, A.data(), &lda, B.data(), &ldb,
-           w.data(), &wkopt, &lwork, &info);
+    int iwkopt = 0;
+    dsygvd_(&itype, &jobz, &uplo, &nn, A.data(), &lda, B.data(), &ldb,
+            w.data(), &wkopt, &lwork, &iwkopt, &liwork, &info);
     if (info != 0) return {};
     lwork = static_cast<int>(wkopt);
+    liwork = iwkopt;
     std::vector<double> work(static_cast<std::size_t>(lwork));
-    dsygv_(&itype, &jobz, &uplo, &nn, A.data(), &lda, B.data(), &ldb,
-           w.data(), work.data(), &lwork, &info);
+    std::vector<int> iwork(static_cast<std::size_t>(liwork));
+    dsygvd_(&itype, &jobz, &uplo, &nn, A.data(), &lda, B.data(), &ldb,
+            w.data(), work.data(), &lwork, iwork.data(), &liwork, &info);
     if (info != 0) return {};
 
     EigenResult res;

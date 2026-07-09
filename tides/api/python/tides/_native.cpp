@@ -11,7 +11,6 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
-#include <nanobind/stl/dict.h>
 #include <nanobind/stl/function.h>
 
 #include "common/status.hpp"
@@ -40,11 +39,11 @@ NB_MODULE(_native, m) {
     nb::class_<Status>(m, "CppStatus")
         .def_prop_ro("ok", &Status::ok)
         .def_prop_ro("code", &Status::code)
-        .def_prop_ro("message", &Status::message)
-        .def_static("ok", &Status::Ok)
-        .def_static("invalid_argument", &Status::InvalidArgument)
-        .def_static("io_error", &Status::IoError)
-        .def_static("unimplemented", &Status::Unimplemented);
+        .def_prop_ro("message", &Status::message);
+    m.def("status_ok", []() { return Status::Ok(); });
+    m.def("status_invalid_argument", [](const std::string& msg) { return Status::InvalidArgument(msg); });
+    m.def("status_io_error", [](const std::string& msg) { return Status::IoError(msg); });
+    m.def("status_unimplemented", [](const std::string& msg) { return Status::Unimplemented(msg); });
 
     // SCFResult
     nb::class_<scf::SCFResult>(m, "CppSCFResult")
@@ -67,8 +66,15 @@ NB_MODULE(_native, m) {
 
     // SolverBroker
     nb::class_<solvers::SolverBroker>(m, "SolverBroker")
-        .def_static("dispatch", &solvers::SolverBroker::Dispatch)
-        .def_static("generate_calib_table", &solvers::SolverBroker::GenerateCalibTable);
+        .def_static("dispatch", [](const solvers::BrokerInput& input,
+                                   const std::vector<solvers::CalibEntry>& calib) {
+            std::string reason;
+            auto regime = solvers::SolverBroker::Dispatch(input, calib, reason);
+            return nb::make_tuple(regime, reason);
+        }, nb::arg("input"), nb::arg("calib"))
+        .def_static("generate_calib_table", []() {
+            return solvers::SolverBroker::GenerateCalibTable();
+        });
 
     // SolverRegime
     nb::enum_<solvers::SolverRegime>(m, "SolverRegime")
@@ -85,9 +91,24 @@ NB_MODULE(_native, m) {
 
     // AnalyticForces
     nb::class_<forces::AnalyticForces>(m, "AnalyticForces")
-        .def_static("fd5_force", &forces::AnalyticForces::FD5Force)
-        .def_static("hellmann_feynman", &forces::AnalyticForces::HellmannFeynman)
-        .def_static("validate", &forces::AnalyticForces::Validate);
+        .def_static("fd5_force", [](const std::function<double(const std::vector<double>&)>& energy_fn,
+                                    std::vector<double> positions, std::size_t atom_idx,
+                                    int component, double h = 0.001) {
+            return forces::AnalyticForces::FD5Force(energy_fn, positions, atom_idx, component, h);
+        }, nb::arg("energy_fn"), nb::arg("positions"), nb::arg("atom_idx"),
+           nb::arg("component"), nb::arg("h") = 0.001)
+        .def_static("hellmann_feynman", [](const std::vector<double>& P,
+                                            const std::vector<std::vector<double>>& dH_dR,
+                                            std::size_t n, std::size_t n_atoms) {
+            return forces::AnalyticForces::HellmannFeynman(P, dH_dR, n, n_atoms);
+        }, nb::arg("P"), nb::arg("dH_dR"), nb::arg("n"), nb::arg("n_atoms"))
+        .def_static("validate", [](const std::vector<double>& analytic_forces,
+                                    const std::function<double(const std::vector<double>&)>& energy_fn,
+                                    const std::vector<double>& positions, std::size_t n_atoms,
+                                    double h = 0.001, double tol = 1e-4) {
+            return forces::AnalyticForces::Validate(analytic_forces, energy_fn, positions, n_atoms, h, tol);
+        }, nb::arg("analytic_forces"), nb::arg("energy_fn"), nb::arg("positions"),
+           nb::arg("n_atoms"), nb::arg("h") = 0.001, nb::arg("tol") = 1e-4);
 
     // XLBOMDResult
     nb::class_<dynamics::XLBOMDResult>(m, "XLBOMDResult")
@@ -98,25 +119,49 @@ NB_MODULE(_native, m) {
 
     // XLBOMD
     nb::class_<dynamics::XLBOMD>(m, "XLBOMD")
-        .def_static("run", &dynamics::XLBOMD::Run,
-            nb::arg("init_R"), nb::arg("masses"), nb::arg("dt"),
-            nb::arg("n_steps"), nb::arg("force_fn"), nb::arg("energy_fn"),
-            nb::arg("density_fn"), nb::arg("thermostat") = 0,
-            nb::arg("kT") = 0.0);
+        .def_static("run", [](const std::vector<double>& init_R, const std::vector<double>& masses,
+                              double dt, int n_steps,
+                              const std::function<std::vector<double>(const std::vector<double>&)>& force_fn,
+                              const std::function<double(const std::vector<double>&)>& energy_fn,
+                              const std::function<std::vector<double>(const std::vector<double>&)>& density_fn,
+                              int thermostat = 0, double kT = 0.0) {
+            return dynamics::XLBOMD::Run(init_R, masses, dt, n_steps, force_fn, energy_fn, density_fn, thermostat, kT);
+        }, nb::arg("init_R"), nb::arg("masses"), nb::arg("dt"),
+           nb::arg("n_steps"), nb::arg("force_fn"), nb::arg("energy_fn"),
+           nb::arg("density_fn"), nb::arg("thermostat") = 0,
+           nb::arg("kT") = 0.0);
 
     // SCFDriver
     nb::class_<scf::SCFDriver>(m, "SCFDriver")
-        .def_static("run", &scf::SCFDriver::Run,
-            nb::arg("n"), nb::arg("n_occ"), nb::arg("S"),
-            nb::arg("build_H"), nb::arg("energy_fn"),
-            nb::arg("P_init") = std::vector<double>{},
-            nb::arg("max_iter") = 100, nb::arg("tol") = 1e-10,
-            nb::arg("mixing") = 1, nb::arg("alpha") = 0.3);
+        .def_static("run", [](std::size_t n, std::size_t n_occ, const std::vector<double>& S,
+                              const std::function<std::vector<double>(const std::vector<double>&)>& build_H,
+                              const std::function<double(const std::vector<double>&)>& energy_fn,
+                              const std::vector<double>& P_init = {},
+                              int max_iter = 100, double tol = 1e-10,
+                              int mixing = 1, double alpha = 0.3) {
+            return scf::SCFDriver::Run(n, n_occ, S, build_H, energy_fn, P_init, max_iter, tol, mixing, alpha);
+        }, nb::arg("n"), nb::arg("n_occ"), nb::arg("S"),
+           nb::arg("build_H"), nb::arg("energy_fn"),
+           nb::arg("P_init") = std::vector<double>{},
+           nb::arg("max_iter") = 100, nb::arg("tol") = 1e-10,
+           nb::arg("mixing") = 1, nb::arg("alpha") = 0.3);
 
     // EnergyAssembly
     nb::class_<scf::EnergyAssembly>(m, "EnergyAssembly")
-        .def_static("compute", &scf::EnergyAssembly::Compute)
-        .def_static("ewald_ion_ion", &scf::EnergyAssembly::EwaldIonIon);
+        .def_static("compute", [](double E_kin, const std::vector<double>& P,
+                                  const std::vector<double>& H, const std::vector<double>& Vne,
+                                  const std::vector<double>& Vh, const std::vector<double>& Vxc,
+                                  const std::vector<double>& S, std::size_t n, double E_ion_ion = 0.0) {
+            return scf::EnergyAssembly::Compute(E_kin, P, H, Vne, Vh, Vxc, S, n, E_ion_ion);
+        }, nb::arg("E_kin"), nb::arg("P"), nb::arg("H"), nb::arg("Vne"),
+           nb::arg("Vh"), nb::arg("Vxc"), nb::arg("S"), nb::arg("n"),
+           nb::arg("E_ion_ion") = 0.0)
+        .def_static("ewald_ion_ion", [](const std::vector<double>& positions,
+                                         const std::vector<double>& charges,
+                                         bool periodic = false, double alpha = 0.0) {
+            return scf::EnergyAssembly::EwaldIonIon(positions, charges, periodic, alpha);
+        }, nb::arg("positions"), nb::arg("charges"),
+           nb::arg("periodic") = false, nb::arg("alpha") = 0.0);
 
     // BrokerInput
     nb::class_<solvers::BrokerInput>(m, "BrokerInput")

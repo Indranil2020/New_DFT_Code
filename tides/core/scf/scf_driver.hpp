@@ -8,6 +8,13 @@
 
 #include "solvers/dense/batched_eig.hpp"
 
+// BLAS symmetric rank-k update for density matrix construction.
+extern "C" {
+void dsyrk_(const char* uplo, const char* trans, const int* n, const int* k,
+            const double* alpha, const double* a, const int* lda,
+            const double* beta, double* c, const int* ldc);
+}
+
 namespace tides::scf {
 
 // SCF driver with Pulay / simple mixing (per WP6 T6.1).
@@ -84,13 +91,27 @@ class SCFDriver {
       auto eig = tides::solvers::BatchedDenseEig::SolveGeneralized(n, H, S);
       if (!eig.ok) return res;
 
-      // Occupy n_occ lowest orbitals -> P_new.
+      // Occupy n_occ lowest orbitals -> P_new = C_occ @ C_occ^T.
+      // Use BLAS dsyrk for O(n^2 * n_occ) symmetric rank-k update.
       std::vector<double> P_new(n * n, 0.0);
-      for (std::size_t k = 0; k < n_occ; ++k)
+      {
+        int nn = static_cast<int>(n);
+        int kk = static_cast<int>(n_occ);
+        double alpha_blas = 1.0;
+        double beta_blas = 0.0;
+        char uplo = 'L';
+        char trans = 'N';
+        // eigenvectors are column-major: evec[k*n + j] = component j of eigvector k
+        // dsyrk with trans='N' computes C = alpha * A * A^T + beta * C
+        // A is n x kk (first kk columns of eigenvectors), lda = n
+        dsyrk_(&uplo, &trans, &nn, &kk, &alpha_blas,
+               eig.eigenvectors.data(), &nn,
+               &beta_blas, P_new.data(), &nn);
+        // Symmetrize: copy lower triangle to upper
         for (std::size_t i = 0; i < n; ++i)
-          for (std::size_t j = 0; j < n; ++j)
-            P_new[i * n + j] += eig.eigenvectors[k * n + i] *
-                                eig.eigenvectors[k * n + j];
+          for (std::size_t j = i + 1; j < n; ++j)
+            P_new[i * n + j] = P_new[j * n + i];
+      }
 
       // Compute energy.
       double E = energy_fn(P_new);

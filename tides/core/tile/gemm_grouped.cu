@@ -4,6 +4,7 @@
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
+#include <mma.h>
 
 #include <algorithm>
 #include <chrono>
@@ -16,6 +17,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+using namespace nvcuda;
 
 namespace tides::tile {
 namespace {
@@ -161,6 +164,120 @@ __global__ void GroupedGemmFp16AccumKernel(
   }
   c[row * n + col] =
       epilogue_scales[problem] * static_cast<double>(sum);
+}
+
+// WMMA-based FP16 GEMM kernel using Ampere tensor cores.
+// Each warp computes a 16x16 output tile via mma.sync 16x16x16.
+// Block has 4 warps (128 threads) → 2x2 output tile grid per block.
+constexpr int kWmmaM = 16;
+constexpr int kWmmaN = 16;
+constexpr int kWmmaK = 16;
+constexpr int kWarpsPerBlock = 4;
+constexpr int kWmmaTileX = 2;  // 2 tiles in N direction per block
+constexpr int kWmmaTileY = 2;  // 2 tiles in M direction per block
+
+__global__ void GroupedGemmFp16AccumWmmaKernel(
+    const __half* a_all, const __half* b_all, double* c_all,
+    const std::uint64_t* a_offsets, const std::uint64_t* b_offsets,
+    const std::uint64_t* c_offsets, const std::uint32_t* ms,
+    const std::uint32_t* ks, const std::uint32_t* ns,
+    const double* epilogue_scales) {
+  const std::uint32_t problem = static_cast<std::uint32_t>(blockIdx.z);
+  const std::uint32_t m = ms[problem];
+  const std::uint32_t k = ks[problem];
+  const std::uint32_t n = ns[problem];
+
+  const int warp_id = threadIdx.x / 32;
+  const int lane = threadIdx.x % 32;
+  // Each warp handles one 16x16 output tile
+  const int warp_row = warp_id / kWmmaTileX;  // 0 or 1
+  const int warp_col = warp_id % kWmmaTileX;  // 0 or 1
+
+  const int tile_row = static_cast<int>(blockIdx.y) * kWmmaTileY + warp_row;
+  const int tile_col = static_cast<int>(blockIdx.x) * kWmmaTileX + warp_col;
+
+  const int row0 = tile_row * kWmmaM;
+  const int col0 = tile_col * kWmmaN;
+  if (row0 >= static_cast<int>(m) || col0 >= static_cast<int>(n)) return;
+
+  const __half* a = a_all + a_offsets[problem];
+  const __half* b = b_all + b_offsets[problem];
+  double* c = c_all + c_offsets[problem];
+
+  wmma::fragment<wmma::matrix_a, kWmmaM, kWmmaN, kWmmaK, __half, wmma::row_major> a_frag;
+  wmma::fragment<wmma::matrix_b, kWmmaM, kWmmaN, kWmmaK, __half, wmma::row_major> b_frag;
+  wmma::fragment<wmma::accumulator, kWmmaM, kWmmaN, kWmmaK, float> c_frag;
+
+  wmma::fill_fragment(c_frag, 0.0f);
+
+  for (int ki = 0; ki < static_cast<int>(k); ki += kWmmaK) {
+    int k_remaining = static_cast<int>(k) - ki;
+    if (k_remaining >= kWmmaK) {
+      // Full tile — use WMMA
+      wmma::load_matrix_sync(a_frag, a + row0 * k + ki, k);
+      wmma::load_matrix_sync(b_frag, b + ki * n + col0, n);
+      wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+    } else {
+      // Partial K tile — pad with zeros in shared memory
+      __shared__ __half a_pad[kWmmaTileY * kWmmaM * kWmmaK];
+      __shared__ __half b_pad[kWmmaTileX * kWmmaN * kWmmaK];
+      __half* a_smem = a_pad + warp_row * kWmmaM * kWmmaK;
+      __half* b_smem = b_pad + warp_col * kWmmaN * kWmmaK;
+
+      // Cooperatively load and zero-pad the K dimension
+      for (int idx = lane; idx < kWmmaM * kWmmaK; idx += 32) {
+        int i = idx / kWmmaK;
+        int p = idx % kWmmaK;
+        int r = row0 + i;
+        a_smem[i * kWmmaK + p] = (r < static_cast<int>(m) && p < k_remaining)
+            ? a[r * k + ki + p] : __float2half(0.0f);
+      }
+      for (int idx = lane; idx < kWmmaN * kWmmaK; idx += 32) {
+        int j = idx / kWmmaK;
+        int p = idx % kWmmaK;
+        int cc = col0 + j;
+        b_smem[j * kWmmaK + p] = (cc < static_cast<int>(n) && p < k_remaining)
+            ? b[(ki + p) * n + cc] : __float2half(0.0f);
+      }
+      __syncwarp();
+      wmma::load_matrix_sync(a_frag, a_smem, kWmmaK);
+      wmma::load_matrix_sync(b_frag, b_smem, kWmmaK);
+      wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+    }
+  }
+
+  // Store with epilogue scaling
+  for (int i = 0; i < c_frag.num_elements; ++i) {
+    c_frag.x[i] = static_cast<float>(c_frag.x[i] * static_cast<float>(epilogue_scales[problem]));
+  }
+
+  // Store to global memory via shared memory
+  __shared__ float c_smem[kWmmaTileY * kWmmaM * kWmmaTileX * kWmmaN];
+  float* tile_smem = c_smem + warp_id * kWmmaM * kWmmaN;
+
+  if (row0 + kWmmaM <= static_cast<int>(m) && col0 + kWmmaN <= static_cast<int>(n)) {
+    // Full tile — use store_matrix_sync into shared memory
+    wmma::store_matrix_sync(tile_smem, c_frag, kWmmaN, wmma::mem_row_major);
+    __syncwarp();
+    if (lane < kWmmaM * kWmmaN) {
+      int i = lane / kWmmaN;
+      int j = lane % kWmmaN;
+      c[(row0 + i) * n + col0 + j] = static_cast<double>(tile_smem[i * kWmmaN + j]);
+    }
+  } else {
+    // Boundary tile — element-wise store from fragment
+    for (int i = 0; i < kWmmaM; ++i) {
+      int r = row0 + i;
+      if (r >= static_cast<int>(m)) break;
+      for (int j = 0; j < kWmmaN; ++j) {
+        int cc = col0 + j;
+        if (cc >= static_cast<int>(n)) break;
+        if (lane == 0) {
+          c[r * n + cc] = static_cast<double>(c_frag.x[i * kWmmaN + j]);
+        }
+      }
+    }
+  }
 }
 
 __global__ void ScaleBucketFloatGemmOutputKernel(
@@ -1505,15 +1622,16 @@ Result<CudaGraphReplayResult> GroupedGemmFp16AccumCudaGraphReplay(
     return CudaStatus(error, "cudaEventCreate mixed graph stop");
   }
 
-  const dim3 block(kBlockEdge, kBlockEdge);
-  const dim3 grid((packed.max_n + kBlockEdge - 1) / kBlockEdge,
-                  (packed.max_m + kBlockEdge - 1) / kBlockEdge,
-                  static_cast<unsigned int>(problems.size()));
+  const dim3 wmma_block(128);
+  const dim3 wmma_grid(
+      (packed.max_n + kWmmaTileX * kWmmaN - 1) / (kWmmaTileX * kWmmaN),
+      (packed.max_m + kWmmaTileY * kWmmaM - 1) / (kWmmaTileY * kWmmaM),
+      static_cast<unsigned int>(problems.size()));
 
   const auto raw_wall_start = std::chrono::steady_clock::now();
   cudaEventRecord(start, stream);
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmFp16AccumKernel<<<grid, block, 0, stream>>>(
+    GroupedGemmFp16AccumWmmaKernel<<<wmma_grid, wmma_block, 0, stream>>>(
         device.a, device.b, device.c, device.a_offsets, device.b_offsets,
         device.c_offsets, device.ms, device.ks, device.ns,
         device.epilogue_scales);
@@ -1525,7 +1643,7 @@ Result<CudaGraphReplayResult> GroupedGemmFp16AccumCudaGraphReplay(
     cudaStreamDestroy(stream);
     FreeDevicePackedMixedProblems(&device);
     return CudaStatus(error,
-                      "raw repeated GroupedGemmFp16AccumKernel launch");
+                      "raw repeated GroupedGemmFp16AccumWmmaKernel launch");
   }
   cudaEventRecord(stop, stream);
   error = cudaEventSynchronize(stop);
@@ -1552,7 +1670,7 @@ Result<CudaGraphReplayResult> GroupedGemmFp16AccumCudaGraphReplay(
     return CudaStatus(error, "cudaStreamBeginCapture mixed");
   }
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmFp16AccumKernel<<<grid, block, 0, stream>>>(
+    GroupedGemmFp16AccumWmmaKernel<<<wmma_grid, wmma_block, 0, stream>>>(
         device.a, device.b, device.c, device.a_offsets, device.b_offsets,
         device.c_offsets, device.ms, device.ks, device.ns,
         device.epilogue_scales);
@@ -1678,15 +1796,16 @@ Result<CudaGraphReplayResult> RunGroupedGemmFp16AccumCudaPlanGraphReplay(
     return CudaStatus(error, "cudaEventCreate planned mixed graph stop");
   }
 
-  const dim3 block(kBlockEdge, kBlockEdge);
-  const dim3 grid((packed.max_n + kBlockEdge - 1) / kBlockEdge,
-                  (packed.max_m + kBlockEdge - 1) / kBlockEdge,
-                  static_cast<unsigned int>(packed.ms.size()));
+  const dim3 wmma_block(128);
+  const dim3 wmma_grid(
+      (packed.max_n + kWmmaTileX * kWmmaN - 1) / (kWmmaTileX * kWmmaN),
+      (packed.max_m + kWmmaTileY * kWmmaM - 1) / (kWmmaTileY * kWmmaM),
+      static_cast<unsigned int>(packed.ms.size()));
 
   const auto raw_wall_start = std::chrono::steady_clock::now();
   cudaEventRecord(start, stream);
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmFp16AccumKernel<<<grid, block, 0, stream>>>(
+    GroupedGemmFp16AccumWmmaKernel<<<wmma_grid, wmma_block, 0, stream>>>(
         device.a, device.b, device.c, device.a_offsets, device.b_offsets,
         device.c_offsets, device.ms, device.ks, device.ns,
         device.epilogue_scales);
@@ -1697,7 +1816,7 @@ Result<CudaGraphReplayResult> RunGroupedGemmFp16AccumCudaPlanGraphReplay(
     cudaEventDestroy(stop);
     cudaStreamDestroy(stream);
     return CudaStatus(error,
-                      "raw repeated planned GroupedGemmFp16AccumKernel launch");
+                      "raw repeated planned GroupedGemmFp16AccumWmmaKernel launch");
   }
   cudaEventRecord(stop, stream);
   error = cudaEventSynchronize(stop);
@@ -1723,7 +1842,7 @@ Result<CudaGraphReplayResult> RunGroupedGemmFp16AccumCudaPlanGraphReplay(
     return CudaStatus(error, "cudaStreamBeginCapture planned mixed");
   }
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmFp16AccumKernel<<<grid, block, 0, stream>>>(
+    GroupedGemmFp16AccumWmmaKernel<<<wmma_grid, wmma_block, 0, stream>>>(
         device.a, device.b, device.c, device.a_offsets, device.b_offsets,
         device.c_offsets, device.ms, device.ks, device.ns,
         device.epilogue_scales);

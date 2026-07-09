@@ -610,6 +610,15 @@ set_target_properties(tides_e5_scf_profile PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME e5_scf_profile COMMAND tides_e5_scf_profile)
 
+add_executable(tides_molecule_driver_tests
+  core/scf/tests/molecule_driver_tests.cpp)
+target_link_libraries(tides_molecule_driver_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_molecule_driver_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME molecule_driver_end_to_end_scf
+  COMMAND tides_molecule_driver_tests)
+
 add_executable(tides_e6_dynamics_profile
   tests/per_engine/e6_dynamics/e6_test_profile.cpp)
 target_link_libraries(tides_e6_dynamics_profile PRIVATE
@@ -746,10 +755,10 @@ add_test(NAME campaign_runner_reproducibility_archiver COMMAND tides_campaign_ru
 
 option(BUILD_PYTHON_BINDINGS "Build Python nanobind bindings" OFF)
 if(BUILD_PYTHON_BINDINGS)
-  find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+  find_package(Python COMPONENTS Interpreter Development REQUIRED)
   # nanobind must be installed via pip: pip install nanobind
   execute_process(
-    COMMAND ${Python3_EXECUTABLE} -c "import nanobind; print(nanobind.cmake_dir())"
+    COMMAND ${Python_EXECUTABLE} -c "import nanobind; print(nanobind.cmake_dir())"
     OUTPUT_VARIABLE NANOBIND_CMAKE_DIR
     OUTPUT_STRIP_TRAILING_WHITESPACE
     RESULT_VARIABLE NANOBIND_RESULT)
@@ -757,9 +766,11 @@ if(BUILD_PYTHON_BINDINGS)
     list(APPEND CMAKE_PREFIX_PATH "${NANOBIND_CMAKE_DIR}")
     find_package(nanobind CONFIG REQUIRED)
     nanobind_add_module(tides_native
-      NB_STATIC STABLE_ABI
       api/python/tides/_native.cpp)
-    target_link_libraries(tides_native PRIVATE tides_core tides_scf tides_forces tides_dynamics tides_solvers)
+    target_link_libraries(tides_native PRIVATE tides_core tides_scf tides_solvers)
+    if(LAPACK_FOUND)
+      target_link_libraries(tides_native PRIVATE -lmkl_rt)
+    endif()
     set_target_properties(tides_native PROPERTIES
       OUTPUT_NAME "_native"
       LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/api/python/tides")
