@@ -1,0 +1,84 @@
+╔══════════════════════════════════════════════════════════════╗
+║   E1: Tile Substrate Engine — Test & Profile Suite           ║
+╚══════════════════════════════════════════════════════════════╝
+
+=== E1.1: Grouped GEMM FP64 ===
+Kernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status
+--------------------------------------------------------------------------------------------------
+  GroupedGEMM         FP64-GPU    16x8             0.108     0.000     3.553e-15       0.6  PASS
+  GroupedGEMM         FP64-CPU    16x8             0.026     0.026     0.000e+00       2.6  ref
+  GroupedGEMM         FP64-GPU    32x8             0.020     0.000     7.105e-15      25.6  PASS
+  GroupedGEMM         FP64-CPU    32x8             0.205     0.205     0.000e+00       2.6  ref
+  GroupedGEMM         FP64-GPU    64x4             0.029     0.000     1.066e-14      73.1  PASS
+  GroupedGEMM         FP64-CPU    64x4             0.772     0.772     0.000e+00       2.7  ref
+  GroupedGEMM         FP64-GPU    128x2            0.064     0.000     1.776e-14     130.1  PASS
+  GroupedGEMM         FP64-CPU    128x2            3.983     3.983     0.000e+00       2.1  ref
+  GroupedGEMM         FP64-GPU    256x1            0.208     0.000     3.553e-14     161.4  PASS
+  GroupedGEMM         FP64-CPU    256x1           22.616    22.616     0.000e+00       1.5  ref
+
+=== E1.2: Grouped GEMM FP16-accum (tensor core) ===
+Kernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status
+--------------------------------------------------------------------------------------------------
+  GroupedGEMM         FP16-accum  16x8            54.607     0.000     4.939e-03       0.0  PASS
+  GroupedGEMM         FP16-accum  32x8             0.060     0.000     8.697e-03       8.7  PASS
+  GroupedGEMM         FP16-accum  64x4             0.079     0.000     1.164e-02      26.5  PASS
+  GroupedGEMM         FP16-accum  128x2            0.068     0.000     1.426e-02     123.7  PASS
+  GroupedGEMM         FP16-accum  256x1            0.751     0.000     2.111e-02      44.7  PASS
+
+=== E1.3: Filtered SpGEMM (tile-level) ===
+Kernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status
+--------------------------------------------------------------------------------------------------
+  SpGEMM              FP64-GPU    4x16             0.083     0.000     1.776e-14       1.6  PASS
+  SpGEMM              FP64-CPU    4x16             0.187     0.187     0.000e+00       0.7  ref
+  SpGEMM              FP64-GPU    8x16             0.045     0.000     4.263e-14      11.8  PASS
+  SpGEMM              FP64-CPU    8x16             1.375     1.375     0.000e+00       0.4  ref
+  SpGEMM              FP64-GPU    16x32            1.442     0.000     1.990e-13      11.6  PASS
+  SpGEMM              FP64-CPU    16x32           95.206    95.206     0.000e+00       0.2  ref
+  SpGEMM              FP64-GPU    32x32           11.261     0.000     4.121e-13       6.0  PASS
+  SpGEMM              FP64-CPU    32x32          753.380   753.380     0.000e+00       0.1  ref
+
+=== E1.4: Ozaki f64e GEMM (FP16-slice emulation) ===
+Kernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status
+--------------------------------------------------------------------------------------------------
+  Ozaki-f64e          FP16-slice  n=16             0.000     0.000     5.329e-15       0.0  PASS
+  Ozaki-f64e          FP64-CPU-refn=16             0.003     0.003     0.000e+00       3.0  ref
+  Ozaki-f64e          FP16-slice  n=32             0.000     0.000     7.105e-15       0.0  PASS
+  Ozaki-f64e          FP64-CPU-refn=32             0.022     0.022     0.000e+00       3.0  ref
+  Ozaki-f64e          FP16-slice  n=64             0.000     0.000     1.776e-14       0.0  PASS
+  Ozaki-f64e          FP64-CPU-refn=64             0.198     0.198     0.000e+00       2.6  ref
+  Ozaki-f64e          FP16-slice  n=128            0.000     0.000     3.553e-14       0.0  PASS
+  Ozaki-f64e          FP64-CPU-refn=128            1.910     1.910     0.000e+00       2.2  ref
+
+=== E1.5: f64e Reductions (dot, sum, trace) ===
+Kernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status
+--------------------------------------------------------------------------------------------------
+  Dot-f64e            GPU         n=1000           4.352     0.000     7.105e-15       0.0  PASS
+  Dot-f64e            CPU-ref     n=1000           0.002     0.002     0.000e+00       0.0  ref
+  Dot-f64e            GPU         n=10000          0.052     0.000     3.695e-13       0.0  PASS
+  Dot-f64e            CPU-ref     n=10000          0.016     0.016     0.000e+00       0.0  ref
+  Dot-f64e            GPU         n=100000         0.150     0.000     5.568e-11       0.0  PASS
+  Dot-f64e            CPU-ref     n=100000         0.173     0.173     0.000e+00       0.0  ref
+  Dot-f64e            GPU         n=1000000        1.028     0.000     1.834e-04       0.0  PASS
+  Dot-f64e            CPU-ref     n=1000000        1.805     1.805     0.000e+00       0.0  ref
+  Trace-f64e          GPU         n=64             2.161     0.000     5.551e-16       0.0  PASS
+  Trace-f64e          GPU         n=256            0.033     0.000     1.066e-14       0.0  PASS
+  Trace-f64e          GPU         n=1024           0.069     0.000     2.576e-14       0.0  PASS
+
+=== E1.6: CUDA Graph Replay ===
+Kernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status
+--------------------------------------------------------------------------------------------------
+  GraphReplay         FP64-raw    8x64x100         0.032     0.000     0.000e+00       0.0  ref
+  GraphReplay         FP64-graph  8x64x100         0.026     0.000     0.000e+00       0.0  PASS (x1.220799)
+  GraphReplay         FP16-raw    8x64x100         0.010     0.000     0.000e+00       0.0  ref
+  GraphReplay         FP16-graph  8x64x100         0.009     0.000     0.000e+00       0.0  PASS (x1.080752)
+
+=== E1.7: Precision Ledger ===
+  Ledger entries: 1
+  Total observed error bound: 0.0
+  Total dropped candidates: 0
+  PASS: Ledger populated with 1 entries
+  PASS: Merge correctly doubled entries to 2
+
+=== E1 Summary ===
+Total profile entries: 46
+ALL E1 TESTS PASSED

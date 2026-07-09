@@ -214,7 +214,35 @@ H2D transfer is 624MB — significant overhead for small problems.
 
 **Key finding**: PySCF CPU MPI does not scale on single workstation. 2-rank shows speedup for small systems but degrades for larger. 4-rank is consistently slower (oversubscription). Gradients show negative scaling. TIDES E7 parallel profile passes on all ranks.
 
-## 11. Optimization Recommendations
+## 11. Optimization Results (RTX 3060, July 2026)
+
+### Optimizations applied:
+1. **SpGEMM kernel**: Added shared-memory tiling — cooperatively load A/B tiles into smem, reducing global memory traffic. Fixed edge=32 correctness bug (cooperative load loop for edge > kBlockEdge).
+2. **FP64 GroupedGemmKernel**: Added shared-memory K-tiling (16-wide) — reduces global memory reads by kGemmTileK factor.
+3. **H2D transfers**: Added pinned memory staging (cudaMallocHost) in both gemm_grouped.cu and spgemm_filtered.cu CopyToDevice/CopyFromHost.
+4. **cuBLASLt workspace**: Tested and reverted — cudaMalloc inside timed region hurt performance; default heuristic already optimal for small tiles.
+
+### Before/After comparison:
+
+| Metric | Before | After | Change |
+|---|---|---|---|
+| SpGEMM kernel (eps=0, n=256) | 0.272 ms | 0.269 ms | -1.1% |
+| SpGEMM total (eps=0, n=256) | 5.995 ms | 5.767 ms | -3.8% |
+| SpGEMM edge=32 correctness | FAIL | PASS | Fixed |
+| FP64 GEMM (E1 256x1) | 161.4 GFLOPS | 160.6 GFLOPS | -0.5% |
+| Mixed planned kernel | 777 GFLOPS | 973 GFLOPS | +25.2% |
+| Mixed planned vs cuBLASLt | 68% | 79% | +11pp |
+| E1 all tests | 2 FAIL | ALL PASS | Fixed |
+| Determinism (100 repeats) | PASS | PASS | Maintained |
+
+### Key insights for RTX 3060:
+- FP64 throughput is hardware-limited (1/64 of FP32) — shared memory tiling gives marginal gains
+- Mixed-precision planned path is the performance path: 973 GFLOPS (79% of cuBLASLt 1230)
+- Pinned memory reduces H2D transfer overhead by ~4%
+- SpGEMM edge=32 bug was critical — shared memory load assumed 1:1 thread-to-element mapping
+- For SCF iterations, plan reuse is essential: one-shot 0.5 GFLOPS vs planned 973 GFLOPS
+
+## 12. Optimization Recommendations
 
 1. **SpGEMM output kernel** dominates E1 (71.2%) — optimize memory access patterns
 2. **H2D transfers** are significant (624MB) — use pinned memory, reduce transfers
@@ -224,7 +252,7 @@ H2D transfer is 624MB — significant overhead for small problems.
 6. **Gradient computation** in gpu4pyscf falls back to CPU on RTX 3060 — opportunity for TIDES GPU force kernel
 7. **Large system scaling**: gpu4pyscf achieves 38.7x speedup at 96 atoms — TIDES needs end-to-end SCF to compete
 
-## 12. Files Generated
+## 13. Files Generated
 
 - `bench/profiling_results/engine_profiles_raw.txt` — Raw E1-E9 + CUDA probe output
 - `bench/profiling_results/nsys_e1_tile.nsys-rep` — nsys profile for E1
@@ -238,3 +266,4 @@ H2D transfer is 624MB — significant overhead for small problems.
 - `bench/profiling_results/mpi_benchmark.json` — MPI benchmark data (4-rank)
 - `bench/profiling_results/mpi_benchmark.md` — MPI benchmark report (4-rank)
 - `bench/profiling_results/mpi_benchmark_summary.md` — Combined MPI scaling summary (1/2/4 ranks)
+- `bench/profiling_results/e1_profile_optimized.txt` — E1 profile after kernel optimizations

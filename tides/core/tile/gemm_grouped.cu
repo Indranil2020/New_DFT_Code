@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <numeric>
 #include <string>
@@ -62,6 +63,8 @@ constexpr int kBlockEdge = 16;
                          CublasStatusName(status));
 }
 
+constexpr int kGemmTileK = 16;
+
 __global__ void GroupedGemmKernel(const double* a_all, const double* b_all,
                                   double* c_all,
                                   const std::uint64_t* a_offsets,
@@ -79,18 +82,55 @@ __global__ void GroupedGemmKernel(const double* a_all, const double* b_all,
   const std::uint32_t m = ms[problem];
   const std::uint32_t k = ks[problem];
   const std::uint32_t n = ns[problem];
-  if (row >= m || col >= n) {
-    return;
-  }
 
   const double* a = a_all + a_offsets[problem];
   const double* b = b_all + b_offsets[problem];
   double* c = c_all + c_offsets[problem];
-  double sum = 0.0;
-  for (std::uint32_t p = 0; p < k; ++p) {
-    sum += a[row * k + p] * b[p * n + col];
+
+  if (k >= static_cast<std::uint32_t>(kGemmTileK)) {
+    extern __shared__ double smem[];
+    double* s_a = smem;
+    double* s_b = smem + kBlockEdge * kGemmTileK;
+
+    double sum = 0.0;
+    const std::uint32_t num_tiles = (k + kGemmTileK - 1) / kGemmTileK;
+    for (std::uint32_t t = 0; t < num_tiles; ++t) {
+      const std::uint32_t k_base = t * kGemmTileK;
+      const std::uint32_t local_k = threadIdx.x;
+      if (row < m && local_k < kGemmTileK && k_base + local_k < k) {
+        s_a[threadIdx.y * kGemmTileK + local_k] = a[row * k + k_base + local_k];
+      } else {
+        s_a[threadIdx.y * kGemmTileK + local_k] = 0.0;
+      }
+      const std::uint32_t b_row = k_base + threadIdx.y;
+      if (col < n && threadIdx.y < kGemmTileK && b_row < k) {
+        s_b[threadIdx.y * kBlockEdge + threadIdx.x] = b[b_row * n + col];
+      } else {
+        s_b[threadIdx.y * kBlockEdge + threadIdx.x] = 0.0;
+      }
+      __syncthreads();
+
+      if (row < m && col < n) {
+        for (std::uint32_t p = 0; p < kGemmTileK && k_base + p < k; ++p) {
+          sum += s_a[threadIdx.y * kGemmTileK + p] *
+                 s_b[p * kBlockEdge + threadIdx.x];
+        }
+      }
+      __syncthreads();
+    }
+    if (row < m && col < n) {
+      c[row * n + col] = epilogue_scales[problem] * sum;
+    }
+  } else {
+    if (row >= m || col >= n) {
+      return;
+    }
+    double sum = 0.0;
+    for (std::uint32_t p = 0; p < k; ++p) {
+      sum += a[row * k + p] * b[p * n + col];
+    }
+    c[row * n + col] = epilogue_scales[problem] * sum;
   }
-  c[row * n + col] = epilogue_scales[problem] * sum;
 }
 
 __global__ void GroupedGemmFp16AccumKernel(
@@ -154,7 +194,15 @@ Status CopyToDevice(const std::vector<T>& host, T** device) {
   if (error != cudaSuccess) {
     return CudaStatus(error, "cudaMalloc");
   }
-  error = cudaMemcpy(*device, host.data(), bytes, cudaMemcpyHostToDevice);
+  void* pinned = nullptr;
+  error = cudaMallocHost(&pinned, bytes);
+  if (error == cudaSuccess) {
+    std::memcpy(pinned, host.data(), bytes);
+    error = cudaMemcpy(*device, pinned, bytes, cudaMemcpyHostToDevice);
+    cudaFreeHost(pinned);
+  } else {
+    error = cudaMemcpy(*device, host.data(), bytes, cudaMemcpyHostToDevice);
+  }
   if (error != cudaSuccess) {
     cudaFree(*device);
     *device = nullptr;
@@ -174,7 +222,15 @@ Status CopySpanToDevice(const T* host, std::size_t count, T** device) {
   if (error != cudaSuccess) {
     return CudaStatus(error, "cudaMalloc");
   }
-  error = cudaMemcpy(*device, host, bytes, cudaMemcpyHostToDevice);
+  void* pinned = nullptr;
+  error = cudaMallocHost(&pinned, bytes);
+  if (error == cudaSuccess) {
+    std::memcpy(pinned, host, bytes);
+    error = cudaMemcpy(*device, pinned, bytes, cudaMemcpyHostToDevice);
+    cudaFreeHost(pinned);
+  } else {
+    error = cudaMemcpy(*device, host, bytes, cudaMemcpyHostToDevice);
+  }
   if (error != cudaSuccess) {
     cudaFree(*device);
     *device = nullptr;
@@ -1028,9 +1084,11 @@ Result<CudaGroupedGemmResult> GroupedGemmFp64Cuda(
   const dim3 grid((packed.max_n + kBlockEdge - 1) / kBlockEdge,
                   (packed.max_m + kBlockEdge - 1) / kBlockEdge,
                   static_cast<unsigned int>(problems.size()));
+  const std::size_t gemm_smem =
+      static_cast<std::size_t>(kBlockEdge) * kGemmTileK * 2 * sizeof(double);
 
   cudaEventRecord(start);
-  GroupedGemmKernel<<<grid, block>>>(device.a, device.b, device.c,
+  GroupedGemmKernel<<<grid, block, gemm_smem>>>(device.a, device.b, device.c,
                                      device.a_offsets, device.b_offsets,
                                      device.c_offsets, device.ms, device.ks,
                                      device.ns, device.epilogue_scales);
@@ -1268,8 +1326,10 @@ Result<CudaGraphReplayResult> GroupedGemmFp64CudaGraphReplay(
 
   const auto raw_wall_start = std::chrono::steady_clock::now();
   cudaEventRecord(start, stream);
+  const std::size_t graph_gemm_smem =
+      static_cast<std::size_t>(kBlockEdge) * kGemmTileK * 2 * sizeof(double);
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmKernel<<<grid, block, 0, stream>>>(
+    GroupedGemmKernel<<<grid, block, graph_gemm_smem, stream>>>(
         device.a, device.b, device.c, device.a_offsets, device.b_offsets,
         device.c_offsets, device.ms, device.ks, device.ns,
         device.epilogue_scales);
@@ -1307,7 +1367,7 @@ Result<CudaGraphReplayResult> GroupedGemmFp64CudaGraphReplay(
     return CudaStatus(error, "cudaStreamBeginCapture");
   }
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmKernel<<<grid, block, 0, stream>>>(
+    GroupedGemmKernel<<<grid, block, graph_gemm_smem, stream>>>(
         device.a, device.b, device.c, device.a_offsets, device.b_offsets,
         device.c_offsets, device.ms, device.ks, device.ns,
         device.epilogue_scales);

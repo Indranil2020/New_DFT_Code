@@ -70,7 +70,15 @@ class DeviceBuffer {
     if (error != cudaSuccess) {
       return CudaStatus(error, context);
     }
-    error = cudaMemcpy(ptr_, host.data(), bytes, cudaMemcpyHostToDevice);
+    void* pinned = nullptr;
+    error = cudaMallocHost(&pinned, bytes);
+    if (error == cudaSuccess) {
+      std::memcpy(pinned, host.data(), bytes);
+      error = cudaMemcpy(ptr_, pinned, bytes, cudaMemcpyHostToDevice);
+      cudaFreeHost(pinned);
+    } else {
+      error = cudaMemcpy(ptr_, host.data(), bytes, cudaMemcpyHostToDevice);
+    }
     if (error != cudaSuccess) {
       cudaFree(ptr_);
       ptr_ = nullptr;
@@ -125,9 +133,12 @@ __global__ void FilteredSpGemmOutputTileKernel(
       static_cast<std::uint32_t>(blockIdx.y * blockDim.y + threadIdx.y);
   const std::uint32_t local_col =
       static_cast<std::uint32_t>(blockIdx.x * blockDim.x + threadIdx.x);
-  if (local_row >= meta.row_extent || local_col >= meta.col_extent) {
-    return;
-  }
+  const std::uint32_t tid = threadIdx.y * blockDim.x + threadIdx.x;
+  const std::uint32_t block_threads = blockDim.x * blockDim.y;
+
+  extern __shared__ double smem[];
+  double* s_a = smem;
+  double* s_b = smem + edge * edge;
 
   double sum = 0.0;
   for (std::uint32_t task_id = meta.task_begin; task_id < meta.task_end;
@@ -135,16 +146,28 @@ __global__ void FilteredSpGemmOutputTileKernel(
     const ProductTaskHost task = tasks[task_id];
     const double* a = a_values + task.a_offset;
     const double* b = b_values + task.b_offset;
-    for (std::uint32_t k = 0; k < task.k_extent; ++k) {
-      sum += a[local_row * edge + k] * b[k * edge + local_col];
+
+    for (std::uint32_t idx = tid; idx < edge * edge; idx += block_threads) {
+      s_a[idx] = a[idx];
+      s_b[idx] = b[idx];
     }
+    __syncthreads();
+
+    if (local_row < meta.row_extent && local_col < meta.col_extent) {
+      for (std::uint32_t k = 0; k < task.k_extent; ++k) {
+        sum += s_a[local_row * edge + k] * s_b[k * edge + local_col];
+      }
+    }
+    __syncthreads();
   }
 
-  const std::uint64_t row =
-      static_cast<std::uint64_t>(meta.block_row) * edge + local_row;
-  const std::uint64_t col =
-      static_cast<std::uint64_t>(meta.block_col) * edge + local_col;
-  c_dense[row * c_cols + col] = sum;
+  if (local_row < meta.row_extent && local_col < meta.col_extent) {
+    const std::uint64_t row =
+        static_cast<std::uint64_t>(meta.block_row) * edge + local_row;
+    const std::uint64_t col =
+        static_cast<std::uint64_t>(meta.block_col) * edge + local_col;
+    c_dense[row * c_cols + col] = sum;
+  }
 }
 
 }  // namespace
@@ -298,9 +321,11 @@ Result<CudaSpGemmFilteredResult> SpGemmFilteredFp64Cuda(
     const dim3 grid((edge + kBlockEdge - 1) / kBlockEdge,
                     (edge + kBlockEdge - 1) / kBlockEdge,
                     static_cast<unsigned int>(outputs.size()));
+    const std::size_t smem_bytes =
+        static_cast<std::size_t>(edge) * edge * 2 * sizeof(double);
     cudaError_t error = cudaEventRecord(start.get());
     if (error != cudaSuccess) return CudaStatus(error, "cudaEventRecord start");
-    FilteredSpGemmOutputTileKernel<<<grid, block>>>(
+    FilteredSpGemmOutputTileKernel<<<grid, block, smem_bytes>>>(
         d_a.get(), d_b.get(), d_c.get(), d_tasks.get(), d_outputs.get(),
         static_cast<std::uint32_t>(outputs.size()), edge, b.cols());
     error = cudaGetLastError();

@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "date": "2026-07-09 08:03:25",
+    "date": "2026-07-09 12:02:25",
     "gpu": "NVIDIA GeForce RTX 3060 (12GB, sm_86)",
     "cuda": "12.9"
   },
@@ -8,17 +8,17 @@
     "E1_tile": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 4.7408562649507076,
-      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E1: Tile Substrate Engine \u2014 Test & Profile Suite           \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E1.1: Grouped GEMM FP64 ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GroupedGEMM         FP64-GPU    16x8             0.087     0.000     3.553e-15       0.8  PASS\n  GroupedGEMM         FP64-CPU    16x8             0.026     0.026     0.000e+00       2.5  ref\n  GroupedGEMM         FP64-GPU    32x8             0.013     0.000     7.105e-15      39.5  PASS\n  GroupedGEMM         FP64-CPU    32x8             0.194     0.194     0.000e+00       2.7  ref\n  GroupedGEMM         FP64-GPU    64x4             0.024     0.000     1.066e-14      89.0  PASS\n  GroupedGEMM         FP64-CPU    64x4             0.773     0.773     0.000e+00       2.7  ref\n  GroupedGEMM         FP64-GPU    128x2            0.061     0.000     1.776e-14     136.5  PASS\n  GroupedGEMM         FP64-CPU    128x2            3.844     3.844     0.000e+00       2.2  ref\n  GroupedGEMM         FP64-GPU    256x1            0.219     0.000     3.553e-14     153.1  PASS\n  GroupedGEMM         FP64-CPU    256x1           25.247    25.247     0.000e+00       1.3  ref\n\n=== E1.2: Grouped GEMM FP16-accum (tensor core) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GroupedGEMM         FP16-accum  16x8            46.161     0.000     4.939e-03       0.0  PASS\n  GroupedGEMM         FP16-accum  32x8             0.030     0.000     8.697e-03      17.7  PASS\n  GroupedGEMM         FP16-accum  64x4             0.054     0.000     1.164e-02      38.8  PASS\n  GroupedGEMM         FP16-accum  128x2            0.045     0.000     1.426e-02     184.9  PASS\n  GroupedGEMM         FP16-accum  256x1            0.697     0.000     2.111e-02      48.1  PASS\n\n=== E1.3: Filtered SpGEMM (tile-level) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  SpGEMM              FP64-GPU    4x16             0.059     0.000     1.776e-14       2.2  PASS\n  SpGEMM              FP64-CPU    4x16             0.193     0.193     0.000e+00       0.7  ref\n  SpGEMM              FP64-GPU    8x16             0.037     0.000     4.263e-14      14.2  PASS\n  SpGEMM              FP64-CPU    8x16             1.343     1.343     0.000e+00       0.4  ref\n  SpGEMM              FP64-GPU    16x32            1.461     0.000     1.990e-13      11.5  PASS\n  SpGEMM              FP64-CPU    16x32           94.003    94.003     0.000e+00       0.2  ref\n  SpGEMM              FP64-GPU    32x32           11.435     0.000     4.121e-13       5.9  PASS\n  SpGEMM              FP64-CPU    32x32          806.492   806.492     0.000e+00       0.1  ref\n\n=== E1.4: Ozaki f64e GEMM (FP16-slice emulation) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  Ozaki-f64e          FP16-slice  n=16             0.000     0.000     5.329e-15       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=16             0.003     0.003     0.000e+00       3.0  ref\n  Ozaki-f64e          FP16-slice  n=32             0.000     0.000     7.105e-15       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=32             0.022     0.022     0.000e+00       3.0  ref\n  Ozaki-f64e          FP16-slice  n=64             0.000     0.000     1.776e-14       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=64             0.191     0.191     0.000e+00       2.7  ref\n  Ozaki-f64e          FP16-slice  n=128            0.000     0.000     3.553e-14       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=128            1.883     1.883     0.000e+00       2.2  ref\n\n=== E1.5: f64e Reductions (dot, sum, trace) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  Dot-f64e            GPU         n=1000           4.550     0.000     7.105e-15       0.0  PASS\n  Dot-f64e            CPU-ref     n=1000           0.002     0.002     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=10000          0.012     0.000     3.695e-13       0.0  PASS\n  Dot-f64e            CPU-ref     n=10000          0.016     0.016     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=100000         0.110     0.000     5.568e-11       0.0  PASS\n  Dot-f64e            CPU-ref     n=100000         0.169     0.169     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=1000000        1.031     0.000     1.834e-04       0.0  PASS\n  Dot-f64e            CPU-ref     n=1000000        1.839     1.839     0.000e+00       0.0  ref\n  Trace-f64e          GPU         n=64             2.082     0.000     5.551e-16       0.0  PASS\n  Trace-f64e          GPU         n=256            0.024     0.000     1.066e-14       0.0  PASS\n  Trace-f64e          GPU         n=1024           0.071     0.000     2.576e-14       0.0  PASS\n\n=== E1.6: CUDA Graph Replay ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GraphReplay         FP64-raw    8x64x100         0.028     0.000     0.000e+00       0.0  ref\n  GraphReplay         FP64-graph  8x64x100         0.027     0.000     0.000e+00       0.0  PASS (x1.018366)\n  GraphReplay         FP16-raw    8x64x100         0.010     0.000     0.000e+00       0.0  ref\n  GraphReplay         FP16-graph  8x64x100         0.009     0.000     0.000e+00       0.0  PASS (x1.082021)\n\n=== E1.7: Precision Ledger ===\n  Ledger entries: 1\n  Total observed error bound: 0.0\n  Total dropped candidates: 0\n  PASS: Ledger populated with 1 entries\n  PASS: Merge correctly doubled entries to 2\n\n=== E1 Summary ===\nTotal profile entries: 46\nALL E1 TESTS PASSED\n",
+      "wall_s": 5.322432389948517,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E1: Tile Substrate Engine \u2014 Test & Profile Suite           \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E1.1: Grouped GEMM FP64 ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GroupedGEMM         FP64-GPU    16x8             0.108     0.000     3.553e-15       0.6  PASS\n  GroupedGEMM         FP64-CPU    16x8             0.026     0.026     0.000e+00       2.5  ref\n  GroupedGEMM         FP64-GPU    32x8             0.020     0.000     7.105e-15      25.6  PASS\n  GroupedGEMM         FP64-CPU    32x8             0.196     0.196     0.000e+00       2.7  ref\n  GroupedGEMM         FP64-GPU    64x4             0.029     0.000     1.066e-14      73.1  PASS\n  GroupedGEMM         FP64-CPU    64x4             0.775     0.775     0.000e+00       2.7  ref\n  GroupedGEMM         FP64-GPU    128x2            0.065     0.000     1.776e-14     130.0  PASS\n  GroupedGEMM         FP64-CPU    128x2            3.915     3.915     0.000e+00       2.1  ref\n  GroupedGEMM         FP64-GPU    256x1            0.208     0.000     3.553e-14     161.1  PASS\n  GroupedGEMM         FP64-CPU    256x1           27.211    27.211     0.000e+00       1.2  ref\n\n=== E1.2: Grouped GEMM FP16-accum (tensor core) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GroupedGEMM         FP16-accum  16x8            51.582     0.000     4.939e-03       0.0  PASS\n  GroupedGEMM         FP16-accum  32x8             0.068     0.000     8.697e-03       7.7  PASS\n  GroupedGEMM         FP16-accum  64x4             0.080     0.000     1.164e-02      26.3  PASS\n  GroupedGEMM         FP16-accum  128x2            0.064     0.000     1.426e-02     130.5  PASS\n  GroupedGEMM         FP16-accum  256x1            0.729     0.000     2.111e-02      46.0  PASS\n\n=== E1.3: Filtered SpGEMM (tile-level) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  SpGEMM              FP64-GPU    4x16             0.077     0.000     1.776e-14       1.7  PASS\n  SpGEMM              FP64-CPU    4x16             0.191     0.191     0.000e+00       0.7  ref\n  SpGEMM              FP64-GPU    8x16             0.044     0.000     4.263e-14      11.9  PASS\n  SpGEMM              FP64-CPU    8x16             1.348     1.348     0.000e+00       0.4  ref\n  SpGEMM              FP64-GPU    16x32            1.442     0.000     1.990e-13      11.6  PASS\n  SpGEMM              FP64-CPU    16x32           96.524    96.524     0.000e+00       0.2  ref\n  SpGEMM              FP64-GPU    32x32           12.146     0.000     4.121e-13       5.5  PASS\n  SpGEMM              FP64-CPU    32x32          750.697   750.697     0.000e+00       0.1  ref\n\n=== E1.4: Ozaki f64e GEMM (FP16-slice emulation) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  Ozaki-f64e          FP16-slice  n=16             0.000     0.000     5.329e-15       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=16             0.003     0.003     0.000e+00       2.9  ref\n  Ozaki-f64e          FP16-slice  n=32             0.000     0.000     7.105e-15       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=32             0.022     0.022     0.000e+00       3.0  ref\n  Ozaki-f64e          FP16-slice  n=64             0.000     0.000     1.776e-14       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=64             0.193     0.193     0.000e+00       2.7  ref\n  Ozaki-f64e          FP16-slice  n=128            0.000     0.000     3.553e-14       0.0  PASS\n  Ozaki-f64e          FP64-CPU-refn=128            1.882     1.882     0.000e+00       2.2  ref\n\n=== E1.5: f64e Reductions (dot, sum, trace) ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  Dot-f64e            GPU         n=1000           4.625     0.000     7.105e-15       0.0  PASS\n  Dot-f64e            CPU-ref     n=1000           0.002     0.002     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=10000          0.055     0.000     3.695e-13       0.0  PASS\n  Dot-f64e            CPU-ref     n=10000          0.016     0.016     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=100000         0.112     0.000     5.568e-11       0.0  PASS\n  Dot-f64e            CPU-ref     n=100000         0.176     0.176     0.000e+00       0.0  ref\n  Dot-f64e            GPU         n=1000000        1.027     0.000     1.834e-04       0.0  PASS\n  Dot-f64e            CPU-ref     n=1000000        2.063     2.063     0.000e+00       0.0  ref\n  Trace-f64e          GPU         n=64             2.247     0.000     5.551e-16       0.0  PASS\n  Trace-f64e          GPU         n=256            0.048     0.000     1.066e-14       0.0  PASS\n  Trace-f64e          GPU         n=1024           0.072     0.000     2.576e-14       0.0  PASS\n\n=== E1.6: CUDA Graph Replay ===\nKernel              Variant     Size          Kern(ms)  Wall(ms)       MaxDiff    GFLOPS  Status\n--------------------------------------------------------------------------------------------------\n  GraphReplay         FP64-raw    8x64x100         0.030     0.000     0.000e+00       0.0  ref\n  GraphReplay         FP64-graph  8x64x100         0.026     0.000     0.000e+00       0.0  PASS (x1.128601)\n  GraphReplay         FP16-raw    8x64x100         0.010     0.000     0.000e+00       0.0  ref\n  GraphReplay         FP16-graph  8x64x100         0.009     0.000     0.000e+00       0.0  PASS (x1.079702)\n\n=== E1.7: Precision Ledger ===\n  Ledger entries: 1\n  Total observed error bound: 0.0\n  Total dropped candidates: 0\n  PASS: Ledger populated with 1 entries\n  PASS: Merge correctly doubled entries to 2\n\n=== E1 Summary ===\nTotal profile entries: 46\nALL E1 TESTS PASSED\n",
       "stderr": "",
       "parsed_entries": [
         {
           "kernel": "GroupedGEMM",
           "variant": "FP64-GPU",
           "size": "16x8",
-          "time_ms": 0.087,
+          "time_ms": 0.108,
           "error": 0.0,
-          "status": "3.553e-15 0.8 PASS"
+          "status": "3.553e-15 0.6 PASS"
         },
         {
           "kernel": "GroupedGEMM",
@@ -32,71 +32,71 @@
           "kernel": "GroupedGEMM",
           "variant": "FP64-GPU",
           "size": "32x8",
-          "time_ms": 0.013,
+          "time_ms": 0.02,
           "error": 0.0,
-          "status": "7.105e-15 39.5 PASS"
+          "status": "7.105e-15 25.6 PASS"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP64-CPU",
           "size": "32x8",
-          "time_ms": 0.194,
-          "error": 0.194,
+          "time_ms": 0.196,
+          "error": 0.196,
           "status": "0.000e+00 2.7 ref"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP64-GPU",
           "size": "64x4",
-          "time_ms": 0.024,
+          "time_ms": 0.029,
           "error": 0.0,
-          "status": "1.066e-14 89.0 PASS"
+          "status": "1.066e-14 73.1 PASS"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP64-CPU",
           "size": "64x4",
-          "time_ms": 0.773,
-          "error": 0.773,
+          "time_ms": 0.775,
+          "error": 0.775,
           "status": "0.000e+00 2.7 ref"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP64-GPU",
           "size": "128x2",
-          "time_ms": 0.061,
+          "time_ms": 0.065,
           "error": 0.0,
-          "status": "1.776e-14 136.5 PASS"
+          "status": "1.776e-14 130.0 PASS"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP64-CPU",
           "size": "128x2",
-          "time_ms": 3.844,
-          "error": 3.844,
-          "status": "0.000e+00 2.2 ref"
+          "time_ms": 3.915,
+          "error": 3.915,
+          "status": "0.000e+00 2.1 ref"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP64-GPU",
           "size": "256x1",
-          "time_ms": 0.219,
+          "time_ms": 0.208,
           "error": 0.0,
-          "status": "3.553e-14 153.1 PASS"
+          "status": "3.553e-14 161.1 PASS"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP64-CPU",
           "size": "256x1",
-          "time_ms": 25.247,
-          "error": 25.247,
-          "status": "0.000e+00 1.3 ref"
+          "time_ms": 27.211,
+          "error": 27.211,
+          "status": "0.000e+00 1.2 ref"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP16-accum",
           "size": "16x8",
-          "time_ms": 46.161,
+          "time_ms": 51.582,
           "error": 0.0,
           "status": "4.939e-03 0.0 PASS"
         },
@@ -104,96 +104,96 @@
           "kernel": "GroupedGEMM",
           "variant": "FP16-accum",
           "size": "32x8",
-          "time_ms": 0.03,
+          "time_ms": 0.068,
           "error": 0.0,
-          "status": "8.697e-03 17.7 PASS"
+          "status": "8.697e-03 7.7 PASS"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP16-accum",
           "size": "64x4",
-          "time_ms": 0.054,
+          "time_ms": 0.08,
           "error": 0.0,
-          "status": "1.164e-02 38.8 PASS"
+          "status": "1.164e-02 26.3 PASS"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP16-accum",
           "size": "128x2",
-          "time_ms": 0.045,
+          "time_ms": 0.064,
           "error": 0.0,
-          "status": "1.426e-02 184.9 PASS"
+          "status": "1.426e-02 130.5 PASS"
         },
         {
           "kernel": "GroupedGEMM",
           "variant": "FP16-accum",
           "size": "256x1",
-          "time_ms": 0.697,
+          "time_ms": 0.729,
           "error": 0.0,
-          "status": "2.111e-02 48.1 PASS"
+          "status": "2.111e-02 46.0 PASS"
         },
         {
           "kernel": "SpGEMM",
           "variant": "FP64-GPU",
           "size": "4x16",
-          "time_ms": 0.059,
+          "time_ms": 0.077,
           "error": 0.0,
-          "status": "1.776e-14 2.2 PASS"
+          "status": "1.776e-14 1.7 PASS"
         },
         {
           "kernel": "SpGEMM",
           "variant": "FP64-CPU",
           "size": "4x16",
-          "time_ms": 0.193,
-          "error": 0.193,
+          "time_ms": 0.191,
+          "error": 0.191,
           "status": "0.000e+00 0.7 ref"
         },
         {
           "kernel": "SpGEMM",
           "variant": "FP64-GPU",
           "size": "8x16",
-          "time_ms": 0.037,
+          "time_ms": 0.044,
           "error": 0.0,
-          "status": "4.263e-14 14.2 PASS"
+          "status": "4.263e-14 11.9 PASS"
         },
         {
           "kernel": "SpGEMM",
           "variant": "FP64-CPU",
           "size": "8x16",
-          "time_ms": 1.343,
-          "error": 1.343,
+          "time_ms": 1.348,
+          "error": 1.348,
           "status": "0.000e+00 0.4 ref"
         },
         {
           "kernel": "SpGEMM",
           "variant": "FP64-GPU",
           "size": "16x32",
-          "time_ms": 1.461,
+          "time_ms": 1.442,
           "error": 0.0,
-          "status": "1.990e-13 11.5 PASS"
+          "status": "1.990e-13 11.6 PASS"
         },
         {
           "kernel": "SpGEMM",
           "variant": "FP64-CPU",
           "size": "16x32",
-          "time_ms": 94.003,
-          "error": 94.003,
+          "time_ms": 96.524,
+          "error": 96.524,
           "status": "0.000e+00 0.2 ref"
         },
         {
           "kernel": "SpGEMM",
           "variant": "FP64-GPU",
           "size": "32x32",
-          "time_ms": 11.435,
+          "time_ms": 12.146,
           "error": 0.0,
-          "status": "4.121e-13 5.9 PASS"
+          "status": "4.121e-13 5.5 PASS"
         },
         {
           "kernel": "SpGEMM",
           "variant": "FP64-CPU",
           "size": "32x32",
-          "time_ms": 806.492,
-          "error": 806.492,
+          "time_ms": 750.697,
+          "error": 750.697,
           "status": "0.000e+00 0.1 ref"
         },
         {
@@ -210,7 +210,7 @@
           "size": "0.003",
           "time_ms": 0.003,
           "error": 0.003,
-          "status": "0.000e+00 3.0 ref"
+          "status": "0.000e+00 2.9 ref"
         },
         {
           "kernel": "Ozaki-f64e",
@@ -239,9 +239,9 @@
         {
           "kernel": "Ozaki-f64e",
           "variant": "FP64-CPU-refn=64",
-          "size": "0.191",
-          "time_ms": 0.191,
-          "error": 0.191,
+          "size": "0.193",
+          "time_ms": 0.193,
+          "error": 0.193,
           "status": "0.000e+00 2.7 ref"
         },
         {
@@ -255,16 +255,16 @@
         {
           "kernel": "Ozaki-f64e",
           "variant": "FP64-CPU-refn=128",
-          "size": "1.883",
-          "time_ms": 1.883,
-          "error": 1.883,
+          "size": "1.882",
+          "time_ms": 1.882,
+          "error": 1.882,
           "status": "0.000e+00 2.2 ref"
         },
         {
           "kernel": "Dot-f64e",
           "variant": "GPU",
           "size": "n=1000",
-          "time_ms": 4.55,
+          "time_ms": 4.625,
           "error": 0.0,
           "status": "7.105e-15 0.0 PASS"
         },
@@ -280,7 +280,7 @@
           "kernel": "Dot-f64e",
           "variant": "GPU",
           "size": "n=10000",
-          "time_ms": 0.012,
+          "time_ms": 0.055,
           "error": 0.0,
           "status": "3.695e-13 0.0 PASS"
         },
@@ -296,7 +296,7 @@
           "kernel": "Dot-f64e",
           "variant": "GPU",
           "size": "n=100000",
-          "time_ms": 0.11,
+          "time_ms": 0.112,
           "error": 0.0,
           "status": "5.568e-11 0.0 PASS"
         },
@@ -304,15 +304,15 @@
           "kernel": "Dot-f64e",
           "variant": "CPU-ref",
           "size": "n=100000",
-          "time_ms": 0.169,
-          "error": 0.169,
+          "time_ms": 0.176,
+          "error": 0.176,
           "status": "0.000e+00 0.0 ref"
         },
         {
           "kernel": "Dot-f64e",
           "variant": "GPU",
           "size": "n=1000000",
-          "time_ms": 1.031,
+          "time_ms": 1.027,
           "error": 0.0,
           "status": "1.834e-04 0.0 PASS"
         },
@@ -320,15 +320,15 @@
           "kernel": "Dot-f64e",
           "variant": "CPU-ref",
           "size": "n=1000000",
-          "time_ms": 1.839,
-          "error": 1.839,
+          "time_ms": 2.063,
+          "error": 2.063,
           "status": "0.000e+00 0.0 ref"
         },
         {
           "kernel": "Trace-f64e",
           "variant": "GPU",
           "size": "n=64",
-          "time_ms": 2.082,
+          "time_ms": 2.247,
           "error": 0.0,
           "status": "5.551e-16 0.0 PASS"
         },
@@ -336,7 +336,7 @@
           "kernel": "Trace-f64e",
           "variant": "GPU",
           "size": "n=256",
-          "time_ms": 0.024,
+          "time_ms": 0.048,
           "error": 0.0,
           "status": "1.066e-14 0.0 PASS"
         },
@@ -344,7 +344,7 @@
           "kernel": "Trace-f64e",
           "variant": "GPU",
           "size": "n=1024",
-          "time_ms": 0.071,
+          "time_ms": 0.072,
           "error": 0.0,
           "status": "2.576e-14 0.0 PASS"
         },
@@ -352,7 +352,7 @@
           "kernel": "GraphReplay",
           "variant": "FP64-raw",
           "size": "8x64x100",
-          "time_ms": 0.028,
+          "time_ms": 0.03,
           "error": 0.0,
           "status": "0.000e+00 0.0 ref"
         },
@@ -360,9 +360,9 @@
           "kernel": "GraphReplay",
           "variant": "FP64-graph",
           "size": "8x64x100",
-          "time_ms": 0.027,
+          "time_ms": 0.026,
           "error": 0.0,
-          "status": "0.000e+00 0.0 PASS (x1.018366)"
+          "status": "0.000e+00 0.0 PASS (x1.128601)"
         },
         {
           "kernel": "GraphReplay",
@@ -378,7 +378,7 @@
           "size": "8x64x100",
           "time_ms": 0.009,
           "error": 0.0,
-          "status": "0.000e+00 0.0 PASS (x1.082021)"
+          "status": "0.000e+00 0.0 PASS (x1.079702)"
         },
         {
           "kernel": "PASS: Ledger",
@@ -393,15 +393,15 @@
     "E2_basis": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 5.673788144951686,
-      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E2: Basis & Integrals Engine \u2014 Test & Profile Suite        \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E2.1: Radial Solver (FD vs Numerov) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  RadialSolver          FD            l=0 n=2k            23.664     1.126e-04  PASS\n  RadialSolver          Numerov       l=0 n=2k             2.116     1.126e-04  PASS\n  RadialSolver          FD            l=0 n=8k             8.184     7.033e-06  PASS\n  RadialSolver          Numerov       l=0 n=8k             8.104     7.033e-06  PASS\n  RadialSolver          FD            l=0 n=16k           15.932     1.758e-06  PASS\n  RadialSolver          Numerov       l=0 n=16k           16.004     1.758e-06  PASS\n  RadialSolver          FD            l=0 n=32k           31.851     4.394e-07  PASS\n  RadialSolver          Numerov       l=0 n=32k           32.109     4.394e-07  PASS\n  RadialSolver          FD            l=1 n=2k             1.997     2.346e-06  PASS\n  RadialSolver          Numerov       l=1 n=2k          1833.740     4.881e-07  PASS\n  RadialSolver          FD            l=1 n=8k             7.439     1.465e-07  PASS\n  RadialSolver          Numerov       l=1 n=8k             7.496     1.465e-07  PASS\n  RadialSolver          FD            l=1 n=16k           14.532     3.663e-08  PASS\n  RadialSolver          Numerov       l=1 n=16k           14.725     3.663e-08  PASS\n  RadialSolver          FD            l=1 n=32k           28.719     9.111e-09  PASS\n  RadialSolver          Numerov       l=1 n=32k           29.037     9.111e-09  PASS\n\n=== E2.2: NAO Generation ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  NAOGenerator          DZP           H (Z=1)            373.597     0.000e+00  PASS\n  NAOGenerator          DZP           C (Z=6)            962.256     0.000e+00  PASS\n  NAOGenerator          DZP           O (Z=8)           1039.301     0.000e+00  PASS\n  NAOGenerator          DZP           Ne (Z=10)         1026.142     0.000e+00  PASS\n\n=== E2.3: Two-center Integrals (spline + GPU) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  TwoCenter             spline        200pts               0.000     3.503e-05  PASS\n  TwoCenter             GPU           H2                  88.690     5.377e-02  PASS\n\n=== E2.4: Three-center Integrals (GPU) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  ThreeCenter           GPU           2-atom               0.363     3.815e-03  PASS\n\n=== E2.5: Derivative Streams (FD validation) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  Derivative            spline-dS/dR  200pts               0.000     7.385e-05  PASS\n  Derivative            5pt-FD        R=2.0                0.000     2.028e-06  PASS\n\n=== E2 Summary ===\nTotal profile entries: 25\nALL E2 TESTS PASSED\n",
+      "wall_s": 6.151806292124093,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E2: Basis & Integrals Engine \u2014 Test & Profile Suite        \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E2.1: Radial Solver (FD vs Numerov) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  RadialSolver          FD            l=0 n=2k            61.331     1.126e-04  PASS\n  RadialSolver          Numerov       l=0 n=2k             2.144     1.126e-04  PASS\n  RadialSolver          FD            l=0 n=8k             8.324     7.033e-06  PASS\n  RadialSolver          Numerov       l=0 n=8k             8.230     7.033e-06  PASS\n  RadialSolver          FD            l=0 n=16k           16.725     1.758e-06  PASS\n  RadialSolver          Numerov       l=0 n=16k           16.920     1.758e-06  PASS\n  RadialSolver          FD            l=0 n=32k           33.860     4.394e-07  PASS\n  RadialSolver          Numerov       l=0 n=32k           34.081     4.394e-07  PASS\n  RadialSolver          FD            l=1 n=2k             2.119     2.346e-06  PASS\n  RadialSolver          Numerov       l=1 n=2k          2149.824     4.881e-07  PASS\n  RadialSolver          FD            l=1 n=8k             7.966     1.465e-07  PASS\n  RadialSolver          Numerov       l=1 n=8k             8.205     1.465e-07  PASS\n  RadialSolver          FD            l=1 n=16k           15.966     3.663e-08  PASS\n  RadialSolver          Numerov       l=1 n=16k           16.014     3.663e-08  PASS\n  RadialSolver          FD            l=1 n=32k           31.261     9.111e-09  PASS\n  RadialSolver          Numerov       l=1 n=32k           31.549     9.111e-09  PASS\n\n=== E2.2: NAO Generation ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  NAOGenerator          DZP           H (Z=1)            408.394     0.000e+00  PASS\n  NAOGenerator          DZP           C (Z=6)           1010.465     0.000e+00  PASS\n  NAOGenerator          DZP           O (Z=8)           1026.168     0.000e+00  PASS\n  NAOGenerator          DZP           Ne (Z=10)         1052.775     0.000e+00  PASS\n\n=== E2.3: Two-center Integrals (spline + GPU) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  TwoCenter             spline        200pts               0.000     3.503e-05  PASS\n  TwoCenter             GPU           H2                  91.187     5.377e-02  PASS\n\n=== E2.4: Three-center Integrals (GPU) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  ThreeCenter           GPU           2-atom               0.351     3.815e-03  PASS\n\n=== E2.5: Derivative Streams (FD validation) ===\nKernel                Variant       Size              Time(ms)         Error  Status\n------------------------------------------------------------------------------------------\n  Derivative            spline-dS/dR  200pts               0.000     7.385e-05  PASS\n  Derivative            5pt-FD        R=2.0                0.000     2.028e-06  PASS\n\n=== E2 Summary ===\nTotal profile entries: 25\nALL E2 TESTS PASSED\n",
       "stderr": "",
       "parsed_entries": [
         {
           "kernel": "RadialSolver FD",
           "variant": "l=0",
           "size": "n=2k",
-          "time_ms": 23.664,
+          "time_ms": 61.331,
           "error": 0.0001126,
           "status": "PASS"
         },
@@ -409,7 +409,7 @@
           "kernel": "RadialSolver Numerov",
           "variant": "l=0",
           "size": "n=2k",
-          "time_ms": 2.116,
+          "time_ms": 2.144,
           "error": 0.0001126,
           "status": "PASS"
         },
@@ -417,7 +417,7 @@
           "kernel": "RadialSolver FD",
           "variant": "l=0",
           "size": "n=8k",
-          "time_ms": 8.184,
+          "time_ms": 8.324,
           "error": 7.033e-06,
           "status": "PASS"
         },
@@ -425,7 +425,7 @@
           "kernel": "RadialSolver Numerov",
           "variant": "l=0",
           "size": "n=8k",
-          "time_ms": 8.104,
+          "time_ms": 8.23,
           "error": 7.033e-06,
           "status": "PASS"
         },
@@ -433,7 +433,7 @@
           "kernel": "RadialSolver FD",
           "variant": "l=0",
           "size": "n=16k",
-          "time_ms": 15.932,
+          "time_ms": 16.725,
           "error": 1.758e-06,
           "status": "PASS"
         },
@@ -441,7 +441,7 @@
           "kernel": "RadialSolver Numerov",
           "variant": "l=0",
           "size": "n=16k",
-          "time_ms": 16.004,
+          "time_ms": 16.92,
           "error": 1.758e-06,
           "status": "PASS"
         },
@@ -449,7 +449,7 @@
           "kernel": "RadialSolver FD",
           "variant": "l=0",
           "size": "n=32k",
-          "time_ms": 31.851,
+          "time_ms": 33.86,
           "error": 4.394e-07,
           "status": "PASS"
         },
@@ -457,7 +457,7 @@
           "kernel": "RadialSolver Numerov",
           "variant": "l=0",
           "size": "n=32k",
-          "time_ms": 32.109,
+          "time_ms": 34.081,
           "error": 4.394e-07,
           "status": "PASS"
         },
@@ -465,7 +465,7 @@
           "kernel": "RadialSolver FD",
           "variant": "l=1",
           "size": "n=2k",
-          "time_ms": 1.997,
+          "time_ms": 2.119,
           "error": 2.346e-06,
           "status": "PASS"
         },
@@ -473,7 +473,7 @@
           "kernel": "RadialSolver Numerov",
           "variant": "l=1",
           "size": "n=2k",
-          "time_ms": 1833.74,
+          "time_ms": 2149.824,
           "error": 4.881e-07,
           "status": "PASS"
         },
@@ -481,7 +481,7 @@
           "kernel": "RadialSolver FD",
           "variant": "l=1",
           "size": "n=8k",
-          "time_ms": 7.439,
+          "time_ms": 7.966,
           "error": 1.465e-07,
           "status": "PASS"
         },
@@ -489,7 +489,7 @@
           "kernel": "RadialSolver Numerov",
           "variant": "l=1",
           "size": "n=8k",
-          "time_ms": 7.496,
+          "time_ms": 8.205,
           "error": 1.465e-07,
           "status": "PASS"
         },
@@ -497,7 +497,7 @@
           "kernel": "RadialSolver FD",
           "variant": "l=1",
           "size": "n=16k",
-          "time_ms": 14.532,
+          "time_ms": 15.966,
           "error": 3.663e-08,
           "status": "PASS"
         },
@@ -505,7 +505,7 @@
           "kernel": "RadialSolver Numerov",
           "variant": "l=1",
           "size": "n=16k",
-          "time_ms": 14.725,
+          "time_ms": 16.014,
           "error": 3.663e-08,
           "status": "PASS"
         },
@@ -513,7 +513,7 @@
           "kernel": "RadialSolver FD",
           "variant": "l=1",
           "size": "n=32k",
-          "time_ms": 28.719,
+          "time_ms": 31.261,
           "error": 9.111e-09,
           "status": "PASS"
         },
@@ -521,7 +521,7 @@
           "kernel": "RadialSolver Numerov",
           "variant": "l=1",
           "size": "n=32k",
-          "time_ms": 29.037,
+          "time_ms": 31.549,
           "error": 9.111e-09,
           "status": "PASS"
         },
@@ -529,7 +529,7 @@
           "kernel": "NAOGenerator DZP",
           "variant": "H",
           "size": "(Z=1)",
-          "time_ms": 373.597,
+          "time_ms": 408.394,
           "error": 0.0,
           "status": "PASS"
         },
@@ -537,7 +537,7 @@
           "kernel": "NAOGenerator DZP",
           "variant": "C",
           "size": "(Z=6)",
-          "time_ms": 962.256,
+          "time_ms": 1010.465,
           "error": 0.0,
           "status": "PASS"
         },
@@ -545,7 +545,7 @@
           "kernel": "NAOGenerator DZP",
           "variant": "O",
           "size": "(Z=8)",
-          "time_ms": 1039.301,
+          "time_ms": 1026.168,
           "error": 0.0,
           "status": "PASS"
         },
@@ -553,7 +553,7 @@
           "kernel": "NAOGenerator DZP",
           "variant": "Ne",
           "size": "(Z=10)",
-          "time_ms": 1026.142,
+          "time_ms": 1052.775,
           "error": 0.0,
           "status": "PASS"
         },
@@ -569,7 +569,7 @@
           "kernel": "TwoCenter",
           "variant": "GPU",
           "size": "H2",
-          "time_ms": 88.69,
+          "time_ms": 91.187,
           "error": 0.05377,
           "status": "PASS"
         },
@@ -577,7 +577,7 @@
           "kernel": "ThreeCenter",
           "variant": "GPU",
           "size": "2-atom",
-          "time_ms": 0.363,
+          "time_ms": 0.351,
           "error": 0.003815,
           "status": "PASS"
         },
@@ -602,15 +602,15 @@
     "E3_grid": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 0.6011596908792853,
-      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E3: Grid Engine \u2014 Test & Profile Suite                     \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E3.1: Dual-grid Index Mapping ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  DualGrid          flatten     32^3               0.411     0.000e+00  PASS\n  DualGrid          flatten     48^3               1.400     0.000e+00  PASS\n  DualGrid          flatten     64^3               3.302     0.000e+00  PASS\n\n=== E3.2: Rho Build (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  RhoBuild          CPU         16^3x4             0.017     0.000e+00  ref\n  RhoBuild          GPU         16^3x4             0.036     0.000e+00  PASS\n  RhoBuild          CPU         24^3x8             0.086     0.000e+00  ref\n  RhoBuild          GPU         24^3x8             0.134     0.000e+00  PASS\n  RhoBuild          CPU         32^3x16            0.369     0.000e+00  ref\n  RhoBuild          GPU         32^3x16            0.499     0.000e+00  PASS\n  RhoBuild          CPU         48^3x32            2.586     0.000e+00  ref\n  RhoBuild          GPU         48^3x32            3.116     0.000e+00  PASS\n\n=== E3.3: Vmat Build (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  VmatBuild         CPU         16^3x4             0.041     0.000e+00  ref\n  VmatBuild         GPU         16^3x4             0.046     0.000e+00  PASS\n  VmatBuild         CPU         24^3x8             0.518     0.000e+00  ref\n  VmatBuild         GPU         24^3x8             0.503     0.000e+00  PASS\n  VmatBuild         CPU         32^3x16            4.673     0.000e+00  ref\n  VmatBuild         GPU         32^3x16            4.619     0.000e+00  PASS\n  VmatBuild         CPU         48^3x32           67.467     0.000e+00  ref\n  VmatBuild         GPU         48^3x32           67.416     0.000e+00  PASS\n\n=== E3.4: Poisson FFT (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Poisson           CPU         16^3              26.143     0.000e+00  ref\n  Poisson           GPU         16^3               0.100     0.000e+00  PASS\n  Poisson           CPU         32^3               1.084     0.000e+00  ref\n  Poisson           GPU         32^3               0.858     0.000e+00  PASS\n\n=== E3.5: XC Evaluation (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  XC-LDA            CPU         16^3               0.558     0.000e+00  ref\n  XC-LDA            GPU         16^3              96.627     3.670e-12  PASS\n  XC-LDA            CPU         24^3               1.938     0.000e+00  ref\n  XC-LDA            GPU         24^3               0.427     5.284e-12  PASS\n  XC-LDA            CPU         32^3               4.506     0.000e+00  ref\n  XC-LDA            GPU         32^3               0.842     4.984e-12  PASS\n  XC-LDA            CPU         48^3              15.355     0.000e+00  ref\n  XC-LDA            GPU         48^3               2.549     6.358e-12  PASS\n\n=== E3.6: Adjointness (rho\u2192V\u2192H consistency) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Adjointness       <AP,w>=<P,ATw>16^3x4             0.000     1.998e-15  PASS\n  Adjointness       H-symmetry  16^3x4             0.000     0.000e+00  PASS\n\n=== E3 Summary ===\nTotal profile entries: 33\nALL E3 TESTS PASSED\n",
+      "wall_s": 0.6257279480341822,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E3: Grid Engine \u2014 Test & Profile Suite                     \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E3.1: Dual-grid Index Mapping ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  DualGrid          flatten     32^3               0.424     0.000e+00  PASS\n  DualGrid          flatten     48^3               1.376     0.000e+00  PASS\n  DualGrid          flatten     64^3               3.284     0.000e+00  PASS\n\n=== E3.2: Rho Build (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  RhoBuild          CPU         16^3x4             0.016     0.000e+00  ref\n  RhoBuild          GPU         16^3x4             0.030     0.000e+00  PASS\n  RhoBuild          CPU         24^3x8             0.089     0.000e+00  ref\n  RhoBuild          GPU         24^3x8             0.135     0.000e+00  PASS\n  RhoBuild          CPU         32^3x16            0.351     0.000e+00  ref\n  RhoBuild          GPU         32^3x16            0.474     0.000e+00  PASS\n  RhoBuild          CPU         48^3x32            2.522     0.000e+00  ref\n  RhoBuild          GPU         48^3x32            3.030     0.000e+00  PASS\n\n=== E3.3: Vmat Build (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  VmatBuild         CPU         16^3x4             0.041     0.000e+00  ref\n  VmatBuild         GPU         16^3x4             0.042     0.000e+00  PASS\n  VmatBuild         CPU         24^3x8             0.503     0.000e+00  ref\n  VmatBuild         GPU         24^3x8             0.500     0.000e+00  PASS\n  VmatBuild         CPU         32^3x16            4.582     0.000e+00  ref\n  VmatBuild         GPU         32^3x16            4.484     0.000e+00  PASS\n  VmatBuild         CPU         48^3x32           67.655     0.000e+00  ref\n  VmatBuild         GPU         48^3x32           67.470     0.000e+00  PASS\n\n=== E3.4: Poisson FFT (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Poisson           CPU         16^3              31.660     0.000e+00  ref\n  Poisson           GPU         16^3               0.098     0.000e+00  PASS\n  Poisson           CPU         32^3               1.157     0.000e+00  ref\n  Poisson           GPU         32^3               0.890     0.000e+00  PASS\n\n=== E3.5: XC Evaluation (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  XC-LDA            CPU         16^3               0.579     0.000e+00  ref\n  XC-LDA            GPU         16^3             117.049     3.670e-12  PASS\n  XC-LDA            CPU         24^3               1.944     0.000e+00  ref\n  XC-LDA            GPU         24^3               0.435     5.284e-12  PASS\n  XC-LDA            CPU         32^3               4.519     0.000e+00  ref\n  XC-LDA            GPU         32^3               0.835     4.984e-12  PASS\n  XC-LDA            CPU         48^3              15.395     0.000e+00  ref\n  XC-LDA            GPU         48^3               2.535     6.358e-12  PASS\n\n=== E3.6: Adjointness (rho\u2192V\u2192H consistency) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Adjointness       <AP,w>=<P,ATw>16^3x4             0.000     1.998e-15  PASS\n  Adjointness       H-symmetry  16^3x4             0.000     0.000e+00  PASS\n\n=== E3 Summary ===\nTotal profile entries: 33\nALL E3 TESTS PASSED\n",
       "stderr": "",
       "parsed_entries": [
         {
           "kernel": "DualGrid",
           "variant": "flatten",
           "size": "32^3",
-          "time_ms": 0.411,
+          "time_ms": 0.424,
           "error": 0.0,
           "status": "PASS"
         },
@@ -618,7 +618,7 @@
           "kernel": "DualGrid",
           "variant": "flatten",
           "size": "48^3",
-          "time_ms": 1.4,
+          "time_ms": 1.376,
           "error": 0.0,
           "status": "PASS"
         },
@@ -626,7 +626,7 @@
           "kernel": "DualGrid",
           "variant": "flatten",
           "size": "64^3",
-          "time_ms": 3.302,
+          "time_ms": 3.284,
           "error": 0.0,
           "status": "PASS"
         },
@@ -634,7 +634,7 @@
           "kernel": "RhoBuild",
           "variant": "CPU",
           "size": "16^3x4",
-          "time_ms": 0.017,
+          "time_ms": 0.016,
           "error": 0.0,
           "status": "ref"
         },
@@ -642,7 +642,7 @@
           "kernel": "RhoBuild",
           "variant": "GPU",
           "size": "16^3x4",
-          "time_ms": 0.036,
+          "time_ms": 0.03,
           "error": 0.0,
           "status": "PASS"
         },
@@ -650,7 +650,7 @@
           "kernel": "RhoBuild",
           "variant": "CPU",
           "size": "24^3x8",
-          "time_ms": 0.086,
+          "time_ms": 0.089,
           "error": 0.0,
           "status": "ref"
         },
@@ -658,7 +658,7 @@
           "kernel": "RhoBuild",
           "variant": "GPU",
           "size": "24^3x8",
-          "time_ms": 0.134,
+          "time_ms": 0.135,
           "error": 0.0,
           "status": "PASS"
         },
@@ -666,7 +666,7 @@
           "kernel": "RhoBuild",
           "variant": "CPU",
           "size": "32^3x16",
-          "time_ms": 0.369,
+          "time_ms": 0.351,
           "error": 0.0,
           "status": "ref"
         },
@@ -674,7 +674,7 @@
           "kernel": "RhoBuild",
           "variant": "GPU",
           "size": "32^3x16",
-          "time_ms": 0.499,
+          "time_ms": 0.474,
           "error": 0.0,
           "status": "PASS"
         },
@@ -682,7 +682,7 @@
           "kernel": "RhoBuild",
           "variant": "CPU",
           "size": "48^3x32",
-          "time_ms": 2.586,
+          "time_ms": 2.522,
           "error": 0.0,
           "status": "ref"
         },
@@ -690,7 +690,7 @@
           "kernel": "RhoBuild",
           "variant": "GPU",
           "size": "48^3x32",
-          "time_ms": 3.116,
+          "time_ms": 3.03,
           "error": 0.0,
           "status": "PASS"
         },
@@ -706,31 +706,31 @@
           "kernel": "VmatBuild",
           "variant": "GPU",
           "size": "16^3x4",
-          "time_ms": 0.046,
+          "time_ms": 0.042,
           "error": 0.0,
           "status": "PASS"
         },
         {
           "kernel": "VmatBuild",
           "variant": "CPU",
-          "size": "24^3x8",
-          "time_ms": 0.518,
-          "error": 0.0,
-          "status": "ref"
-        },
-        {
-          "kernel": "VmatBuild",
-          "variant": "GPU",
           "size": "24^3x8",
           "time_ms": 0.503,
           "error": 0.0,
+          "status": "ref"
+        },
+        {
+          "kernel": "VmatBuild",
+          "variant": "GPU",
+          "size": "24^3x8",
+          "time_ms": 0.5,
+          "error": 0.0,
           "status": "PASS"
         },
         {
           "kernel": "VmatBuild",
           "variant": "CPU",
           "size": "32^3x16",
-          "time_ms": 4.673,
+          "time_ms": 4.582,
           "error": 0.0,
           "status": "ref"
         },
@@ -738,7 +738,7 @@
           "kernel": "VmatBuild",
           "variant": "GPU",
           "size": "32^3x16",
-          "time_ms": 4.619,
+          "time_ms": 4.484,
           "error": 0.0,
           "status": "PASS"
         },
@@ -746,7 +746,7 @@
           "kernel": "VmatBuild",
           "variant": "CPU",
           "size": "48^3x32",
-          "time_ms": 67.467,
+          "time_ms": 67.655,
           "error": 0.0,
           "status": "ref"
         },
@@ -754,7 +754,7 @@
           "kernel": "VmatBuild",
           "variant": "GPU",
           "size": "48^3x32",
-          "time_ms": 67.416,
+          "time_ms": 67.47,
           "error": 0.0,
           "status": "PASS"
         },
@@ -762,7 +762,7 @@
           "kernel": "Poisson",
           "variant": "CPU",
           "size": "16^3",
-          "time_ms": 26.143,
+          "time_ms": 31.66,
           "error": 0.0,
           "status": "ref"
         },
@@ -770,7 +770,7 @@
           "kernel": "Poisson",
           "variant": "GPU",
           "size": "16^3",
-          "time_ms": 0.1,
+          "time_ms": 0.098,
           "error": 0.0,
           "status": "PASS"
         },
@@ -778,7 +778,7 @@
           "kernel": "Poisson",
           "variant": "CPU",
           "size": "32^3",
-          "time_ms": 1.084,
+          "time_ms": 1.157,
           "error": 0.0,
           "status": "ref"
         },
@@ -786,7 +786,7 @@
           "kernel": "Poisson",
           "variant": "GPU",
           "size": "32^3",
-          "time_ms": 0.858,
+          "time_ms": 0.89,
           "error": 0.0,
           "status": "PASS"
         },
@@ -794,7 +794,7 @@
           "kernel": "XC-LDA",
           "variant": "CPU",
           "size": "16^3",
-          "time_ms": 0.558,
+          "time_ms": 0.579,
           "error": 0.0,
           "status": "ref"
         },
@@ -802,7 +802,7 @@
           "kernel": "XC-LDA",
           "variant": "GPU",
           "size": "16^3",
-          "time_ms": 96.627,
+          "time_ms": 117.049,
           "error": 3.67e-12,
           "status": "PASS"
         },
@@ -810,7 +810,7 @@
           "kernel": "XC-LDA",
           "variant": "CPU",
           "size": "24^3",
-          "time_ms": 1.938,
+          "time_ms": 1.944,
           "error": 0.0,
           "status": "ref"
         },
@@ -818,7 +818,7 @@
           "kernel": "XC-LDA",
           "variant": "GPU",
           "size": "24^3",
-          "time_ms": 0.427,
+          "time_ms": 0.435,
           "error": 5.284e-12,
           "status": "PASS"
         },
@@ -826,7 +826,7 @@
           "kernel": "XC-LDA",
           "variant": "CPU",
           "size": "32^3",
-          "time_ms": 4.506,
+          "time_ms": 4.519,
           "error": 0.0,
           "status": "ref"
         },
@@ -834,7 +834,7 @@
           "kernel": "XC-LDA",
           "variant": "GPU",
           "size": "32^3",
-          "time_ms": 0.842,
+          "time_ms": 0.835,
           "error": 4.984e-12,
           "status": "PASS"
         },
@@ -842,7 +842,7 @@
           "kernel": "XC-LDA",
           "variant": "CPU",
           "size": "48^3",
-          "time_ms": 15.355,
+          "time_ms": 15.395,
           "error": 0.0,
           "status": "ref"
         },
@@ -850,7 +850,7 @@
           "kernel": "XC-LDA",
           "variant": "GPU",
           "size": "48^3",
-          "time_ms": 2.549,
+          "time_ms": 2.535,
           "error": 6.358e-12,
           "status": "PASS"
         },
@@ -875,15 +875,15 @@
     "E4_solvers": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 2.7069519178476185,
-      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E4: Solvers Engine \u2014 Test & Profile Suite                  \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E4.1: Batched Dense Eig (H x = e S x) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  DenseEig          generalized n=16              24.890     1.776e-15  PASS\n  DenseEig          generalized n=32               0.095     1.776e-15  PASS\n  DenseEig          generalized n=64               1.071     2.665e-15  PASS\n  DenseEig          generalized n=128              1.721     2.220e-15  PASS\n  DenseEig          generalized n=256              6.309     2.220e-15  PASS\n  DenseEig          batched     3x{16,32,64}       0.450     2.665e-15  PASS\n\n=== E4.2: SP2 Purification (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  SP2               CPU         n=32               1.098     2.421e-15  PASS\n  SP2               GPU         n=32               1.088     2.421e-15  PASS\n  SP2               CPU         n=64              10.723     1.830e-15  PASS\n  SP2               GPU         n=64              10.824     1.830e-15  PASS\n  SP2               CPU         n=128            117.363     5.542e-13  PASS\n  SP2               GPU         n=128            115.641     5.542e-13  PASS\n  SP2               CPU         n=256           1749.212     7.186e-15  PASS\n  SP2               GPU         n=256            203.703     7.217e-15  PASS\n\n=== E4.3: ChFSI (Chebyshev-filtered Subspace Iteration) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ChFSI             CPU         n=32 occ=4         0.484     1.634e-11  PASS\n  ChFSI             CPU         n=64 occ=8         9.174     2.829e-10  PASS\n  ChFSI             CPU         n=128 occ=16     196.497     8.282e-10  PASS\n\n=== E4.4: FOE (Fermi Operator Expansion) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  FOE               CPU         n=32 Ne=16         1.618     7.105e-15  PASS\n  FOE               CPU         n=64 Ne=32        11.765     7.105e-15  PASS\n  FOE               CPU         n=128 Ne=64      119.892     2.132e-14  PASS\n\n=== E4.5: OMM (Orbital Minimization Method) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  OMM               CPU         n=32 occ=4         0.051     0.000e+00  PASS\n  OMM               CPU         n=64 occ=8         0.197     0.000e+00  PASS\n  OMM               CPU         n=128 occ=16       2.455     0.000e+00  PASS\n\n=== E4.6: Solver Broker Dispatch ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Broker            small       50 atoms           0.000     0.000e+00  PASS (small molecular system; R0 batched dense)\n  Broker            large-gapped5000 atoms         0.000     0.000e+00  PASS (gapped large system; R2 SP2-submatrix)\n  Broker            medium      500 atoms          0.000     0.000e+00  PASS (mid-range gapped; R1 ChFSI)\n\n=== E4 Summary ===\nTotal profile entries: 26\nALL E4 TESTS PASSED\n",
+      "wall_s": 2.6325664441101253,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E4: Solvers Engine \u2014 Test & Profile Suite                  \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E4.1: Batched Dense Eig (H x = e S x) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  DenseEig          generalized n=16              10.445     1.776e-15  PASS\n  DenseEig          generalized n=32               0.089     1.776e-15  PASS\n  DenseEig          generalized n=64               1.325     2.665e-15  PASS\n  DenseEig          generalized n=128              1.732     2.220e-15  PASS\n  DenseEig          generalized n=256              6.055     2.220e-15  PASS\n  DenseEig          batched     3x{16,32,64}       0.433     2.665e-15  PASS\n\n=== E4.2: SP2 Purification (CPU + GPU) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  SP2               CPU         n=32               1.067     2.421e-15  PASS\n  SP2               GPU         n=32               1.082     2.421e-15  PASS\n  SP2               CPU         n=64              10.646     1.830e-15  PASS\n  SP2               GPU         n=64              10.636     1.830e-15  PASS\n  SP2               CPU         n=128            122.500     5.542e-13  PASS\n  SP2               GPU         n=128            117.367     5.542e-13  PASS\n  SP2               CPU         n=256           1693.661     7.186e-15  PASS\n  SP2               GPU         n=256            204.895     7.217e-15  PASS\n\n=== E4.3: ChFSI (Chebyshev-filtered Subspace Iteration) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ChFSI             CPU         n=32 occ=4         1.121     1.634e-11  PASS\n  ChFSI             CPU         n=64 occ=8         8.881     2.829e-10  PASS\n  ChFSI             CPU         n=128 occ=16     189.941     8.006e-10  PASS\n\n=== E4.4: FOE (Fermi Operator Expansion) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  FOE               CPU         n=32 Ne=16         1.580     7.105e-15  PASS\n  FOE               CPU         n=64 Ne=32        11.646     7.105e-15  PASS\n  FOE               CPU         n=128 Ne=64      114.754     2.132e-14  PASS\n\n=== E4.5: OMM (Orbital Minimization Method) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  OMM               CPU         n=32 occ=4         0.050     0.000e+00  PASS\n  OMM               CPU         n=64 occ=8         0.196     0.000e+00  PASS\n  OMM               CPU         n=128 occ=16       2.433     0.000e+00  PASS\n\n=== E4.6: Solver Broker Dispatch ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Broker            small       50 atoms           0.000     0.000e+00  PASS (small molecular system; R0 batched dense)\n  Broker            large-gapped5000 atoms         0.000     0.000e+00  PASS (gapped large system; R2 SP2-submatrix)\n  Broker            medium      500 atoms          0.000     0.000e+00  PASS (mid-range gapped; R1 ChFSI)\n\n=== E4 Summary ===\nTotal profile entries: 26\nALL E4 TESTS PASSED\n",
       "stderr": "",
       "parsed_entries": [
         {
           "kernel": "DenseEig",
           "variant": "generalized",
           "size": "n=16",
-          "time_ms": 24.89,
+          "time_ms": 10.445,
           "error": 1.776e-15,
           "status": "PASS"
         },
@@ -891,7 +891,7 @@
           "kernel": "DenseEig",
           "variant": "generalized",
           "size": "n=32",
-          "time_ms": 0.095,
+          "time_ms": 0.089,
           "error": 1.776e-15,
           "status": "PASS"
         },
@@ -899,7 +899,7 @@
           "kernel": "DenseEig",
           "variant": "generalized",
           "size": "n=64",
-          "time_ms": 1.071,
+          "time_ms": 1.325,
           "error": 2.665e-15,
           "status": "PASS"
         },
@@ -907,7 +907,7 @@
           "kernel": "DenseEig",
           "variant": "generalized",
           "size": "n=128",
-          "time_ms": 1.721,
+          "time_ms": 1.732,
           "error": 2.22e-15,
           "status": "PASS"
         },
@@ -915,7 +915,7 @@
           "kernel": "DenseEig",
           "variant": "generalized",
           "size": "n=256",
-          "time_ms": 6.309,
+          "time_ms": 6.055,
           "error": 2.22e-15,
           "status": "PASS"
         },
@@ -923,7 +923,7 @@
           "kernel": "DenseEig",
           "variant": "batched",
           "size": "3x{16,32,64}",
-          "time_ms": 0.45,
+          "time_ms": 0.433,
           "error": 2.665e-15,
           "status": "PASS"
         },
@@ -931,7 +931,7 @@
           "kernel": "SP2",
           "variant": "CPU",
           "size": "n=32",
-          "time_ms": 1.098,
+          "time_ms": 1.067,
           "error": 2.421e-15,
           "status": "PASS"
         },
@@ -939,7 +939,7 @@
           "kernel": "SP2",
           "variant": "GPU",
           "size": "n=32",
-          "time_ms": 1.088,
+          "time_ms": 1.082,
           "error": 2.421e-15,
           "status": "PASS"
         },
@@ -947,7 +947,7 @@
           "kernel": "SP2",
           "variant": "CPU",
           "size": "n=64",
-          "time_ms": 10.723,
+          "time_ms": 10.646,
           "error": 1.83e-15,
           "status": "PASS"
         },
@@ -955,7 +955,7 @@
           "kernel": "SP2",
           "variant": "GPU",
           "size": "n=64",
-          "time_ms": 10.824,
+          "time_ms": 10.636,
           "error": 1.83e-15,
           "status": "PASS"
         },
@@ -963,7 +963,7 @@
           "kernel": "SP2",
           "variant": "CPU",
           "size": "n=128",
-          "time_ms": 117.363,
+          "time_ms": 122.5,
           "error": 5.542e-13,
           "status": "PASS"
         },
@@ -971,7 +971,7 @@
           "kernel": "SP2",
           "variant": "GPU",
           "size": "n=128",
-          "time_ms": 115.641,
+          "time_ms": 117.367,
           "error": 5.542e-13,
           "status": "PASS"
         },
@@ -979,7 +979,7 @@
           "kernel": "SP2",
           "variant": "CPU",
           "size": "n=256",
-          "time_ms": 1749.212,
+          "time_ms": 1693.661,
           "error": 7.186e-15,
           "status": "PASS"
         },
@@ -987,7 +987,7 @@
           "kernel": "SP2",
           "variant": "GPU",
           "size": "n=256",
-          "time_ms": 203.703,
+          "time_ms": 204.895,
           "error": 7.217e-15,
           "status": "PASS"
         },
@@ -995,7 +995,7 @@
           "kernel": "ChFSI CPU",
           "variant": "n=32",
           "size": "occ=4",
-          "time_ms": 0.484,
+          "time_ms": 1.121,
           "error": 1.634e-11,
           "status": "PASS"
         },
@@ -1003,7 +1003,7 @@
           "kernel": "ChFSI CPU",
           "variant": "n=64",
           "size": "occ=8",
-          "time_ms": 9.174,
+          "time_ms": 8.881,
           "error": 2.829e-10,
           "status": "PASS"
         },
@@ -1011,15 +1011,15 @@
           "kernel": "ChFSI CPU",
           "variant": "n=128",
           "size": "occ=16",
-          "time_ms": 196.497,
-          "error": 8.282e-10,
+          "time_ms": 189.941,
+          "error": 8.006e-10,
           "status": "PASS"
         },
         {
           "kernel": "FOE CPU",
           "variant": "n=32",
           "size": "Ne=16",
-          "time_ms": 1.618,
+          "time_ms": 1.58,
           "error": 7.105e-15,
           "status": "PASS"
         },
@@ -1027,7 +1027,7 @@
           "kernel": "FOE CPU",
           "variant": "n=64",
           "size": "Ne=32",
-          "time_ms": 11.765,
+          "time_ms": 11.646,
           "error": 7.105e-15,
           "status": "PASS"
         },
@@ -1035,7 +1035,7 @@
           "kernel": "FOE CPU",
           "variant": "n=128",
           "size": "Ne=64",
-          "time_ms": 119.892,
+          "time_ms": 114.754,
           "error": 2.132e-14,
           "status": "PASS"
         },
@@ -1043,7 +1043,7 @@
           "kernel": "OMM CPU",
           "variant": "n=32",
           "size": "occ=4",
-          "time_ms": 0.051,
+          "time_ms": 0.05,
           "error": 0.0,
           "status": "PASS"
         },
@@ -1051,7 +1051,7 @@
           "kernel": "OMM CPU",
           "variant": "n=64",
           "size": "occ=8",
-          "time_ms": 0.197,
+          "time_ms": 0.196,
           "error": 0.0,
           "status": "PASS"
         },
@@ -1059,7 +1059,7 @@
           "kernel": "OMM CPU",
           "variant": "n=128",
           "size": "occ=16",
-          "time_ms": 2.455,
+          "time_ms": 2.433,
           "error": 0.0,
           "status": "PASS"
         },
@@ -1092,15 +1092,15 @@
     "E5_scf": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 0.12312067090533674,
-      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E5: SCF Engine \u2014 Test & Profile Suite                      \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E5.1: SCF Convergence (model problem) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  SCF               Pulay       n=8                3.255     8.243e-09  PASS (8 iters)\n  SCF               simple      n=8                0.152     7.581e-09  PASS (20 iters)\n  SCF               Pulay       n=16               0.365     6.341e-11  PASS (12 iters)\n  SCF               simple      n=16               0.421     5.804e-09  PASS (19 iters)\n  SCF               Pulay       n=32               3.354     1.739e-10  PASS (29 iters)\n  SCF               simple      n=32               1.520     4.916e-09  PASS (19 iters)\n  SCF               Pulay       n=64              83.657     2.930e-09  PASS (139 iters)\n  SCF               simple      n=64              21.258     7.790e-09  PASS (53 iters)\n\n=== E5.2: Energy Assembly ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  EnergyAssembly    components  n=8                0.000     0.000e+00  PASS\n  EnergyAssembly    components  n=16               0.001     0.000e+00  PASS\n  EnergyAssembly    components  n=32               0.004     0.000e+00  PASS\n\n=== E5.3: Stress Tensor (FD vs virial) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Stress            FD-vs-virial4 atoms            0.002     2.791e-13  PASS\n\n=== E5 Summary ===\nTotal profile entries: 12\nALL E5 TESTS PASSED\n",
+      "wall_s": 0.13874852494336665,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E5: SCF Engine \u2014 Test & Profile Suite                      \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E5.1: SCF Convergence (model problem) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  SCF               Pulay       n=8               27.830     8.243e-09  PASS (8 iters)\n  SCF               simple      n=8                0.168     7.581e-09  PASS (20 iters)\n  SCF               Pulay       n=16               0.397     6.341e-11  PASS (12 iters)\n  SCF               simple      n=16               0.436     5.804e-09  PASS (19 iters)\n  SCF               Pulay       n=32               3.405     1.739e-10  PASS (29 iters)\n  SCF               simple      n=32               1.520     4.916e-09  PASS (19 iters)\n  SCF               Pulay       n=64              77.819     5.891e-09  PASS (139 iters)\n  SCF               simple      n=64              21.221     7.790e-09  PASS (53 iters)\n\n=== E5.2: Energy Assembly ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  EnergyAssembly    components  n=8                0.000     0.000e+00  PASS\n  EnergyAssembly    components  n=16               0.001     0.000e+00  PASS\n  EnergyAssembly    components  n=32               0.004     0.000e+00  PASS\n\n=== E5.3: Stress Tensor (FD vs virial) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Stress            FD-vs-virial4 atoms            0.002     2.791e-13  PASS\n\n=== E5 Summary ===\nTotal profile entries: 12\nALL E5 TESTS PASSED\n",
       "stderr": "",
       "parsed_entries": [
         {
           "kernel": "SCF",
           "variant": "Pulay",
           "size": "n=8",
-          "time_ms": 3.255,
+          "time_ms": 27.83,
           "error": 8.243e-09,
           "status": "PASS (8 iters)"
         },
@@ -1108,7 +1108,7 @@
           "kernel": "SCF",
           "variant": "simple",
           "size": "n=8",
-          "time_ms": 0.152,
+          "time_ms": 0.168,
           "error": 7.581e-09,
           "status": "PASS (20 iters)"
         },
@@ -1116,7 +1116,7 @@
           "kernel": "SCF",
           "variant": "Pulay",
           "size": "n=16",
-          "time_ms": 0.365,
+          "time_ms": 0.397,
           "error": 6.341e-11,
           "status": "PASS (12 iters)"
         },
@@ -1124,7 +1124,7 @@
           "kernel": "SCF",
           "variant": "simple",
           "size": "n=16",
-          "time_ms": 0.421,
+          "time_ms": 0.436,
           "error": 5.804e-09,
           "status": "PASS (19 iters)"
         },
@@ -1132,7 +1132,7 @@
           "kernel": "SCF",
           "variant": "Pulay",
           "size": "n=32",
-          "time_ms": 3.354,
+          "time_ms": 3.405,
           "error": 1.739e-10,
           "status": "PASS (29 iters)"
         },
@@ -1148,15 +1148,15 @@
           "kernel": "SCF",
           "variant": "Pulay",
           "size": "n=64",
-          "time_ms": 83.657,
-          "error": 2.93e-09,
+          "time_ms": 77.819,
+          "error": 5.891e-09,
           "status": "PASS (139 iters)"
         },
         {
           "kernel": "SCF",
           "variant": "simple",
           "size": "n=64",
-          "time_ms": 21.258,
+          "time_ms": 21.221,
           "error": 7.79e-09,
           "status": "PASS (53 iters)"
         },
@@ -1197,7 +1197,7 @@
     "E6_dynamics": {
       "status": "fail",
       "returncode": 1,
-      "wall_s": 0.0011907459702342749,
+      "wall_s": 0.0013949780259281397,
       "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E6: Forces & Dynamics Engine \u2014 Test & Profile Suite        \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E6.1: Analytic Forces vs FD ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Forces            analytic-vs-FD4 atoms            0.003     2.944e-13  PASS\n\n=== E6.2: XL-BOMD NVE Energy Conservation ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  XLBOMD            NVE-drift   2 atoms, 100 steps     0.010     2.730e+04  FAIL\n  XLBOMD            solves/step 2 atoms            0.000     1.000e-02  PASS\n\n=== E6.3: Geometry Optimizers ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Optimizer         FIRE        2 atoms            0.005     9.748e-07  PASS (86 steps)\n\n=== E6 Summary ===\nTotal profile entries: 4\n1 E6 TEST(S) FAILED\n",
       "stderr": "",
       "parsed_entries": []
@@ -1205,8 +1205,8 @@
     "E7_parallel": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 7.782400214113295,
-      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.004     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.091     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.580     0.000e+00  PASS\n  Partitioner       RCB         10000/16           2.021     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.000     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.001     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.004     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.019     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n",
+      "wall_s": 7.818468023091555,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E7: Parallel Engine \u2014 Test & Profile Suite                 \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E7.1: Graph Partitioner (recursive bisection) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Partitioner       RCB         100/2              0.004     0.000e+00  PASS\n  Partitioner       RCB         1000/4             0.085     0.000e+00  PASS\n  Partitioner       RCB         4000/8             0.577     0.000e+00  PASS\n  Partitioner       RCB         10000/16           1.978     0.000e+00  PASS\n\n=== E7.2: Halo Exchange ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  HaloExchange      1D          100+2              0.000     0.000e+00  PASS\n  HaloExchange      1D          1000+4             0.001     0.000e+00  PASS\n  HaloExchange      1D          10000+8            0.004     0.000e+00  PASS\n  HaloExchange      3D          10^3+halo          0.018     0.000e+00  PASS\n\n=== E7.3: Communication Fraction Model ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  CommFraction      model       1MB/10ms           0.000     0.000e+00  PASS\n\n=== E7 Summary ===\nTotal profile entries: 9\nALL E7 TESTS PASSED\n",
       "stderr": "",
       "parsed_entries": [
         {
@@ -1221,7 +1221,7 @@
           "kernel": "Partitioner",
           "variant": "RCB",
           "size": "1000/4",
-          "time_ms": 0.091,
+          "time_ms": 0.085,
           "error": 0.0,
           "status": "PASS"
         },
@@ -1229,7 +1229,7 @@
           "kernel": "Partitioner",
           "variant": "RCB",
           "size": "4000/8",
-          "time_ms": 0.58,
+          "time_ms": 0.577,
           "error": 0.0,
           "status": "PASS"
         },
@@ -1237,7 +1237,7 @@
           "kernel": "Partitioner",
           "variant": "RCB",
           "size": "10000/16",
-          "time_ms": 2.021,
+          "time_ms": 1.978,
           "error": 0.0,
           "status": "PASS"
         },
@@ -1269,7 +1269,7 @@
           "kernel": "HaloExchange",
           "variant": "3D",
           "size": "10^3+halo",
-          "time_ms": 0.019,
+          "time_ms": 0.018,
           "error": 0.0,
           "status": "PASS"
         },
@@ -1286,8 +1286,8 @@
     "E8_hybrids": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 0.009902321035042405,
-      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E8: Hybrids Engine \u2014 Test & Profile Suite                  \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E8.1: D3 Dispersion ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  D3                pair        Z=1-1 R=3.000000     0.000    -3.653e-04  PASS\n  D3                pair        Z=6-6 R=3.500000     0.000    -5.213e-03  PASS\n  D3                pair        Z=8-8 R=3.000000     0.000    -1.040e-03  PASS\n  D3                pair        Z=6-8 R=3.200000     0.000    -2.309e-03  PASS\n  D3                H2O-dimer   6 atoms            0.001    -7.332e-03  PASS\n\n=== E8.2: ISDF (Interpolative Separable Density Fitting) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ISDF              select      100x10 r=5         0.021     3.866e-14  PASS\n  ISDF              select      500x20 r=10        0.266     6.447e-12  PASS\n  ISDF              select      2000x50 r=20       5.259     4.527e-14  PASS\n\n=== E8.3: ACE (Adaptively Compressed Exchange) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ACE               build       n=16 occ=4         0.001     0.000e+00  PASS\n  ACE               build       n=32 occ=8         0.002     0.000e+00  PASS\n  ACE               build       n=64 occ=16        0.007     0.000e+00  PASS\n  ACE               PBE0-energy formula            0.000     0.000e+00  PASS\n\n=== E8 Summary ===\nTotal profile entries: 12\nALL E8 TESTS PASSED\n",
+      "wall_s": 0.010210963897407055,
+      "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E8: Hybrids Engine \u2014 Test & Profile Suite                  \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E8.1: D3 Dispersion ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  D3                pair        Z=1-1 R=3.000000     0.000    -3.653e-04  PASS\n  D3                pair        Z=6-6 R=3.500000     0.000    -5.213e-03  PASS\n  D3                pair        Z=8-8 R=3.000000     0.000    -1.040e-03  PASS\n  D3                pair        Z=6-8 R=3.200000     0.000    -2.309e-03  PASS\n  D3                H2O-dimer   6 atoms            0.001    -7.332e-03  PASS\n\n=== E8.2: ISDF (Interpolative Separable Density Fitting) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ISDF              select      100x10 r=5         0.021     3.866e-14  PASS\n  ISDF              select      500x20 r=10        0.268     6.447e-12  PASS\n  ISDF              select      2000x50 r=20       5.311     4.527e-14  PASS\n\n=== E8.3: ACE (Adaptively Compressed Exchange) ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  ACE               build       n=16 occ=4         0.001     0.000e+00  PASS\n  ACE               build       n=32 occ=8         0.002     0.000e+00  PASS\n  ACE               build       n=64 occ=16        0.007     0.000e+00  PASS\n  ACE               PBE0-energy formula            0.000     0.000e+00  PASS\n\n=== E8 Summary ===\nTotal profile entries: 12\nALL E8 TESTS PASSED\n",
       "stderr": "",
       "parsed_entries": [
         {
@@ -1342,7 +1342,7 @@
           "kernel": "ISDF select",
           "variant": "500x20",
           "size": "r=10",
-          "time_ms": 0.266,
+          "time_ms": 0.268,
           "error": 6.447e-12,
           "status": "PASS"
         },
@@ -1350,7 +1350,7 @@
           "kernel": "ISDF select",
           "variant": "2000x50",
           "size": "r=20",
-          "time_ms": 5.259,
+          "time_ms": 5.311,
           "error": 4.527e-14,
           "status": "PASS"
         },
@@ -1391,7 +1391,7 @@
     "E9_verification": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 0.0011571149807423353,
+      "wall_s": 0.0013523860834538937,
       "stdout": "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n\u2551   E9: Verification Ladder \u2014 Test & Profile Suite             \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n\n=== E9: Verification Ladder ===\nKernel            Variant     Size            Time(ms)         Error  Status\n----------------------------------------------------------------------------------\n  Ladder-1          kernel      rho-build          0.000     7.000e-15  PASS\n  Ladder-2          operator    adjointness        0.000     2.000e-15  PASS\n  Ladder-3          energy      SCF-conv           0.000     5.000e-09  PASS\n  Ladder-4          force       5pt-FD             0.000     3.000e-13  PASS\n  Ladder-5          dynamics    NVE-drift          0.000     7.762e+03  KNOWN-ISSUE: short sim inflates drift\n  Ladder-6          physics     ACWF/Delta         0.000     0.000e+00  SKIP (deferred)\n\n\n=== TIDES Six-Rung Verification Ladder ===\n  rung  status  measured      budget        unit           name\n  ----  ------  -----------   -----------   -----------    ----\n     1  PASS     7.0000e-15   8.0000e+00  ULP           Kernel\n     2  PASS     2.0000e-15   1.0000e-12                Operator\n     3  PASS     5.0000e-09   5.0000e-04  Ha            Energy\n     4  PASS     3.0000e-13   1.0000e-06  Ha/Bohr       Force\n     5  SKIP     7.7620e+03   3.0000e+01  uHa/atom/ps   Dynamics\n     6  SKIP     0.0000e+00   0.0000e+00                Physics\n  === 4 pass, 0 fail, 2 skip ===\n  ALL RUNGS PASS (release-ready)\n\n=== E9 Summary ===\nTotal profile entries: 6\nALL E9 TESTS PASSED\n",
       "stderr": "",
       "parsed_entries": [
@@ -1506,56 +1506,56 @@
     "cuda_gemm": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 0.6544519178569317,
-      "stdout": "cuda_gemm_probe: problems=128 products=12595200 scale_abs_sum=71.6641 cpu_ref_ms=12.5463 gpu_total_ms=5.06858 gpu_kernel_ms=0.232448 kernel_gflops=108.37 mixed_total_ms=183.006 mixed_kernel_ms=46.0343 mixed_postprocess_ms=0.027296 mixed_shape_buckets=3 mixed_kernel_gflops=0.54721 plan_build_ms=123.555 planned_total_ms=6.57447 planned_samples=10 planned_kernel_ms=0.02672 planned_postprocess_ms=0.012704 planned_shape_buckets=3 planned_device_total_ms=0.039424 planned_kernel_gflops=942.754 cublas_shape_buckets=3 cublas_status=ok cublas_kernel_ms=0.023296 cublas_kernel_gflops=1081.32 cublaslt_shape_buckets=3 cublaslt_status=ok cublaslt_kernel_ms=0.021248 cublaslt_kernel_gflops=1185.54 planned_vs_cublas_ratio=1.14698 planned_vs_cublaslt_ratio=1.25753 mixed_abs_bound=0.00889787\n",
+      "wall_s": 0.7157036361750215,
+      "stdout": "cuda_gemm_probe: problems=128 products=12595200 scale_abs_sum=71.6641 cpu_ref_ms=12.5794 gpu_total_ms=13.3137 gpu_kernel_ms=0.236416 kernel_gflops=106.551 mixed_total_ms=195.513 mixed_kernel_ms=48.7567 mixed_postprocess_ms=0.027648 mixed_shape_buckets=3 mixed_kernel_gflops=0.516655 plan_build_ms=135.291 planned_total_ms=6.44929 planned_samples=10 planned_kernel_ms=0.025856 planned_postprocess_ms=0.012288 planned_shape_buckets=3 planned_device_total_ms=0.038144 planned_kernel_gflops=974.257 cublas_shape_buckets=3 cublas_status=ok cublas_kernel_ms=0.023392 cublas_kernel_gflops=1076.88 cublaslt_shape_buckets=3 cublaslt_status=ok cublaslt_kernel_ms=0.021152 cublaslt_kernel_gflops=1190.92 planned_vs_cublas_ratio=1.10534 planned_vs_cublaslt_ratio=1.22239 mixed_abs_bound=0.00889787\n",
       "stderr": "",
       "parsed": {
         "problems": 128.0,
         "products": 12595200.0,
         "scale_abs_sum": 71.6641,
-        "cpu_ref_ms": 12.5463,
-        "gpu_total_ms": 5.06858,
-        "gpu_kernel_ms": 0.232448,
-        "kernel_gflops": 108.37,
-        "mixed_total_ms": 183.006,
-        "mixed_kernel_ms": 46.0343,
-        "mixed_postprocess_ms": 0.027296,
+        "cpu_ref_ms": 12.5794,
+        "gpu_total_ms": 13.3137,
+        "gpu_kernel_ms": 0.236416,
+        "kernel_gflops": 106.551,
+        "mixed_total_ms": 195.513,
+        "mixed_kernel_ms": 48.7567,
+        "mixed_postprocess_ms": 0.027648,
         "mixed_shape_buckets": 3.0,
-        "mixed_kernel_gflops": 0.54721,
-        "plan_build_ms": 123.555,
-        "planned_total_ms": 6.57447,
+        "mixed_kernel_gflops": 0.516655,
+        "plan_build_ms": 135.291,
+        "planned_total_ms": 6.44929,
         "planned_samples": 10.0,
-        "planned_kernel_ms": 0.02672,
-        "planned_postprocess_ms": 0.012704,
+        "planned_kernel_ms": 0.025856,
+        "planned_postprocess_ms": 0.012288,
         "planned_shape_buckets": 3.0,
-        "planned_device_total_ms": 0.039424,
-        "planned_kernel_gflops": 942.754,
+        "planned_device_total_ms": 0.038144,
+        "planned_kernel_gflops": 974.257,
         "cublas_shape_buckets": 3.0,
         "cublas_status": "ok",
-        "cublas_kernel_ms": 0.023296,
-        "cublas_kernel_gflops": 1081.32,
+        "cublas_kernel_ms": 0.023392,
+        "cublas_kernel_gflops": 1076.88,
         "cublaslt_shape_buckets": 3.0,
         "cublaslt_status": "ok",
-        "cublaslt_kernel_ms": 0.021248,
-        "cublaslt_kernel_gflops": 1185.54,
-        "planned_vs_cublas_ratio": 1.14698,
-        "planned_vs_cublaslt_ratio": 1.25753,
+        "cublaslt_kernel_ms": 0.021152,
+        "cublaslt_kernel_gflops": 1190.92,
+        "planned_vs_cublas_ratio": 1.10534,
+        "planned_vs_cublaslt_ratio": 1.22239,
         "mixed_abs_bound": 0.00889787
       }
     },
     "cuda_ozaki_gemm": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 0.006457401905208826,
-      "stdout": "ozaki_gemm_probe: shape=32x32x32 a_slices=12 b_slices=12 slice_pairs=144 f64e_ms=0.037982 ozaki_ref_ms=5.0992 max_abs_diff=1.19209e-07 observed_bound=81.875 fp64_forward_bound=28421.7\n",
+      "wall_s": 0.006620101863518357,
+      "stdout": "ozaki_gemm_probe: shape=32x32x32 a_slices=12 b_slices=12 slice_pairs=144 f64e_ms=0.037822 ozaki_ref_ms=5.04964 max_abs_diff=1.19209e-07 observed_bound=81.875 fp64_forward_bound=28421.7\n",
       "stderr": "",
       "parsed": {}
     },
     "cuda_spgemm": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 0.2590304580517113,
-      "stdout": "cuda_spgemm_probe: n=256 edge=32 a_tiles=64 b_tiles=64\neps=0 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=12.9555 gpu_total_ms=1.92451 gpu_kernel_ms=0.269312\neps=4 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=12.5141 gpu_total_ms=1.41258 gpu_kernel_ms=0.2088\neps=16 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=12.4637 gpu_total_ms=1.3417 gpu_kernel_ms=0.208704\neps=32 candidates=512 retained=22 dropped=490 output_tiles=17 ledger_bound=13099.5 cpu_ms=1.04086 gpu_total_ms=1.03452 gpu_kernel_ms=0.024576\neps=64 candidates=512 retained=0 dropped=512 output_tiles=0 ledger_bound=13837.7 cpu_ms=0.483199 gpu_total_ms=0.524291 gpu_kernel_ms=0\n",
+      "wall_s": 0.2608390769455582,
+      "stdout": "cuda_spgemm_probe: n=256 edge=32 a_tiles=64 b_tiles=64\neps=0 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=12.8856 gpu_total_ms=5.63442 gpu_kernel_ms=0.264992\neps=4 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=12.3538 gpu_total_ms=4.92685 gpu_kernel_ms=0.201888\neps=16 candidates=512 retained=512 dropped=0 output_tiles=64 ledger_bound=0 cpu_ms=12.3708 gpu_total_ms=4.93854 gpu_kernel_ms=0.204576\neps=32 candidates=512 retained=22 dropped=490 output_tiles=17 ledger_bound=13099.5 cpu_ms=1.05817 gpu_total_ms=4.97202 gpu_kernel_ms=0.031424\neps=64 candidates=512 retained=0 dropped=512 output_tiles=0 ledger_bound=13837.7 cpu_ms=0.51174 gpu_total_ms=0.552537 gpu_kernel_ms=0\n",
       "stderr": "",
       "parsed": [
         {
@@ -1571,9 +1571,9 @@
           "dropped": 0.0,
           "output_tiles": 64.0,
           "ledger_bound": 0.0,
-          "cpu_ms": 12.9555,
-          "gpu_total_ms": 1.92451,
-          "gpu_kernel_ms": 0.269312
+          "cpu_ms": 12.8856,
+          "gpu_total_ms": 5.63442,
+          "gpu_kernel_ms": 0.264992
         },
         {
           "eps": 4.0,
@@ -1582,9 +1582,9 @@
           "dropped": 0.0,
           "output_tiles": 64.0,
           "ledger_bound": 0.0,
-          "cpu_ms": 12.5141,
-          "gpu_total_ms": 1.41258,
-          "gpu_kernel_ms": 0.2088
+          "cpu_ms": 12.3538,
+          "gpu_total_ms": 4.92685,
+          "gpu_kernel_ms": 0.201888
         },
         {
           "eps": 16.0,
@@ -1593,9 +1593,9 @@
           "dropped": 0.0,
           "output_tiles": 64.0,
           "ledger_bound": 0.0,
-          "cpu_ms": 12.4637,
-          "gpu_total_ms": 1.3417,
-          "gpu_kernel_ms": 0.208704
+          "cpu_ms": 12.3708,
+          "gpu_total_ms": 4.93854,
+          "gpu_kernel_ms": 0.204576
         },
         {
           "eps": 32.0,
@@ -1604,9 +1604,9 @@
           "dropped": 490.0,
           "output_tiles": 17.0,
           "ledger_bound": 13099.5,
-          "cpu_ms": 1.04086,
-          "gpu_total_ms": 1.03452,
-          "gpu_kernel_ms": 0.024576
+          "cpu_ms": 1.05817,
+          "gpu_total_ms": 4.97202,
+          "gpu_kernel_ms": 0.031424
         },
         {
           "eps": 64.0,
@@ -1615,8 +1615,8 @@
           "dropped": 512.0,
           "output_tiles": 0.0,
           "ledger_bound": 13837.7,
-          "cpu_ms": 0.483199,
-          "gpu_total_ms": 0.524291,
+          "cpu_ms": 0.51174,
+          "gpu_total_ms": 0.552537,
           "gpu_kernel_ms": 0.0
         }
       ]
@@ -1624,42 +1624,42 @@
     "cuda_reduce_f64e": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 7.28495752485469,
-      "stdout": "cuda_reduce_f64e_probe: n=1048576 dot_wall_ms=4755.87 dot_kernel_ms=28.0576 dot_gterms_s=0.0373723 dot_abs_error=1.71952e+10 dot_abs_bound=3.03606e+20 sum_wall_ms=2343.49 sum_kernel_ms=1.10592 sum_gterms_s=0.948148 trace_edge=1024 trace_wall_ms=3.09791 trace_kernel_ms=0.045056 trace_abs_error=2.76486e-09\n",
+      "wall_s": 7.298098933883011,
+      "stdout": "cuda_reduce_f64e_probe: n=1048576 dot_wall_ms=4705.39 dot_kernel_ms=29.0341 dot_gterms_s=0.0361153 dot_abs_error=1.71952e+10 dot_abs_bound=3.03606e+20 sum_wall_ms=2399.42 sum_kernel_ms=1.08032 sum_gterms_s=0.970616 trace_edge=1024 trace_wall_ms=3.18009 trace_kernel_ms=0.048128 trace_abs_error=2.76486e-09\n",
       "stderr": "",
       "parsed": {}
     },
     "cuda_graph": {
       "status": "pass",
       "returncode": 0,
-      "wall_s": 0.4563733341637999,
-      "stdout": "cuda_graph_probe: case=tiny_launch_bound problems=1 repeats=1000 raw_repeated_kernel_ms=3.77856 raw_repeated_wall_ms=3.78801 graph_setup_ms=4.23187 graph_replay_ms=3.2641 graph_replay_wall_ms=3.27542 raw_per_launch_us=3.77856 graph_per_captured_kernel_us=3.2641 launch_count_reduction=1000\ncuda_graph_probe: case=tiny_launch_bound_mixed problems=1 repeats=1000 raw_repeated_kernel_ms=2.95526 raw_repeated_wall_ms=2.96305 graph_setup_ms=2.09031 graph_replay_ms=2.48525 graph_replay_wall_ms=2.49646 raw_per_launch_us=2.95526 graph_per_captured_kernel_us=2.48525 launch_count_reduction=1000 mixed_abs_bound=0.0032571\ncuda_graph_probe: case=mixed_tile_compute problems=128 repeats=200 raw_repeated_kernel_ms=30.0646 raw_repeated_wall_ms=30.0799 graph_setup_ms=0.401834 graph_replay_ms=29.8926 graph_replay_wall_ms=29.906 raw_per_launch_us=150.323 graph_per_captured_kernel_us=149.463 launch_count_reduction=200\ncuda_graph_probe: case=mixed_tile_compute_fp16 problems=128 repeats=200 raw_repeated_kernel_ms=9.30125 raw_repeated_wall_ms=9.31318 graph_setup_ms=0.402005 graph_replay_ms=9.14022 graph_replay_wall_ms=9.14999 raw_per_launch_us=46.5062 graph_per_captured_kernel_us=45.7011 launch_count_reduction=200 mixed_abs_bound=0.00589567\n",
+      "wall_s": 0.49233169201761484,
+      "stdout": "cuda_graph_probe: case=tiny_launch_bound problems=1 repeats=1000 raw_repeated_kernel_ms=4.04883 raw_repeated_wall_ms=4.06042 graph_setup_ms=4.00821 graph_replay_ms=3.12691 graph_replay_wall_ms=3.21027 raw_per_launch_us=4.04883 graph_per_captured_kernel_us=3.12691 launch_count_reduction=1000\ncuda_graph_probe: case=tiny_launch_bound_mixed problems=1 repeats=1000 raw_repeated_kernel_ms=2.95014 raw_repeated_wall_ms=2.95708 graph_setup_ms=1.74912 graph_replay_ms=2.36579 graph_replay_wall_ms=2.44493 raw_per_launch_us=2.95014 graph_per_captured_kernel_us=2.36579 launch_count_reduction=1000 mixed_abs_bound=0.0032571\ncuda_graph_probe: case=mixed_tile_compute problems=128 repeats=200 raw_repeated_kernel_ms=31.6897 raw_repeated_wall_ms=31.7082 graph_setup_ms=0.392824 graph_replay_ms=30.4188 graph_replay_wall_ms=30.4385 raw_per_launch_us=158.449 graph_per_captured_kernel_us=152.094 launch_count_reduction=200\ncuda_graph_probe: case=mixed_tile_compute_fp16 problems=128 repeats=200 raw_repeated_kernel_ms=9.29821 raw_repeated_wall_ms=9.30793 graph_setup_ms=0.391146 graph_replay_ms=9.13085 graph_replay_wall_ms=9.14166 raw_per_launch_us=46.491 graph_per_captured_kernel_us=45.6542 launch_count_reduction=200 mixed_abs_bound=0.00589567\n",
       "stderr": "",
       "parsed": [
         {
           "case": "tiny_launch_bound",
           "problems": 1.0,
           "repeats": 1000.0,
-          "raw_repeated_kernel_ms": 3.77856,
-          "raw_repeated_wall_ms": 3.78801,
-          "graph_setup_ms": 4.23187,
-          "graph_replay_ms": 3.2641,
-          "graph_replay_wall_ms": 3.27542,
-          "raw_per_launch_us": 3.77856,
-          "graph_per_captured_kernel_us": 3.2641,
+          "raw_repeated_kernel_ms": 4.04883,
+          "raw_repeated_wall_ms": 4.06042,
+          "graph_setup_ms": 4.00821,
+          "graph_replay_ms": 3.12691,
+          "graph_replay_wall_ms": 3.21027,
+          "raw_per_launch_us": 4.04883,
+          "graph_per_captured_kernel_us": 3.12691,
           "launch_count_reduction": 1000.0
         },
         {
           "case": "tiny_launch_bound_mixed",
           "problems": 1.0,
           "repeats": 1000.0,
-          "raw_repeated_kernel_ms": 2.95526,
-          "raw_repeated_wall_ms": 2.96305,
-          "graph_setup_ms": 2.09031,
-          "graph_replay_ms": 2.48525,
-          "graph_replay_wall_ms": 2.49646,
-          "raw_per_launch_us": 2.95526,
-          "graph_per_captured_kernel_us": 2.48525,
+          "raw_repeated_kernel_ms": 2.95014,
+          "raw_repeated_wall_ms": 2.95708,
+          "graph_setup_ms": 1.74912,
+          "graph_replay_ms": 2.36579,
+          "graph_replay_wall_ms": 2.44493,
+          "raw_per_launch_us": 2.95014,
+          "graph_per_captured_kernel_us": 2.36579,
           "launch_count_reduction": 1000.0,
           "mixed_abs_bound": 0.0032571
         },
@@ -1667,26 +1667,26 @@
           "case": "mixed_tile_compute",
           "problems": 128.0,
           "repeats": 200.0,
-          "raw_repeated_kernel_ms": 30.0646,
-          "raw_repeated_wall_ms": 30.0799,
-          "graph_setup_ms": 0.401834,
-          "graph_replay_ms": 29.8926,
-          "graph_replay_wall_ms": 29.906,
-          "raw_per_launch_us": 150.323,
-          "graph_per_captured_kernel_us": 149.463,
+          "raw_repeated_kernel_ms": 31.6897,
+          "raw_repeated_wall_ms": 31.7082,
+          "graph_setup_ms": 0.392824,
+          "graph_replay_ms": 30.4188,
+          "graph_replay_wall_ms": 30.4385,
+          "raw_per_launch_us": 158.449,
+          "graph_per_captured_kernel_us": 152.094,
           "launch_count_reduction": 200.0
         },
         {
           "case": "mixed_tile_compute_fp16",
           "problems": 128.0,
           "repeats": 200.0,
-          "raw_repeated_kernel_ms": 9.30125,
-          "raw_repeated_wall_ms": 9.31318,
-          "graph_setup_ms": 0.402005,
-          "graph_replay_ms": 9.14022,
-          "graph_replay_wall_ms": 9.14999,
-          "raw_per_launch_us": 46.5062,
-          "graph_per_captured_kernel_us": 45.7011,
+          "raw_repeated_kernel_ms": 9.29821,
+          "raw_repeated_wall_ms": 9.30793,
+          "graph_setup_ms": 0.391146,
+          "graph_replay_ms": 9.13085,
+          "graph_replay_wall_ms": 9.14166,
+          "raw_per_launch_us": 46.491,
+          "graph_per_captured_kernel_us": 45.6542,
           "launch_count_reduction": 200.0,
           "mixed_abs_bound": 0.00589567
         }
