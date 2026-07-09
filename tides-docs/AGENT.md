@@ -14,7 +14,7 @@ When applicable: algorithms, performance, memory, CPU/GPU profiling, numerical s
 
 PHASE H — HANDOFF: Verify acceptance criteria. Update ledger.md. Commit with descriptive message.
 
-RULES: No assumptions. Ask if unclear. Fail-fast. Minimal but complete. 
+RULES: No assumptions. Ask if unclear. Fail-fast. Minimal but complete.  Less is more
 Decision Principle:
 Accuracy > Speed.
 Evidence > Assumption.

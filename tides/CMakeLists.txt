@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(TIDES_ENABLE_CUDA "Build CUDA WP1 substrate probes when CUDA is available" ON)
+option(TIDES_ENABLE_HIP "Build HIP/ROCm backend when available" OFF)
 
 add_library(tides_core INTERFACE)
 target_include_directories(tides_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
@@ -54,6 +55,10 @@ add_test(NAME precision_descriptor_and_ledger_contracts COMMAND tides_precision_
 add_executable(tides_ops_tests core/tile/tests/ops_tests.cpp)
 target_link_libraries(tides_ops_tests PRIVATE tides_core)
 add_test(NAME tile_ops_analytical_contracts COMMAND tides_ops_tests)
+
+add_executable(tides_bloch_phase_tests core/tile/tests/bloch_phase_tests.cpp)
+target_link_libraries(tides_bloch_phase_tests PRIVATE tides_core)
+add_test(NAME bloch_phase_periodic_tiles COMMAND tides_bloch_phase_tests)
 
 add_executable(tides_tile_ops_probe core/tile/tests/tile_ops_probe.cpp)
 target_link_libraries(tides_tile_ops_probe PRIVATE tides_core)
@@ -310,6 +315,10 @@ if(TIDES_ENABLE_CUDA)
   endif()
 endif()
 
+# --- HIP / ROCm backend (T1.8) ----------------------------------------------
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/hip.cmake)
+
 # --- WP2: Basis & integrals (CPU foundation) ---------------------------------
 
 # LAPACK/BLAS for the dense symmetric eigensolver used by the atomic radial
@@ -424,6 +433,11 @@ target_link_libraries(tides_poisson_tests PRIVATE tides_grid)
 add_test(NAME wp3_poisson_gaussian_charge_all_bcs
   COMMAND tides_poisson_tests)
 
+add_executable(tides_isf_poisson_tests
+  core/grid/tests/isf_poisson_tests.cpp)
+target_link_libraries(tides_isf_poisson_tests PRIVATE tides_grid)
+add_test(NAME isf_poisson_nonperiodic_bcs COMMAND tides_isf_poisson_tests)
+
 add_executable(tides_grid_ops_tests
   core/grid/tests/grid_ops_tests.cpp)
 target_link_libraries(tides_grid_ops_tests PRIVATE tides_grid)
@@ -435,6 +449,22 @@ add_executable(tides_libxc_pbe_tests
   core/grid/tests/libxc_pbe_tests.cpp)
 target_link_libraries(tides_libxc_pbe_tests PRIVATE tides_grid)
 add_test(NAME wp3_libxc_pbe_vs_analytical COMMAND tides_libxc_pbe_tests)
+
+add_executable(tides_collinear_spin_xc_tests
+  core/grid/tests/collinear_spin_xc_tests.cpp)
+target_link_libraries(tides_collinear_spin_xc_tests PRIVATE tides_grid)
+add_test(NAME collinear_spin_xc COMMAND tides_collinear_spin_xc_tests)
+
+add_executable(tides_qtt_tests
+  core/grid/tests/qtt_tests.cpp)
+target_link_libraries(tides_qtt_tests PRIVATE tides_grid)
+add_test(NAME qtt_rho_poisson_prototype COMMAND tides_qtt_tests)
+
+# T3.9: ESP / Prolate Ewald backend
+add_executable(tides_prolate_ewald_tests
+  core/grid/tests/prolate_ewald_tests.cpp)
+target_link_libraries(tides_prolate_ewald_tests PRIVATE tides_grid)
+add_test(NAME t39_prolate_ewald_esp COMMAND tides_prolate_ewald_tests)
 
 # --- WP4: Mid-range solvers (CPU foundation) ---------------------------------
 
@@ -451,10 +481,20 @@ add_executable(tides_wp4_tests
 target_link_libraries(tides_wp4_tests PRIVATE tides_solvers)
 add_test(NAME wp4_solvers_broker_chfsi_omm COMMAND tides_wp4_tests)
 
+add_executable(tides_cusolver_batched_tests
+  core/solvers/tests/cusolver_batched_tests.cpp)
+target_link_libraries(tides_cusolver_batched_tests PRIVATE tides_solvers)
+add_test(NAME cusolver_syevj_batched COMMAND tides_cusolver_batched_tests)
+
 add_executable(tides_wp5_tests
   core/solvers/tests/wp5_tests.cpp)
 target_link_libraries(tides_wp5_tests PRIVATE tides_solvers)
 add_test(NAME wp5_sp2_submatrix_foe_fermi_truncation COMMAND tides_wp5_tests)
+
+add_executable(tides_gpu_foe_tests
+  core/solvers/tests/gpu_foe_tests.cpp)
+target_link_libraries(tides_gpu_foe_tests PRIVATE tides_solvers)
+add_test(NAME gpu_foe_r3_dispatch COMMAND tides_gpu_foe_tests)
 
 # --- P3: Physics validation tests ---
 add_executable(tides_physics_tests
@@ -489,6 +529,44 @@ if(LAPACK_FOUND)
 endif()
 set_target_properties(tides_benchmark PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
+
+# T5.8: 10⁴-atom single-card benchmark
+add_executable(tides_10k_atom_benchmark
+  core/solvers/tests/t58_10k_atom_benchmark.cpp)
+target_link_libraries(tides_10k_atom_benchmark PRIVATE tides_solvers tides_basis)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_10k_atom_benchmark PRIVATE ${LAPACK_LIBRARIES})
+endif()
+add_test(NAME t58_10k_atom_single_card COMMAND tides_10k_atom_benchmark)
+
+# T5.9: Distributed R2/R3 scaling simulation (Phase C)
+add_executable(tides_distributed_scaling_tests
+  core/parallel/tests/t59_distributed_scaling.cpp)
+target_link_libraries(tides_distributed_scaling_tests PRIVATE tides_core)
+add_test(NAME t59_distributed_scaling COMMAND tides_distributed_scaling_tests)
+
+# T8.6: MPI + NVSHMEM multi-node (Phase C)
+add_executable(tides_mpi_nvshmem_tests
+  core/parallel/tests/t86_mpi_nvshmem_tests.cpp)
+target_link_libraries(tides_mpi_nvshmem_tests PRIVATE tides_core)
+add_test(NAME t86_mpi_nvshmem COMMAND tides_mpi_nvshmem_tests)
+
+# L-BFGS optimizer tests
+add_executable(tides_lbfgs_tests
+  core/dynamics/tests/lbfgs_tests.cpp)
+target_link_libraries(tides_lbfgs_tests PRIVATE tides_scf)
+add_test(NAME lbfgs_optimizer COMMAND tides_lbfgs_tests)
+
+# Broyden mixer tests
+add_executable(tides_broyden_mixer_tests
+  core/scf/tests/broyden_mixer_tests.cpp)
+target_link_libraries(tides_broyden_mixer_tests PRIVATE tides_scf)
+add_test(NAME broyden_mixer COMMAND tides_broyden_mixer_tests)
+
+# Roofline analysis for GPU kernels
+add_executable(tides_roofline_analysis
+  bench/roofline_analysis.cpp)
+add_test(NAME roofline_analysis COMMAND tides_roofline_analysis)
 
 # --- Per-Engine Test & Profile Suites (E1-E8) ---
 add_executable(tides_e1_tile_profile
@@ -579,6 +657,21 @@ add_executable(tides_wp6_tests
 target_link_libraries(tides_wp6_tests PRIVATE tides_scf)
 add_test(NAME wp6_scf_forces_xlbomd_optimizers_stress COMMAND tides_wp6_tests)
 
+add_executable(tides_ewald_tests
+  core/scf/tests/ewald_tests.cpp)
+target_link_libraries(tides_ewald_tests PRIVATE tides_scf)
+add_test(NAME ewald_periodic_ion_ion COMMAND tides_ewald_tests)
+
+add_executable(tides_neb_tests
+  core/dynamics/tests/neb_tests.cpp)
+target_link_libraries(tides_neb_tests PRIVATE tides_core)
+add_test(NAME neb_climbing_image COMMAND tides_neb_tests)
+
+add_executable(tides_md_throughput_bench
+  core/dynamics/tests/md_throughput_bench.cpp)
+target_link_libraries(tides_md_throughput_bench PRIVATE tides_core)
+add_test(NAME md_throughput_vs_anchors COMMAND tides_md_throughput_bench)
+
 # --- WP7: Hybrids, dispersion (CPU foundation) -------------------------------
 
 add_library(tides_hybrids INTERFACE)
@@ -594,6 +687,11 @@ add_executable(tides_wp7_tests
 target_link_libraries(tides_wp7_tests PRIVATE tides_hybrids)
 add_test(NAME wp7_hybrids_d3_isdf_ace_paw COMMAND tides_wp7_tests)
 
+add_executable(tides_hse_screening_tests
+  core/hybrids/tests/hse_screening_tests.cpp)
+target_link_libraries(tides_hse_screening_tests PRIVATE tides_hybrids)
+add_test(NAME hse_short_range_screening COMMAND tides_hse_screening_tests)
+
 # --- WP8: Parallel, HPC, packaging (CPU foundation) -------------------------
 
 add_library(tides_parallel_lib INTERFACE)
@@ -605,6 +703,11 @@ add_executable(tides_wp8_tests
 target_link_libraries(tides_wp8_tests PRIVATE tides_parallel_lib)
 add_test(NAME wp8_stage_dump_partitioner_halo_packaging COMMAND tides_wp8_tests)
 
+add_executable(tides_multi_gpu_tests
+  core/parallel/tests/multi_gpu_tests.cpp)
+target_link_libraries(tides_multi_gpu_tests PRIVATE tides_parallel_lib)
+add_test(NAME multi_gpu_nccl_data_model COMMAND tides_multi_gpu_tests)
+
 # --- WP9: Verification & benchmarks (the red team) ---------------------------
 
 add_library(tides_verification_lib INTERFACE)
@@ -615,6 +718,26 @@ add_executable(tides_wp9_tests
   core/verification/tests/wp9_tests.cpp)
 target_link_libraries(tides_wp9_tests PRIVATE tides_verification_lib)
 add_test(NAME wp9_ladder_runner_reference_data_ab_fd_dashboard COMMAND tides_wp9_tests)
+
+add_executable(tides_ab_harness_tests
+  core/verification/tests/ab_harness_tests.cpp)
+target_link_libraries(tides_ab_harness_tests PRIVATE tides_verification_lib)
+add_test(NAME ab_harness_nightly_automation COMMAND tides_ab_harness_tests)
+
+add_executable(tides_competitor_farm_tests
+  core/verification/tests/competitor_farm_tests.cpp)
+target_link_libraries(tides_competitor_farm_tests PRIVATE tides_verification_lib)
+add_test(NAME competitor_farm_containers_parsers COMMAND tides_competitor_farm_tests)
+
+add_executable(tides_regression_dashboard_tests
+  core/verification/tests/regression_dashboard_tests.cpp)
+target_link_libraries(tides_regression_dashboard_tests PRIVATE tides_verification_lib)
+add_test(NAME regression_dashboard_energy_metering COMMAND tides_regression_dashboard_tests)
+
+add_executable(tides_campaign_runner_tests
+  core/verification/tests/campaign_runner_tests.cpp)
+target_link_libraries(tides_campaign_runner_tests PRIVATE tides_verification_lib)
+add_test(NAME campaign_runner_reproducibility_archiver COMMAND tides_campaign_runner_tests)
 
 # --- WP10: API, docs, community, releases -----------------------------------
 # T10.1: Nanobind Python bindings (optional — requires nanobind installed)
