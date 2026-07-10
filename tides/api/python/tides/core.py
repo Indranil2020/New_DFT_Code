@@ -46,6 +46,8 @@ class SCFResult:
     """Whether SCF converged within tolerance."""
     energy_history: list[float] = field(default_factory=list)
     """Energy at each SCF iteration."""
+    timings: dict = field(default_factory=dict)
+    """Per-component pipeline timings (rho_build, xc_eval, vmat_build, etc.)."""
 
 
 @dataclass
@@ -300,6 +302,8 @@ class TidesCalculator:
             grid_margin = getattr(self._config.grid, 'margin', 4.0)
             max_iter = getattr(self._config.scf, 'max_iter', 100)
             tol = getattr(self._config.scf, 'energy_tol', 1e-8)
+            xc_func = getattr(self._config.scf, 'xc_functional', 'lda')
+            use_grid_h = getattr(self._config.scf, 'use_grid_hartree', False)
 
             cpp_result = _NATIVE.MoleculeDriver.run(
                 mol=mol,
@@ -307,10 +311,13 @@ class TidesCalculator:
                 grid_margin=grid_margin,
                 max_iter=max_iter,
                 tol=tol,
+                use_grid_hartree=use_grid_h,
+                xc_functional=xc_func,
             )
 
             # Convert C++ MoleculeDriverResult to Python SCFResult
             e = cpp_result.energy
+            t = cpp_result.timings
             result = SCFResult(
                 energy=cpp_result.scf.energy,
                 energy_components={
@@ -326,6 +333,18 @@ class TidesCalculator:
                 n_iterations=cpp_result.scf.n_iterations,
                 converged=cpp_result.scf.converged,
                 energy_history=list(cpp_result.scf.energy_history),
+                timings={
+                    "rho_build_ms": t.rho_build_ms,
+                    "xc_eval_ms": t.xc_eval_ms,
+                    "poisson_ms": t.poisson_ms,
+                    "vmat_build_ms": t.vmat_build_ms,
+                    "scf_total_ms": t.scf_total_ms,
+                    "n_iterations": t.n_iterations,
+                    "used_gpu_xc": t.used_gpu_xc,
+                    "used_grid_hartree": t.used_grid_hartree,
+                    "xc_functional": t.xc_functional,
+                    "wall_time_ms": cpp_result.wall_time_ms,
+                },
             )
             self._last_scf = result
             return Result.ok(result)

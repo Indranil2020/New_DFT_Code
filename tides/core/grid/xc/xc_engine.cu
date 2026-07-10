@@ -9,6 +9,16 @@
 #include <cstring>
 #include <iostream>
 
+// CPU functors for Tier-0 functionals (included at file scope, not inside
+// functions, because the .cuh files contain namespace blocks).
+// Guarded from nvcc: gga_pbe.cuh uses floating-point template parameters
+// which are a GCC extension not supported by nvcc.
+#ifndef __CUDACC__
+#include "grid/xc/functionals/lda_slater.cuh"
+#include "grid/xc/functionals/lda_pw92.cuh"
+#include "grid/xc/functionals/gga_pbe.cuh"
+#endif
+
 #ifdef TIDES_HAVE_CUDA
 #include <cuda_runtime.h>
 #include "grid/xc/kernels/xc_lda_kernel.cu"
@@ -145,12 +155,10 @@ static bool CudaXcEvalGga(const XcGridIn& in, XcGridOut& out, std::string& error
 
 #endif // TIDES_HAVE_CUDA
 
+#ifndef __CUDACC__
 // CPU fallback for Tier-0 functionals (also used when CUDA is not available).
+// Not compiled by nvcc due to floating-point template parameters in functors.
 static bool CpuXcEvalLda(const XcGridIn& in, XcGridOut& out) {
-  // Include functors for CPU path.
-#include "grid/xc/functionals/lda_slater.cuh"
-#include "grid/xc/functionals/lda_pw92.cuh"
-
   auto t0 = std::chrono::steady_clock::now();
   double energy = 0.0;
   for (std::size_t i = 0; i < in.np; ++i) {
@@ -170,8 +178,6 @@ static bool CpuXcEvalLda(const XcGridIn& in, XcGridOut& out) {
 }
 
 static bool CpuXcEvalGga(const XcGridIn& in, XcGridOut& out) {
-#include "grid/xc/functionals/gga_pbe.cuh"
-
   auto t0 = std::chrono::steady_clock::now();
   double energy = 0.0;
   for (std::size_t i = 0; i < in.np; ++i) {
@@ -203,6 +209,9 @@ static bool CpuXcEvalGga(const XcGridIn& in, XcGridOut& out) {
   return true;
 }
 
+#endif // __CUDACC__
+
+// XcEval dispatch: routes to CUDA when available, CPU fallback otherwise.
 bool XcEval(const XcSpec& spec, const XcGridIn& in, XcGridOut& out,
             std::string& error_msg) {
   if (in.np == 0) {

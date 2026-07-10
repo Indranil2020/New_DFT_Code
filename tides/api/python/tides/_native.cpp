@@ -188,6 +188,20 @@ NB_MODULE(_native, m) {
     // AUDIT C7: MoleculeDriver bindings — the real GTO-based SCF engine.
     // This replaces the model Hamiltonian stub in Python.
     // EnergyComponents already bound above as CppEnergyComponents.
+
+    // PipelineTimings: per-component profiling data (Audit P3).
+    nb::class_<scf::PipelineTimings>(m, "PipelineTimings")
+        .def_ro("rho_build_ms", &scf::PipelineTimings::rho_build_ms)
+        .def_ro("xc_eval_ms", &scf::PipelineTimings::xc_eval_ms)
+        .def_ro("poisson_ms", &scf::PipelineTimings::poisson_ms)
+        .def_ro("vmat_build_ms", &scf::PipelineTimings::vmat_build_ms)
+        .def_ro("eigensolve_ms", &scf::PipelineTimings::eigensolve_ms)
+        .def_ro("scf_total_ms", &scf::PipelineTimings::scf_total_ms)
+        .def_ro("n_iterations", &scf::PipelineTimings::n_iterations)
+        .def_ro("used_gpu_xc", &scf::PipelineTimings::used_gpu_xc)
+        .def_ro("used_grid_hartree", &scf::PipelineTimings::used_grid_hartree)
+        .def_ro("xc_functional", &scf::PipelineTimings::xc_functional);
+
     nb::class_<scf::MoleculeDriverResult>(m, "MoleculeDriverResult")
         .def_rw("scf", &scf::MoleculeDriverResult::scf)
         .def_rw("energy", &scf::MoleculeDriverResult::energy)
@@ -196,7 +210,8 @@ NB_MODULE(_native, m) {
         .def_rw("n_atoms", &scf::MoleculeDriverResult::n_atoms)
         .def_rw("grid_h", &scf::MoleculeDriverResult::grid_h)
         .def_rw("wall_time_ms", &scf::MoleculeDriverResult::wall_time_ms)
-        .def_rw("forces", &scf::MoleculeDriverResult::forces);
+        .def_rw("forces", &scf::MoleculeDriverResult::forces)
+        .def_rw("timings", &scf::MoleculeDriverResult::timings);
 
     nb::class_<scf::GTOMolecule>(m, "GTOMolecule")
         .def_rw("atomic_numbers", &scf::GTOMolecule::atomic_numbers)
@@ -210,11 +225,32 @@ NB_MODULE(_native, m) {
         }, nb::arg("atomic_numbers"), nb::arg("positions"))
         .def_static("run", [](const scf::GTOMolecule& mol,
                               double grid_h, double grid_margin,
-                              int max_iter, double tol) {
-            return scf::MoleculeDriver::Run(mol, grid_h, grid_margin, max_iter, tol);
+                              int max_iter, double tol,
+                              bool use_grid_hartree,
+                              const std::string& xc_functional) {
+            // Map string to XcSpec.
+            grid::xc::XcSpec spec{};
+            if (xc_functional == "pbe" || xc_functional == "PBE") {
+                spec.id = grid::xc::XcFunctionalId::kPbe;
+                spec.family = grid::xc::XcFamily::kGga;
+            } else if (xc_functional == "pbesol" || xc_functional == "PBEsol") {
+                spec.id = grid::xc::XcFunctionalId::kPbesol;
+                spec.family = grid::xc::XcFamily::kGga;
+            } else if (xc_functional == "revpbe" || xc_functional == "revPBE") {
+                spec.id = grid::xc::XcFunctionalId::kRevPbe;
+                spec.family = grid::xc::XcFamily::kGga;
+            } else {
+                // Default: LDA-PW92.
+                spec.id = grid::xc::XcFunctionalId::kLdaPw92;
+                spec.family = grid::xc::XcFamily::kLda;
+            }
+            return scf::MoleculeDriver::Run(mol, grid_h, grid_margin, max_iter, tol,
+                                             use_grid_hartree, spec);
         }, nb::arg("mol"),
            nb::arg("grid_h") = 0.3, nb::arg("grid_margin") = 4.0,
-           nb::arg("max_iter") = 100, nb::arg("tol") = 1e-8)
+           nb::arg("max_iter") = 100, nb::arg("tol") = 1e-8,
+           nb::arg("use_grid_hartree") = false,
+           nb::arg("xc_functional") = std::string("lda"))
         .def_static("compute_forces", [](const scf::GTOMolecule& mol,
                                          const scf::SCFResult& scf_result,
                                          const scf::EnergyComponents& energy) {

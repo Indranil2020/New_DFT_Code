@@ -237,7 +237,8 @@ if(TIDES_ENABLE_CUDA)
       core/grid/rho_build.cu
       core/grid/poisson_fft.cu
       core/grid/vmat_build.cu
-      core/grid/xc.cu)
+      core/grid/xc.cu
+      core/grid/xc/xc_engine.cu)
     target_link_libraries(tides_cuda_grid PUBLIC tides_grid tides_cuda_tile cufft)
     target_compile_options(tides_cuda_grid PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
@@ -659,6 +660,17 @@ target_link_libraries(tides_scf INTERFACE tides_solvers tides_basis)
 if(LAPACK_FOUND)
   target_link_libraries(tides_scf INTERFACE ${LAPACK_LIBRARIES})
   target_compile_definitions(tides_scf INTERFACE TIDES_HAVE_LAPACK=1)
+endif()
+
+# P2: XC engine — compiled as CPU-only when CUDA is off, linked from
+# tides_cuda_grid when CUDA is on.
+if(TIDES_HAVE_CUDA)
+  target_link_libraries(tides_scf INTERFACE tides_cuda_grid)
+else()
+  add_library(tides_xc_engine_cpu STATIC core/grid/xc/xc_engine_cpu.cpp)
+  target_link_libraries(tides_xc_engine_cpu PUBLIC tides_grid)
+  set_target_properties(tides_xc_engine_cpu PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_link_libraries(tides_scf INTERFACE tides_xc_engine_cpu)
 endif()
 
 add_executable(tides_wp6_tests

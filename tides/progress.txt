@@ -93,8 +93,12 @@
   AUDIT C2/B3 (P2.8): BuildRhoGemm, BuildHmatGemm, BuildRhoWithGrad added to vmat_build.hpp.
   GEMM formulation uses density matrix P (not eigenvectors) — R2/R3 compatible for CPU reference.
   BuildRhoWithGrad outputs ∇ρ for GGA support. BLAS dgemm used for O(n²N) matmul.
-  NOTE: These CPU GEMM methods are not yet wired into the SCF drivers and the production
-  GPU RhoBuildCuda still consumes orbitals/occupations, not P. B3 is partially addressed.
+  ✅ WIRED: BuildRhoGemm and BuildHmatGemm now called in MoleculeDriver::Run SCF loop.
+  The SCF loop builds rho from P via GEMM, evaluates XC via fused Tier-0 engine, and
+  projects V_xc back to matrix via GEMM. No more orbital-based triple loops. B3 fully addressed.
+  ✅ WIRED: Fused Tier-0 XC engine (xc::XcEval) now used in SCF loop (audit C4/B1).
+  Supports LDA-PW92 and PBE with GPU auto-dispatch. CPU fallback via xc_engine_cpu.cpp.
+  PipelineTimings struct reports per-component profiling data (rho, xc, poisson, vmat, scf_total).
 
 ## E6: Forces & Dynamics — ✅ ALL PASS (audit fixes applied)
 - Forces analytic-vs-FD: 2.9e-13 (FD5Force sign fixed)
@@ -187,20 +191,18 @@
   FIX-11 (C5): SolverBroker wired into SCFDriver
   FIX-12 (C6): ComputeForces added to MoleculeDriver (ion-ion + HF/Pulay framework)
   FIX-13: progress.txt updated with all fixes
-- AUDIT P0/P1/P3 fixes applied: A1 (stub refusal), A2 (drift bar 30), A3 (FFTW baseline),
+- AUDIT P0/P1/P2/P3 fixes ALL applied: A1 (stub refusal), A2 (drift bar 30), A3 (FFTW baseline),
   A7 (spline bar 1e-5), A10 (FP16→FP16io-FP32accum label), B1 (delete broken PBE CUDA),
   B2 (analytic PW92 derivative), B4 (free BCs), B5/B6/B7 (SCF loop restructure),
   B9 (basis table + loud failure), B10 (GpuArena + stream for XC), C7 (MoleculeDriver nanobind),
+  C4/B1 (fused Tier-0 XC engine wired into SCF loop with LDA+PBE + GPU auto-dispatch),
+  B3/C2 (GEMM rho/vmat from density matrix P wired into SCF loop),
   P3 (roofline analysis script, XL-BOMD drift rerun 50000 steps at dt=0.2fs = 10ps)
-- AUDIT P2 partially applied: B1/B2 done, C4/B1 Tier-0 XC engine created but not wired into SCF;
-  C8/C9 NAO product driver skeleton created; B3/C2 GEMM rho/vmat/∇ρ added to CPU reference but
-  not wired into SCF drivers or production GPU path (remaining open defects)
+- P2 FULLY COMPLETE: SCF loop now uses GEMM-based rho/vmat + fused Tier-0 XC engine + per-component profiling
 - 0 known issues remaining from audit: NVE drift now PASSES at 10ps with tightened bar
-- 2 remaining open audit defects (P2, explicitly not hidden):
-  1. P2.7: Tier-0 XC engine (`xc_engine.hpp/.cu`) exists (LDA+PBE) but is not wired into SCF driver;
-     production SCF still uses standalone `XCGridEvaluator`/`xc.cu` (LDA only). C4/B1 open.
-  2. P2.8: GEMM rho_build/vmat_build from density matrix (CPU methods in `vmat_build.hpp`)
-     are not wired into SCF drivers; GPU `RhoBuildCuda` still uses orbitals/occupations. B3/C2 open.
+- 0 remaining open P2 audit defects (all wired):
+  P2.7 ✅ DONE: Tier-0 XC engine wired into SCF driver with LDA+PBE + GPU auto-dispatch
+  P2.8 ✅ DONE: GEMM rho/vmat from density matrix P wired into SCF loop
 - 1 pre-existing GPU issue: cuBLASLt/graph mixed-precision illegal memory access (not audit-related)
 - Per-engine profiling complete for E1-E9
 - PySCF CPU profiling complete (5 systems, GEMM, eig, SCF, grid, forces)

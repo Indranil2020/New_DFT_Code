@@ -49,7 +49,7 @@ struct PbeExchange {
   // eps_x^GGA = eps_x^LDA * F_x(s)
   static double Eps(double rho, double sigma) {
     if (rho < detail::kRhoMin) return 0.0;
-    const double s2 = detail::ReducedGradient(rho, sigma);
+    double s2 = detail::ReducedGradient(rho, sigma);
     s2 *= s2;  // s^2
     return LdaSlater::Eps(rho) * Fx(s2);
   }

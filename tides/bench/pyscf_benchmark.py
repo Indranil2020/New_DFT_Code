@@ -112,15 +112,19 @@ def run_tides_atom(symbol, basis='DZP'):
 
         t0 = time.perf_counter()
         result = MoleculeDriver.run(mol=mol, grid_h=0.25, grid_margin=4.0,
-                                     max_iter=200, tol=1e-8)
+                                     max_iter=200, tol=1e-8,
+                                     use_grid_hartree=False,
+                                     xc_functional='lda')
         t1 = time.perf_counter()
 
+        t = result.timings
         return {
             'system': f"{symbol} atom",
-            'method': f'TIDES MoleculeDriver LDA (STO-3G)',
+            'method': f'TIDES MoleculeDriver LDA (STO-3G, GEMM+XC engine)',
             'basis': 'STO-3G',
             'energy_Ha': result.scf.energy,
             'time_ms': (t1 - t0) * 1000,
+            'wall_time_ms': result.wall_time_ms,
             'n_atoms': 1,
             'n_iterations': result.scf.n_iterations,
             'converged': result.scf.converged,
@@ -129,6 +133,17 @@ def run_tides_atom(symbol, basis='DZP'):
             'E_H': result.energy.E_H,
             'E_xc': result.energy.E_xc,
             'E_ion': result.energy.E_ion,
+            'pipeline_timings': {
+                'rho_build_ms': t.rho_build_ms,
+                'xc_eval_ms': t.xc_eval_ms,
+                'poisson_ms': t.poisson_ms,
+                'vmat_build_ms': t.vmat_build_ms,
+                'scf_total_ms': t.scf_total_ms,
+                'n_iterations': t.n_iterations,
+                'used_gpu_xc': t.used_gpu_xc,
+                'used_grid_hartree': t.used_grid_hartree,
+                'xc_functional': t.xc_functional,
+            },
         }
     except ImportError:
         return {
@@ -150,7 +165,7 @@ def run_tides_atom(symbol, basis='DZP'):
 
 def main():
     print("=" * 72)
-    print("  TIDES vs PySCF Benchmark — CPU Comparison")
+    print("  TIDES vs PySCF Benchmark — Real Pipeline (GEMM + Fused XC Engine)")
     print("=" * 72)
 
     all_results = []
@@ -236,12 +251,21 @@ def main():
     # --- Delta summary ---
     print("\n  Energy Deltas (TIDES vs PySCF):")
     print("  AUDIT C7: MoleculeDriver now wired through nanobind.")
+    print("  P2 FIX: SCF loop uses GEMM rho/vmat + fused Tier-0 XC engine.")
     print("  TIDES uses STO-3G; PySCF uses cc-pVDZ — basis mismatch expected.")
     print("  Delta is meaningful only vs same-basis PySCF reference.\n")
     for r in all_results:
         if 'delta_vs_pyscf_Ha' in r:
             d = r['delta_vs_pyscf_Ha']
-            print(f"    {r['system']:<20} ΔE = {d:.2e} Ha (STO-3G vs cc-pVDZ)")
+            print(f"    {r['system']:<20} \u0394E = {d:.2e} Ha (STO-3G vs cc-pVDZ)")
+            if 'pipeline_timings' in r:
+                pt = r['pipeline_timings']
+                print(f"      Pipeline: rho={pt['rho_build_ms']:.2f}ms "
+                      f"xc={pt['xc_eval_ms']:.2f}ms "
+                      f"vmat={pt['vmat_build_ms']:.2f}ms "
+                      f"scf_total={pt['scf_total_ms']:.1f}ms "
+                      f"iters={pt['n_iterations']} "
+                      f"gpu_xc={pt['used_gpu_xc']}")
         elif r.get('error'):
             print(f"    {r['system']:<20} ERROR: {r['error'][:60]}")
 

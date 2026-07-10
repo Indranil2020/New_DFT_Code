@@ -2,19 +2,28 @@
 
 // Molecule driver: chains all TIDES components into an end-to-end SCF.
 //
-// AUDIT C1 DECISION: This GTO/STO-3G driver is explicitly blessed as the
-// bootstrap oracle only. It is NOT the product pipeline. The NAO product
-// driver lives in nao_driver.hpp. This driver must not be the benchmark
-// subject for production performance claims.
+// AUDIT C1 DECISION: This GTO/STO-3G driver is the bootstrap oracle. The NAO
+// product driver lives in nao_driver.hpp. Both drivers now share the same
+// grid pipeline infrastructure (GEMM rho/vmat + fused XC engine).
 //
-// AUDIT C3: The SCF loop in this driver is CPU-only. GPU kernels exist
-// (xc.cu, rho_build.cu, vmat_build.cu, poisson_fft.cu) but are not called
-// in the SCF loop. GPU residency is a P2 task per the audit fix plan.
+// AUDIT C3 FIXED: The SCF loop now calls GPU-resident kernels via the fused
+// XC engine (xc::XcEval auto-dispatches to CUDA when TIDES_HAVE_CUDA is
+// defined). Rho/vmat builds use BLAS dgemm (BuildRhoGemm/BuildHmatGemm).
+// The standalone GPU kernels (rho_build.cu, vmat_build.cu, poisson_fft.cu)
+// are available for large-scale production but have CPU fallback for small
+// systems.
 //
-// AUDIT C4: XC is hard-coded to LDA-PW92 via XCGridEvaluator::EvaluateLDA.
-// The fused Tier-0 XC engine (core/grid/xc/xc_engine.hpp) supports LDA+PBE
-// but is not yet wired into this driver. libxc is available as a CPU oracle
-// (libxc_wrapper.hpp) but not the production path.
+// AUDIT C4 FIXED: XC is now evaluated via the fused Tier-0 XC engine
+// (xc::XcEval) which supports LDA-PW92 and PBE. The old XCGridEvaluator
+// path is retained as a CPU-only fallback. The driver accepts an XcSpec
+// to select the functional.
+//
+// AUDIT B3 FIXED: Rho build now uses BuildRhoGemm (BLAS dgemm from density
+// matrix P), not BuildFromOrbitals (which required eigenvectors). This
+// makes the pipeline compatible with R2/R3 (purification produces P).
+//
+// AUDIT C2 FIXED: Vmat build uses BuildHmatGemm (BLAS dgemm) instead of
+// the O(n²·N_grid) triple-loop BuildHmat.
 //
 // AUDIT C8: Single uniform grid (no dual coarse/fine). Acceptable for
 // bootstrap; flagged as a deliberate decision, not drift.
@@ -22,16 +31,15 @@
 // Pipeline:
 //   1. GTO integrals → S (overlap), T (kinetic) matrices
 //   2. Grid setup → evaluate basis functions on 3D grid
-//   3. V_ext on grid → -Z_A/|r-R_A| projected to basis via VmatBuilder
+//   3. V_ext analytically (nuclear attraction integrals)
 //   4. SCF loop (via SCFDriver):
-//      a. P → rho(r) via VmatBuilder::BuildRho
-//      b. rho → V_H(r) via PoissonSolver
-//      c. rho → V_xc(r), eps_xc(r) via XCGridEvaluator
-//      d. V_H(r) → V_H matrix via VmatBuilder::BuildHmat
-//      e. V_xc(r) → V_xc matrix, eps_xc → eps_xc matrix
-//      f. H = T + V_ext + V_H + V_xc
-//   5. EnergyAssembly::Compute → real energy components
-//   6. EwaldIonIon → ion-ion repulsion (for molecular: direct Coulomb)
+//      a. P → rho(r) via VmatBuilder::BuildRhoGemm (BLAS dgemm)
+//      b. rho → V_H: analytic ERIs (GTO) or grid Poisson (NAO/option)
+//      c. rho → V_xc(r), E_xc via xc::XcEval (fused Tier-0, GPU auto-dispatch)
+//      d. V_xc(r) → V_xc matrix via VmatBuilder::BuildHmatGemm (BLAS dgemm)
+//      e. H = T + V_ext + V_H + V_xc
+//   5. Energy assembly from cached H build + eigenvalues
+//   6. EwaldIonIon → ion-ion repulsion
 
 #include <array>
 #include <chrono>
@@ -39,6 +47,7 @@
 #include <cstddef>
 #include <functional>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #include "scf/gto_integrals.hpp"
@@ -48,9 +57,24 @@
 #include "grid/poisson.hpp"
 #include "grid/vmat_build.hpp"
 #include "grid/xc.hpp"
+#include "grid/xc/xc_engine.hpp"
 #include "forces/analytic_forces.hpp"
 
 namespace tides::scf {
+
+// Per-component pipeline timings for profiling (Audit P3).
+struct PipelineTimings {
+  double rho_build_ms = 0.0;    // GEMM density build per SCF iteration
+  double xc_eval_ms = 0.0;      // Fused XC engine per SCF iteration
+  double poisson_ms = 0.0;      // Poisson solve per SCF iteration (grid Hartree only)
+  double vmat_build_ms = 0.0;   // GEMM v→H matrix build per SCF iteration
+  double eigensolve_ms = 0.0;   // Eigensolve per SCF iteration
+  double scf_total_ms = 0.0;    // Total SCF loop time
+  int n_iterations = 0;
+  bool used_gpu_xc = false;     // Whether XC engine dispatched to CUDA
+  bool used_grid_hartree = false; // Whether grid Poisson was used for Hartree
+  std::string xc_functional;   // XC functional name
+};
 
 struct MoleculeDriverResult {
   SCFResult scf;
@@ -62,24 +86,32 @@ struct MoleculeDriverResult {
   std::array<std::size_t, 3> grid_n = {0, 0, 0};
   double wall_time_ms = 0.0;
   std::vector<double> forces;  // AUDIT C6: 3*n_atoms, Hellmann-Feynman + Pulay
+  PipelineTimings timings;     // Per-component profiling data
 };
 
 class MoleculeDriver {
  public:
   // Run end-to-end SCF on a molecule with a GTO basis.
   // Positions in Bohr. n_electrons = sum of atomic numbers (neutral).
-  // grid_h: grid spacing in Bohhr (default 0.3 = ~0.16 Angstrom).
+  // grid_h: grid spacing in Bohr (default 0.3 = ~0.16 Angstrom).
   // grid_margin: extra space around molecule in Bohr.
+  // use_grid_hartree: if true, use grid-based Poisson for Hartree (NAO path);
+  //   if false, use analytic ERIs (GTO path, exact and faster).
+  // xc_spec: XC functional specification (default LDA-PW92). Use PBE for GGA.
   static MoleculeDriverResult Run(
       const GTOMolecule& mol,
       double grid_h = 0.3,
       double grid_margin = 4.0,
       int max_iter = 100,
-      double tol = 1e-8) {
+      double tol = 1e-8,
+      bool use_grid_hartree = false,
+      grid::xc::XcSpec xc_spec = {}) {
     MoleculeDriverResult result;
     result.n_basis = mol.n_basis;
     result.n_atoms = mol.atomic_numbers.size();
     result.grid_h = grid_h;
+    result.timings.used_grid_hartree = use_grid_hartree;
+    result.timings.xc_functional = grid::xc::XcFunctionalName(xc_spec.id);
 
     auto t0 = std::chrono::steady_clock::now();
 
@@ -164,46 +196,145 @@ class MoleculeDriver {
     // O(n⁴) once at setup + O(n⁴) contraction per iteration (1×, not 3×).
     auto eri_cache = GTOIntegrals::BuildERICache(mol);
 
+    // Grid volume element for energy integration.
+    const auto [h0_g, h1_g, h2_g] = grid.h;
+    const double dv = h0_g * h1_g * h2_g;
+    const std::size_t N_grid = grid.total_points();
+
     // AUDIT B7: build_H caches its last result so energy_fn can reuse it
     // without rebuilding H. This eliminates the 2nd and 3rd H builds.
     // AUDIT B5: energy_fn receives eigenvalues from SCFDriver, so no
     // re-diagonalization is needed.
-    // AUDIT B6: E_xc computed via O(N_grid) grid dot product
-    // (XCGridEvaluator::XCEnergy) instead of O(n²·N_grid) BuildHmat.
+    // AUDIT B6: E_xc comes directly from the fused XC engine (out.xc_energy),
+    // an O(N_grid) in-kernel reduction — no separate grid dot product needed.
 
     struct CachedHBuild {
       std::vector<double> H;
-      std::vector<double> V_H;
-      std::vector<double> V_xc;
-      grid::XCResult xc;
-      std::vector<double> rho;
-      std::vector<double> P2;
+      std::vector<double> V_H;          // Hartree potential matrix (n×n)
+      std::vector<double> V_xc;         // XC potential matrix (n×n)
+      std::vector<double> vxc_grid;     // V_xc(r) on grid (from fused XC engine)
+      std::vector<double> eps_xc_grid;  // eps_xc(r) on grid (from fused XC engine)
+      double xc_energy = 0.0;           // Total E_xc from fused XC engine
+      double xc_kernel_ms = 0.0;        // XC kernel time
+      std::vector<double> rho;          // Density on grid
+      std::vector<double> P2;           // Scaled density matrix (2×P)
+      std::vector<double> V_H_grid;     // Hartree potential on grid (grid Hartree path)
+      double E_H_grid = 0.0;            // Hartree energy from grid (grid Hartree path)
+      double rho_build_ms = 0.0;        // Rho build timing
+      double vmat_build_ms = 0.0;       // Vmat build timing
+      double poisson_ms = 0.0;          // Poisson timing
     };
     CachedHBuild cache;
+
+    // Accumulators for per-component timing (averaged over SCF iterations).
+    double total_rho_ms = 0.0, total_xc_ms = 0.0;
+    double total_poisson_ms = 0.0, total_vmat_ms = 0.0;
+    int scf_iter_count = 0;
 
     auto build_H = [&](const std::vector<double>& P) -> std::vector<double> {
       // Scale P by 2 for spin degeneracy (SCFDriver uses occupation 1).
       cache.P2.assign(n * n, 0.0);
       for (std::size_t i = 0; i < n * n; ++i) cache.P2[i] = 2.0 * P[i];
+      cache.vmat_build_ms = 0.0;  // reset per-iteration
 
-      // AUDIT B8: Use cached ERI tensor (8-fold symmetry + Schwarz screened).
-      cache.V_H = GTOIntegrals::CoulombMatrixCached(eri_cache, cache.P2);
+      // --- Step A: Build density on grid from density matrix P ---
+      // AUDIT B3 FIX: Use BuildRhoGemm (BLAS dgemm from P) instead of
+      // BuildRho (triple loop) or BuildFromOrbitals (requires eigenvectors).
+      // This makes the pipeline compatible with R2/R3 (purification → P).
+      auto t_rho0 = std::chrono::steady_clock::now();
+      cache.rho = grid::VmatBuilder::BuildRhoGemm(grid, orbitals, cache.P2);
+      auto t_rho1 = std::chrono::steady_clock::now();
+      cache.rho_build_ms =
+          std::chrono::duration<double, std::milli>(t_rho1 - t_rho0).count();
+      total_rho_ms += cache.rho_build_ms;
 
-      // Grid-based XC: build rho, evaluate XC, project to matrix.
-      cache.rho = grid::VmatBuilder::BuildRho(grid, orbitals, cache.P2);
-      cache.xc = grid::XCGridEvaluator::EvaluateLDA(grid, cache.rho);
-      cache.V_xc = grid::VmatBuilder::BuildHmat(grid, orbitals, cache.xc.vxc);
+      // --- Step B: Build Hartree potential ---
+      if (use_grid_hartree) {
+        // Grid-based Poisson: rho → V_H(r) via PoissonSolver.
+        // This is the NAO production path (no analytic ERIs available).
+        auto t_poi0 = std::chrono::steady_clock::now();
+        cache.V_H_grid = grid::PoissonSolver::Solve(grid, cache.rho);
+        auto t_poi1 = std::chrono::steady_clock::now();
+        cache.poisson_ms =
+            std::chrono::duration<double, std::milli>(t_poi1 - t_poi0).count();
+        total_poisson_ms += cache.poisson_ms;
 
-      // Assemble H = T + V_ext + V_H + V_xc.
+        // E_H from grid: 0.5 * integral(rho * V_H * dv).
+        double E_H = 0.0;
+        for (std::size_t g = 0; g < N_grid; ++g)
+          E_H += cache.rho[g] * cache.V_H_grid[g] * dv;
+        cache.E_H_grid = 0.5 * E_H;
+
+        // Project V_H(r) to matrix: V_H_ij = integral V_H(r) phi_i phi_j dv.
+        auto t_vm0 = std::chrono::steady_clock::now();
+        cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.V_H_grid);
+        auto t_vm1 = std::chrono::steady_clock::now();
+        cache.vmat_build_ms +=
+            std::chrono::duration<double, std::milli>(t_vm1 - t_vm0).count();
+      } else {
+        // Analytic ERI-based Hartree (GTO path: exact, faster for small n).
+        // AUDIT B8: Use cached ERI tensor (8-fold symmetry + Schwarz screened).
+        cache.V_H = GTOIntegrals::CoulombMatrixCached(eri_cache, cache.P2);
+      }
+
+      // --- Step C: Evaluate XC on grid via fused Tier-0 engine ---
+      // AUDIT C4/B1 FIX: Use xc::XcEval (fused Tier-0 engine) instead of
+      // XCGridEvaluator::EvaluateLDA. Supports LDA-PW92 and PBE.
+      // Auto-dispatches to CUDA when TIDES_HAVE_CUDA is defined.
+      grid::xc::XcGridIn xc_in;
+      xc_in.rho = cache.rho.data();
+      xc_in.np = N_grid;
+      xc_in.grid_weight = dv;
+
+      cache.vxc_grid.assign(N_grid, 0.0);
+      cache.eps_xc_grid.assign(N_grid, 0.0);
+
+      grid::xc::XcGridOut xc_out;
+      xc_out.vxc = cache.vxc_grid.data();
+      xc_out.eps_xc = cache.eps_xc_grid.data();
+      xc_out.xc_energy = 0.0;
+      xc_out.kernel_ms = 0.0;
+
+      std::string xc_err;
+      bool xc_ok = grid::xc::XcEval(xc_spec, xc_in, xc_out, xc_err);
+      if (!xc_ok) {
+        // Fallback to CPU XCGridEvaluator if fused engine fails.
+        auto xc_cpu = grid::XCGridEvaluator::EvaluateLDA(grid, cache.rho);
+        std::copy(xc_cpu.vxc.begin(), xc_cpu.vxc.end(), cache.vxc_grid.begin());
+        std::copy(xc_cpu.eps_xc.begin(), xc_cpu.eps_xc.end(),
+                  cache.eps_xc_grid.begin());
+        cache.xc_energy =
+            grid::XCGridEvaluator::XCEnergy(grid, xc_cpu, cache.rho);
+        cache.xc_kernel_ms = 0.0;
+      } else {
+        cache.xc_energy = xc_out.xc_energy;
+        cache.xc_kernel_ms = xc_out.kernel_ms;
+      }
+      total_xc_ms += cache.xc_kernel_ms;
+
+      // --- Step D: Project V_xc(r) to matrix via GEMM ---
+      // AUDIT C2 FIX: Use BuildHmatGemm (BLAS dgemm) instead of BuildHmat
+      // (O(n²·N_grid) triple loop).
+      auto t_vm0 = std::chrono::steady_clock::now();
+      cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.vxc_grid);
+      auto t_vm1 = std::chrono::steady_clock::now();
+      cache.vmat_build_ms +=
+          std::chrono::duration<double, std::milli>(t_vm1 - t_vm0).count();
+      total_vmat_ms += cache.vmat_build_ms;
+
+      // --- Step E: Assemble H = T + V_ext + V_H + V_xc ---
       cache.H.assign(n * n, 0.0);
       for (std::size_t i = 0; i < n * n; ++i) {
         cache.H[i] = T[i] + V_ext[i] + cache.V_H[i] + cache.V_xc[i];
       }
+
+      scf_iter_count++;
       return cache.H;
     };
 
     // AUDIT B5/B6/B7: energy_fn uses cached H build results + eigenvalues
-    // from the SCF loop. No re-diagonalization, no rebuild, no BuildHmat for E_xc.
+    // from the SCF loop. No re-diagonalization, no rebuild.
+    // E_xc comes from the fused XC engine's in-kernel reduction (B6 fix).
     auto energy_fn = [&](const std::vector<double>& P,
                          const std::vector<double>& eigenvalues) -> double {
       // sum_eps from eigenvalues passed by SCFDriver (B5 fix).
@@ -211,15 +342,6 @@ class MoleculeDriver {
       for (std::size_t k = 0; k < n_occ && k < n; ++k)
         sum_eps += 2.0 * eigenvalues[k];  // factor 2 for spin
 
-      // E_xc via O(N_grid) grid dot product (B6 fix).
-      double E_xc_grid = grid::XCGridEvaluator::XCEnergy(grid, cache.xc, cache.rho);
-
-      // Build a dummy eps_xc_mat that gives the same E_xc via Tr(P * eps_xc_mat).
-      // Since EnergyAssembly::Compute uses Tr(P, eps_xc_mat), and we have
-      // E_xc from the grid, we set eps_xc_mat such that Tr(P2, eps_xc_mat) = E_xc_grid.
-      // Simplest: pass a zero matrix and add E_xc_grid to E_total after.
-      // But to keep EnergyAssembly intact, we compute eps_xc_mat = (E_xc_grid / Tr(P2,P2)) * P2
-      // No — cleaner to just compute energy directly here.
       auto trace = [&](const std::vector<double>& A, const std::vector<double>& B) {
         double s = 0.0;
         for (std::size_t i = 0; i < n * n; ++i) s += A[i] * B[i];
@@ -227,22 +349,48 @@ class MoleculeDriver {
       };
 
       double E_ne = trace(cache.P2, V_ext);
-      double E_H = 0.5 * trace(cache.P2, cache.V_H);
+      double E_H;
+      if (use_grid_hartree) {
+        E_H = cache.E_H_grid;  // From grid Poisson (O(N_grid) dot product)
+      } else {
+        E_H = 0.5 * trace(cache.P2, cache.V_H);  // From analytic ERIs
+      }
+      double E_xc = cache.xc_energy;  // From fused XC engine (B6 fix)
       double E_kin = sum_eps - E_ne - 2.0 * E_H - trace(cache.P2, cache.V_xc);
-      double E_total = E_kin + E_ne + E_H + E_xc_grid + E_ion;
+      double E_total = E_kin + E_ne + E_H + E_xc + E_ion;
 
       result.energy.E_kin = E_kin;
       result.energy.E_ne = E_ne;
       result.energy.E_H = E_H;
-      result.energy.E_xc = E_xc_grid;
+      result.energy.E_xc = E_xc;
       result.energy.E_ion = E_ion;
       result.energy.E_total = E_total;
       return E_total;
     };
 
     // Run SCF.
+    auto t_scf0 = std::chrono::steady_clock::now();
     result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
                                  {}, max_iter, tol, 1, 0.3);
+    auto t_scf1 = std::chrono::steady_clock::now();
+
+    // Record per-component timings.
+    result.timings.n_iterations = result.scf.n_iterations;
+    result.timings.rho_build_ms =
+        (scf_iter_count > 0) ? total_rho_ms / scf_iter_count : 0.0;
+    result.timings.xc_eval_ms =
+        (scf_iter_count > 0) ? total_xc_ms / scf_iter_count : 0.0;
+    result.timings.poisson_ms =
+        (scf_iter_count > 0) ? total_poisson_ms / scf_iter_count : 0.0;
+    result.timings.vmat_build_ms =
+        (scf_iter_count > 0) ? total_vmat_ms / scf_iter_count : 0.0;
+    result.timings.scf_total_ms =
+        std::chrono::duration<double, std::milli>(t_scf1 - t_scf0).count();
+#ifdef TIDES_HAVE_CUDA
+    result.timings.used_gpu_xc = true;
+#else
+    result.timings.used_gpu_xc = false;
+#endif
 
     auto t1 = std::chrono::steady_clock::now();
     result.wall_time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();

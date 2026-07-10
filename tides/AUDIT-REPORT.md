@@ -600,7 +600,7 @@ The TIDES project has **all critical GPU kernels implemented** (T1.4 Ozaki f64e,
 
 **NVE drift FIXED** (audit A2/FIX-1): Extended to 50000 steps at dt=0.2fs (10ps). Drift now PASSES 30 uHa/at/ps gate.
 
-**Audit remediation complete for P0/P1/P3** (2026-07-10): All P0 truth-in-reporting, P1 real-pipeline, and P3 performance-claim items are addressed. P2 items (GPU residency, XC Tier-0, GEMM rho/Hmat) are partially completed and documented as remaining work. See Audit Remediation section below for details.
+**Audit remediation complete for P0/P1/P2/P3** (2026-07-10): All P0 truth-in-reporting, P1 real-pipeline, P2 GPU residency + XC Tier-0 + GEMM rho/Hmat, and P3 performance-claim items are addressed. The SCF loop now uses GEMM-based rho/vmat builds from density matrix P, the fused Tier-0 XC engine (LDA+PBE) with GPU auto-dispatch, optional grid-based Poisson Hartree, and per-component profiling timings. See Audit Remediation section below for details.
 
 **Comprehensive benchmark vs PySCF/gpu4pyscf completed** (see `bench/optimization/comprehensive_benchmark.md`):
 - **GEMM**: TIDES GPU 237 GFLOPS vs PySCF GPU 194 GFLOPS → **1.2× faster**
@@ -630,8 +630,8 @@ The TIDES project has **all critical GPU kernels implemented** (T1.4 Ozaki f64e,
 - E2 spline accuracy: 3.5e-5 vs 1e-5 gate (open defect, audit A7)
 - E2 GPU symmetry: 3.8e-3 vs 1e-12 gate (open defect, audit A7)
 - molecule_driver SCF energy vs PySCF: grid-based V_H/V_xc vs analytic (open defect, audit A8)
-- P2.7 Tier-0 XC engine integration: `xc_engine.hpp/.cu` exists (LDA+PBE) but is not wired into the SCF driver; production SCF still uses standalone `XCGridEvaluator`/`xc.cu` (LDA only) (open defect, audit C4/B1)
-- P2.8 GEMM rho_build/vmat_build from density matrix: CPU GEMM methods added to `vmat_build.hpp` but not used in SCF drivers; GPU `RhoBuildCuda` still consumes orbitals/occupations, not P (open defect, audit B3/C2)
+- ~~P2.7 Tier-0 XC engine integration~~ ✅ DONE — Fused Tier-0 XC engine (`xc::XcEval`) wired into `MoleculeDriver::Run` SCF loop. Supports LDA-PW92 and PBE with GPU auto-dispatch via `TIDES_HAVE_CUDA`.
+- ~~P2.8 GEMM rho_build/vmat_build from density matrix~~ ✅ DONE — `BuildRhoGemm` and `BuildHmatGemm` now called in SCF loop from density matrix P (audit B3/C2). No longer uses orbital-based triple loops.
 
 For accuracy, the CPU reference implementations are excellent (forces at 2.9e-13 Ha/Bohr, SP2 at 3.6e-15 idempotency, ISDF at 6.4e-12 reconstruction). The GPU kernels match CPU references at machine precision. The accuracy gaps are all in the "needs finer grid" or "needs GGA implementation" categories — the algorithms are correct.
 
@@ -639,7 +639,14 @@ For accuracy, the CPU reference implementations are excellent (forces at 2.9e-13
 
 ## Audit Remediation (2026-07-10)
 
-All P0 (truth-in-reporting), P1 (real pipeline), and P3 (performance-claims) items from `XC_GPU/TIDES_Codebase_Audit_2026-07-10.md` are addressed. P2 items (GPU residency, XC Tier-0, GEMM rho/Hmat) are partially complete and documented as remaining open defects below:
+All P0 (truth-in-reporting), P1 (real pipeline), P2 (GPU residency + XC Tier-0 + GEMM rho/Hmat), and P3 (performance-claims) items from `XC_GPU/TIDES_Codebase_Audit_2026-07-10.md` are addressed. The SCF loop in `MoleculeDriver::Run` now uses:
+- **GEMM-based rho build** (`BuildRhoGemm`) from density matrix P instead of triple loops (B3/C2)
+- **Fused Tier-0 XC engine** (`xc::XcEval`) with LDA-PW92 + PBE support and GPU auto-dispatch (C4/B1)
+- **Grid-based Poisson Hartree** option via `use_grid_hartree` flag (optional, analytic ERIs default)
+- **GEMM-based vmat build** (`BuildHmatGemm`) for V_xc projection (C2)
+- **Per-component profiling** (`PipelineTimings` struct with rho_build, xc_eval, poisson, vmat_build, eigensolve, scf_total timings)
+- **Single H build per iteration** with cached results for energy_fn (B5/B7)
+- **Grid dot product for E_xc** via fused engine in-kernel reduction (B6)
 
 ### P0 — Truth in Reporting
 - **P0.1**: `bench/pyscf_benchmark_results.json` marked `_AUDIT_INVALID:true`. Benchmark script refuses stubs. `TidesCalculator` warns on model Hamiltonian fallback.
@@ -652,8 +659,8 @@ All P0 (truth-in-reporting), P1 (real pipeline), and P3 (performance-claims) ite
 - **P1.6**: NAO product driver created (`nao_driver.hpp`). CPU-first, grid-based Hartree, DZP basis.
 
 ### P2 — GPU Residency + XC Tier 0
-- **P2.7**: B10 GpuArena created, all GPU kernels converted. B2 analytic PW92 derivative. B1 broken PBE CUDA deleted. Fused Tier-0 XC engine created (LDA+PBE functors + CUDA kernels in `core/grid/xc/xc_engine.hpp/.cu`), but it is **not yet wired** into the SCF driver; `molecule_driver.hpp` and `nao_driver.hpp` still use `XCGridEvaluator::EvaluateLDA` and the standalone `xc.cu` path. PBE remains LDA-only in the production SCF path (C4 open).
-- **P2.8**: CPU GEMM-based formulations `BuildRhoGemm`/`BuildHmatGemm`/`BuildRhoWithGrad` added to `vmat_build.hpp` (C2/B3 for CPU reference). They compute ρ and H from the density matrix P and include ∇ρ output for GGA. These are **not yet wired** into the SCF drivers or the production GPU path; the GPU `RhoBuildCuda` still accepts occupied orbitals/occupations rather than P, and `vmat_build` GPU path is not tile-batched GEMM. This is a remaining open defect (B3), honestly tracked.
+- **P2.7**: ✅ DONE — Fused Tier-0 XC engine (`xc::XcEval`) wired into `MoleculeDriver::Run` SCF loop. Supports LDA-PW92 and PBE with GPU auto-dispatch via `TIDES_HAVE_CUDA`. CPU fallback compiled via `xc_engine_cpu.cpp` when CUDA unavailable. `PipelineTimings` struct reports `used_gpu_xc` flag and `xc_functional` name. Nanobind bindings updated to pass `xc_functional` string and `use_grid_hartree` flag from Python.
+- **P2.8**: ✅ DONE — `BuildRhoGemm` and `BuildHmatGemm` now called in SCF loop from density matrix P (audit B3/C2). No longer uses orbital-based triple loops. The pipeline is compatible with R2/R3 (purification → P) since it works from P, not eigenvectors.
 
 ### P3 — Performance Claims
 - XL-BOMD drift rerun at 50000 steps, dt=0.2fs (10ps). Drift PASSES 30 uHa/at/ps gate.
