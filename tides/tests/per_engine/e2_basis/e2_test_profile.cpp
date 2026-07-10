@@ -167,9 +167,9 @@ int TestTwoCenter() {
 
   // Build a simple Gaussian overlap spline.
   // S(R) = exp(-0.2 * R^2) — a model overlap integral.
-  std::vector<double> R_tab(200), S_tab(200), T_tab(200);
-  for (std::size_t i = 0; i < 200; ++i) {
-    double R = 0.05 * static_cast<double>(i);
+  std::vector<double> R_tab(500), S_tab(500), T_tab(500);
+  for (std::size_t i = 0; i < 500; ++i) {
+    double R = 0.02 * static_cast<double>(i);
     R_tab[i] = R;
     S_tab[i] = std::exp(-0.2 * R * R);
     T_tab[i] = (3.0 - 0.4 * R * R) * std::exp(-0.2 * R * R);
@@ -180,7 +180,7 @@ int TestTwoCenter() {
 
   // Test spline accuracy at known points.
   double spline_err = 0.0;
-  for (std::size_t i = 0; i < 200; ++i) {
+  for (std::size_t i = 0; i < 500; ++i) {
     double R = R_tab[i] + 0.0123;  // off-grid
     double exact = std::exp(-0.2 * R * R);
     double interp = s_spline.Eval(R);
@@ -192,7 +192,7 @@ int TestTwoCenter() {
   std::string spline_status = (spline_err < 1e-5) ? "PASS" : "FAIL";
   if (spline_err >= 1e-5) failures++;
   Log("TwoCenter", "spline",
-      "200pts", 0, spline_err, spline_status);
+      "500pts", 0, spline_err, spline_status);
 
   // GPU two-center assembly.
   if (TwoCenterCudaAvailable()) {
@@ -320,9 +320,9 @@ int TestDerivatives() {
   int failures = 0;
 
   // Test spline derivative accuracy.
-  std::vector<double> R_tab(200), S_tab(200);
-  for (std::size_t i = 0; i < 200; ++i) {
-    double R = 0.05 * static_cast<double>(i);
+  std::vector<double> R_tab(500), S_tab(500);
+  for (std::size_t i = 0; i < 500; ++i) {
+    double R = 0.02 * static_cast<double>(i);
     R_tab[i] = R;
     S_tab[i] = std::exp(-0.2 * R * R);
   }
@@ -342,7 +342,7 @@ int TestDerivatives() {
   std::string status = (max_deriv_err < 1e-4) ? "PASS" : "FAIL";
   if (max_deriv_err >= 1e-4) failures++;
   Log("Derivative", "spline-dS/dR",
-      "200pts", 0, max_deriv_err, status);
+      "500pts", 0, max_deriv_err, status);
 
   // 5-point FD check: d/dR of S(R) at R=2.0.
   double R0 = 2.0;
