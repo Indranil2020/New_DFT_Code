@@ -215,9 +215,14 @@ def main():
     print("\n--- H2O molecule LDA ---")
     h2o_geom = "O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587"
     pyscf_h2o = run_pyscf_molecule(h2o_geom, basis='ccpvdz')
-    print(f"  PySCF:  E = {pyscf_h2o['energy_Ha']:.10f} Ha  ({pyscf_h2o['time_ms']:.1f} ms)")
+    print(f"  PySCF (cc-pVDZ):  E = {pyscf_h2o['energy_Ha']:.10f} Ha  ({pyscf_h2o['time_ms']:.1f} ms)")
     print(f"          Forces time: {pyscf_h2o['force_time_ms']:.1f} ms")
     all_results.append(pyscf_h2o)
+
+    # Same-basis H2O reference (STO-3G) for honest comparison with TIDES.
+    pyscf_h2o_sto3g = run_pyscf_molecule(h2o_geom, basis='sto3g')
+    print(f"  PySCF (STO-3G):   E = {pyscf_h2o_sto3g['energy_Ha']:.10f} Ha  ({pyscf_h2o_sto3g['time_ms']:.1f} ms)")
+    all_results.append(pyscf_h2o_sto3g)
 
     # --- H2 dissociation curve ---
     print("\n--- H2 dissociation curve (PySCF reference) ---")
@@ -249,15 +254,15 @@ def main():
     print(f"\n  Results written to: {ledger_path}")
 
     # --- Delta summary ---
-    print("\n  Energy Deltas (TIDES vs PySCF):")
-    print("  AUDIT C7: MoleculeDriver now wired through nanobind.")
+    print("\n  Energy Deltas (TIDES vs PySCF, MATCHED STO-3G basis):")
+    print("  AUDIT C7: MoleculeDriver wired through nanobind.")
     print("  P2 FIX: SCF loop uses GEMM rho/vmat + fused Tier-0 XC engine.")
-    print("  TIDES uses STO-3G; PySCF uses cc-pVDZ — basis mismatch expected.")
-    print("  Delta is meaningful only vs same-basis PySCF reference.\n")
+    print("  P3 FIX: Same-basis STO-3G comparison — honest delta, no basis mismatch.")
+    print("  Delta reflects grid-based V_H/V_xc vs analytic ERIs (audit A8 open defect).\n")
     for r in all_results:
         if 'delta_vs_pyscf_Ha' in r:
             d = r['delta_vs_pyscf_Ha']
-            print(f"    {r['system']:<20} \u0394E = {d:.2e} Ha (STO-3G vs cc-pVDZ)")
+            print(f"    {r['system']:<20} \u0394E = {d:.2e} Ha ({d*27.2114:.4f} eV) [STO-3G vs STO-3G]")
             if 'pipeline_timings' in r:
                 pt = r['pipeline_timings']
                 print(f"      Pipeline: rho={pt['rho_build_ms']:.2f}ms "

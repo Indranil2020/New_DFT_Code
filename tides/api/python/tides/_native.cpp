@@ -211,7 +211,10 @@ NB_MODULE(_native, m) {
         .def_rw("grid_h", &scf::MoleculeDriverResult::grid_h)
         .def_rw("wall_time_ms", &scf::MoleculeDriverResult::wall_time_ms)
         .def_rw("forces", &scf::MoleculeDriverResult::forces)
-        .def_rw("timings", &scf::MoleculeDriverResult::timings);
+        .def_rw("timings", &scf::MoleculeDriverResult::timings)
+        .def_prop_ro("grid_n", [](const scf::MoleculeDriverResult& r) {
+            return std::vector<std::size_t>{r.grid_n[0], r.grid_n[1], r.grid_n[2]};
+        });
 
     nb::class_<scf::GTOMolecule>(m, "GTOMolecule")
         .def_rw("atomic_numbers", &scf::GTOMolecule::atomic_numbers)
