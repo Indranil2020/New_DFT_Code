@@ -32,20 +32,20 @@ struct LdaPw92 {
   static constexpr double b4_ = 0.49294;
 
   // Q(rs) = b1*sqrt(rs) + b2*rs + b3*rs*sqrt(rs) + b4*rs^2
-  static double Q(double rs) {
+  static TIDES_HD double Q(double rs) {
     const double sqrt_rs = std::sqrt(rs);
     return b1_ * sqrt_rs + b2_ * rs + b3_ * rs * sqrt_rs + b4_ * rs * rs;
   }
 
   // dQ/d(rs) = b1/(2*sqrt(rs)) + b2 + 3*b3*sqrt(rs)/2 + 2*b4*rs
-  static double DQDrs(double rs) {
+  static TIDES_HD double DQDrs(double rs) {
     if (rs < 1e-15) return 0.0;
     const double sqrt_rs = std::sqrt(rs);
     return b1_ / (2.0 * sqrt_rs) + b2_ + 1.5 * b3_ * sqrt_rs + 2.0 * b4_ * rs;
   }
 
   // eps_c(rs): correlation energy per particle.
-  static double EpsRs(double rs) {
+  static TIDES_HD double EpsRs(double rs) {
     if (rs < 1e-15 || rs > 1e10) return 0.0;
     const double q = Q(rs);
     const double arg = 1.0 + 1.0 / (2.0 * a_ * q);
@@ -53,7 +53,7 @@ struct LdaPw92 {
   }
 
   // Analytic d(eps_c)/d(rs) — replaces finite-difference hack (audit B2).
-  static double DEpsDrs(double rs) {
+  static TIDES_HD double DEpsDrs(double rs) {
     if (rs < 1e-15 || rs > 1e10) return 0.0;
     const double q = Q(rs);
     const double dq = DQDrs(rs);
@@ -69,14 +69,14 @@ struct LdaPw92 {
   }
 
   // eps_c(n): convenience wrapper converting density to rs.
-  static double Eps(double rho) {
+  static TIDES_HD double Eps(double rho) {
     if (rho < detail::kRhoMin) return 0.0;
     return EpsRs(detail::RhoToRs(rho));
   }
 
   // v_c(rho) = eps_c + rho * d(eps_c)/d(rho)
   //          = eps_c - (rs/3) * d(eps_c)/d(rs)
-  static double Vrho(double rho) {
+  static TIDES_HD double Vrho(double rho) {
     if (rho < detail::kRhoMin) return 0.0;
     const double rs = detail::RhoToRs(rho);
     const double eps_c = EpsRs(rs);
@@ -85,7 +85,7 @@ struct LdaPw92 {
   }
 
   // Energy density: rho * eps_c
-  static double EnergyDensity(double rho) {
+  static TIDES_HD double EnergyDensity(double rho) {
     return rho * Eps(rho);
   }
 };

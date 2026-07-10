@@ -8,6 +8,14 @@
 
 namespace tides::grid::xc::detail {
 
+// Host/device compatibility macro: __host__ __device__ when compiled by nvcc,
+// otherwise empty so the same headers build on CPU-only paths.
+#ifdef __CUDACC__
+#define TIDES_HD __host__ __device__
+#else
+#define TIDES_HD
+#endif
+
 // Physical constants and thresholds mirroring libxc.
 // These thresholds determine when to use asymptotic forms vs full expressions.
 constexpr double kRhoMin = 1e-14;    // below this, rho ≈ 0
@@ -15,13 +23,13 @@ constexpr double kSigmaMin = 1e-30;  // below this, sigma ≈ 0
 constexpr double kTauMin = 1e-20;    // below this, tau ≈ 0
 
 // Wigner-Seitz radius: rs = (3 / (4*pi*n))^(1/3)
-inline double RhoToRs(double n) {
+inline TIDES_HD double RhoToRs(double n) {
   if (n < kRhoMin) return 1e30;
   return std::cbrt(3.0 / (4.0 * M_PI * n));
 }
 
 // Reduced gradient: s = |grad_rho| / (2 * (3*pi^2)^(1/3) * rho^(4/3))
-inline double ReducedGradient(double rho, double sigma) {
+inline TIDES_HD double ReducedGradient(double rho, double sigma) {
   if (rho < kRhoMin) return 0.0;
   const double grad = std::sqrt(std::max(sigma, 0.0));
   const double kF = std::cbrt(3.0 * M_PI * M_PI * rho);
@@ -29,20 +37,20 @@ inline double ReducedGradient(double rho, double sigma) {
 }
 
 // Spin polarization: zeta = (rho_up - rho_down) / rho
-inline double SpinPolarization(double rho_up, double rho_down) {
+inline TIDES_HD double SpinPolarization(double rho_up, double rho_down) {
   double rho = rho_up + rho_down;
   if (rho < kRhoMin) return 0.0;
   return (rho_up - rho_down) / rho;
 }
 
 // Fermi wavevector: kF = (3*pi^2 * rho)^(1/3)
-inline double FermiWavevector(double rho) {
+inline TIDES_HD double FermiWavevector(double rho) {
   if (rho < kRhoMin) return 0.0;
   return std::cbrt(3.0 * M_PI * M_PI * rho);
 }
 
 // Thomas-Fermi screening wavevector: kTF = sqrt(4*kF/pi)
-inline double ThomasFermiK(double rho) {
+inline TIDES_HD double ThomasFermiK(double rho) {
   double kF = FermiWavevector(rho);
   return std::sqrt(4.0 * kF / M_PI);
 }

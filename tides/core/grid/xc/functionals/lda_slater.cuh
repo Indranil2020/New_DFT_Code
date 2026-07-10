@@ -18,21 +18,21 @@ namespace tides::grid::xc {
 
 struct LdaSlater {
   // Energy per particle: eps_x(rho)
-  static double Eps(double rho) {
+  static TIDES_HD double Eps(double rho) {
     if (rho < detail::kRhoMin) return 0.0;
     const double cbrt_rho = std::cbrt(rho);
     return -0.75 * std::cbrt(3.0 / M_PI) * cbrt_rho;
   }
 
   // Potential: v_x(rho) = d(rho*eps_x)/d(rho)
-  static double Vrho(double rho) {
+  static TIDES_HD double Vrho(double rho) {
     if (rho < detail::kRhoMin) return 0.0;
     const double cbrt_rho = std::cbrt(rho);
     return -std::cbrt(3.0 / M_PI) * cbrt_rho;  // = -(4/3) * (3/(4*pi))^(1/3) * rho^(1/3)
   }
 
   // Energy density: rho * eps_x
-  static double EnergyDensity(double rho) {
+  static TIDES_HD double EnergyDensity(double rho) {
     return rho * Eps(rho);
   }
 };

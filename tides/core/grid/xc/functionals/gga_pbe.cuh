@@ -27,27 +27,48 @@
 
 namespace tides::grid::xc {
 
+// Parameter structs (nvcc-compatible alternative to double template parameters).
+struct PbeXParams {
+  static constexpr double kappa = 0.804;
+  static constexpr double mu = 0.2195149727645171;
+};
+struct PbesolXParams {
+  static constexpr double kappa = 1.0;
+  static constexpr double mu = 0.1234567901234568;
+};
+struct RevPbeXParams {
+  static constexpr double kappa = 1.245;
+  static constexpr double mu = 0.2195149727645171;
+};
+
+struct PbeCParams {
+  static constexpr double beta = 0.06672455060314922;
+};
+struct PbesolCParams {
+  static constexpr double beta = 0.046;
+};
+
 // PBE Exchange enhancement factor and derivative.
-template <double Kappa, double Mu>
+template <typename Params>
 struct PbeExchange {
-  static constexpr double kappa = Kappa;
-  static constexpr double mu = Mu;
+  static constexpr double kappa = Params::kappa;
+  static constexpr double mu = Params::mu;
 
   // F_x(s) = 1 + kappa - kappa / (1 + mu * s^2 / kappa)
-  static double Fx(double s2) {
+  static TIDES_HD double Fx(double s2) {
     const double t = mu * s2 / kappa;
     return 1.0 + kappa - kappa / (1.0 + t);
   }
 
   // dF_x/d(s^2) = kappa * mu / kappa / (1 + mu*s^2/kappa)^2
   //             = mu / (1 + mu*s^2/kappa)^2
-  static double DFxDs2(double s2) {
+  static TIDES_HD double DFxDs2(double s2) {
     const double t = mu * s2 / kappa;
     return mu / ((1.0 + t) * (1.0 + t));
   }
 
   // eps_x^GGA = eps_x^LDA * F_x(s)
-  static double Eps(double rho, double sigma) {
+  static TIDES_HD double Eps(double rho, double sigma) {
     if (rho < detail::kRhoMin) return 0.0;
     double s2 = detail::ReducedGradient(rho, sigma);
     s2 *= s2;  // s^2
@@ -63,7 +84,7 @@ struct PbeExchange {
   // v_rho = eps_x^LDA * (4/3 * F_x + rho * dF_x/d(s^2) * d(s^2)/d(rho))
   // v_sigma = rho * eps_x^LDA * dF_x/d(s^2) * d(s^2)/d(sigma)
   struct Result { double v_rho; double v_sigma; };
-  static Result VrhoVsigma(double rho, double sigma) {
+  static TIDES_HD Result VrhoVsigma(double rho, double sigma) {
     if (rho < detail::kRhoMin) return {0.0, 0.0};
     const double eps_x_lda = LdaSlater::Eps(rho);
     const double s = detail::ReducedGradient(rho, sigma);
@@ -100,7 +121,6 @@ struct PbeExchange {
   }
 };
 
-// PBE Correlation: LDA part + gradient correction.
 // Standard PBE correlation:
 //   A = (pi^2/3) * (gamma * phi^3)  -- not used directly
 //   t = |grad_rho| / (2 * k_s * rho)  (reduced gradient for correlation)
@@ -113,14 +133,14 @@ struct PbeExchange {
 // Actually, the standard PBE uses:
 //   gamma = 0.031090690869654895  (≈ pi^2/3 * (alpha/(2*pi))^2 ... )
 //   beta = 0.06672455060314922
-template <double Beta>
+template <typename Params>
 struct PbeCorrelation {
-  static constexpr double beta = Beta;
+  static constexpr double beta = Params::beta;
   static constexpr double gamma = 0.031090690869654895;
 
   // t = |grad_rho| / (2 * k_s * rho)
   // k_s = sqrt(4 * kF / pi), kF = (3*pi^2*rho)^(1/3)
-  static double ReducedT(double rho, double sigma) {
+  static TIDES_HD double ReducedT(double rho, double sigma) {
     if (rho < detail::kRhoMin) return 0.0;
     const double grad = std::sqrt(std::max(sigma, 0.0));
     const double kF = detail::FermiWavevector(rho);
@@ -129,7 +149,7 @@ struct PbeCorrelation {
   }
 
   // H(t, eps_c_lda): gradient correction to correlation.
-  static double Hcorr(double t, double eps_c_lda) {
+  static TIDES_HD double Hcorr(double t, double eps_c_lda) {
     const double t2 = t * t;
     const double exp_term = std::exp(-eps_c_lda / gamma);
     const double denom = 1.0 + (beta / gamma) * t2 * exp_term;
@@ -137,7 +157,7 @@ struct PbeCorrelation {
   }
 
   // eps_c^GGA = eps_c^LDA + H
-  static double Eps(double rho, double sigma) {
+  static TIDES_HD double Eps(double rho, double sigma) {
     if (rho < detail::kRhoMin) return 0.0;
     const double eps_c_lda = LdaPw92::Eps(rho);
     const double t = ReducedT(rho, sigma);
@@ -148,7 +168,7 @@ struct PbeCorrelation {
   // This is complex — the full derivative involves dH/d(t) * d(t)/d(rho) and dH/d(eps_c) * d(eps_c)/d(rho).
   // For the Tier-0 implementation, we compute these analytically.
   struct Result { double v_rho; double v_sigma; };
-  static Result VrhoVsigma(double rho, double sigma) {
+  static TIDES_HD Result VrhoVsigma(double rho, double sigma) {
     if (rho < detail::kRhoMin) return {0.0, 0.0};
     const double rs = detail::RhoToRs(rho);
     const double eps_c_lda = LdaPw92::EpsRs(rs);
@@ -203,11 +223,11 @@ struct PbeCorrelation {
 };
 
 // Convenience typedefs for standard PBE parameter sets.
-using PbeX = PbeExchange<0.804, 0.2195149727645171>;
-using PbesolX = PbeExchange<1.0, 0.1234567901234568>;
-using RevPbeX = PbeExchange<1.245, 0.2195149727645171>;
+using PbeX = PbeExchange<PbeXParams>;
+using PbesolX = PbeExchange<PbesolXParams>;
+using RevPbeX = PbeExchange<RevPbeXParams>;
 
-using PbeC = PbeCorrelation<0.06672455060314922>;
-using PbesolC = PbeCorrelation<0.046>;
+using PbeC = PbeCorrelation<PbeCParams>;
+using PbesolC = PbeCorrelation<PbesolCParams>;
 
 }  // namespace tides::grid::xc

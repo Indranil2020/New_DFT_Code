@@ -311,84 +311,17 @@ class NaoDriver {
       }
     }
 
-    // Step 3: Assemble S and T matrices.
-    // For s-s pairs: use tabulated splines.
-    // For general (l_a, l_b): use direct grid integration (fallback).
-    // This is a first implementation — s-s is exact via splines, higher-l
-    // uses grid-based numerical integration.
-    std::vector<double> S(n * n, 0.0);
-    std::vector<double> T(n * n, 0.0);
-
-    // Diagonal (same-atom) blocks: use direct radial integration.
-    for (std::size_t a = 0; a < atoms.size(); ++a) {
-      for (std::size_t bi = 0; bi < basis_map.size(); ++bi) {
-        if (basis_map[bi].atom != a) continue;
-        for (std::size_t bj = 0; bj < basis_map.size(); ++bj) {
-          if (basis_map[bj].atom != a) continue;
-          const auto& fa = atoms[a].basis.functions[basis_map[bi].fn];
-          const auto& fb = atoms[a].basis.functions[basis_map[bj].fn];
-          const int la = basis_map[bi].l, lb = basis_map[bj].l;
-          const int ma = basis_map[bi].m, mb = basis_map[bj].m;
-
-          if (la == lb && ma == mb) {
-            // Same atom, same l, same m: ∫ R_a R_b r² dr (orthogonality via m).
-            double s_val = 0.0, t_val = 0.0;
-            const auto& r = fa.r;
-            const auto& Ra = fa.R;
-            const auto& Rb = fb.R;
-            for (std::size_t i = 0; i + 1 < r.size(); ++i) {
-              const double dr = r[i + 1] - r[i];
-              s_val += 0.5 * (Ra[i] * Rb[i] * r[i] * r[i] +
-                             Ra[i + 1] * Rb[i + 1] * r[i + 1] * r[i + 1]) * dr;
-              // Kinetic: -0.5 ∫ R_a ∇²R_b r² dr (same-atom, no R shift)
-              // Approximate ∇²R_b ≈ R_b'' + (2/r)R_b' + l(l+1)/r² R_b
-              if (i > 0 && i + 1 < r.size()) {
-                const double d2Rb = (Rb[i + 1] - 2.0 * Rb[i] + Rb[i - 1]) / (dr * dr);
-                const double dRb = (Rb[i + 1] - Rb[i - 1]) / (2.0 * dr);
-                const double lap = d2Rb + 2.0 * dRb / r[i] +
-                                   static_cast<double>(lb * (lb + 1)) / (r[i] * r[i]) * Rb[i];
-                t_val += -0.5 * Ra[i] * lap * r[i] * r[i] * dr;
-              }
-            }
-            S[bi * n + bj] = s_val;
-            T[bi * n + bj] = t_val;
-          }
-        }
+    // Step 3: Set up the grid and evaluate NAO basis functions.
+    // The grid margin must exceed the largest radial cutoff so every basis
+    // function is zero at the domain boundaries; this makes integration-by-
+    // parts valid for the kinetic-energy matrix.
+    double max_rcut = 0.0;
+    for (const auto& atom : atoms) {
+      for (const auto& f : atom.basis.functions) {
+        max_rcut = std::max(max_rcut, f.r_cut);
       }
     }
-
-    // Off-diagonal (different-atom) blocks: use splines for s-s.
-    for (std::size_t bi = 0; bi < basis_map.size(); ++bi) {
-      for (std::size_t bj = bi + 1; bj < basis_map.size(); ++bj) {
-        const auto& atom_a = atoms[basis_map[bi].atom];
-        const auto& atom_b = atoms[basis_map[bj].atom];
-        if (basis_map[bi].atom == basis_map[bj].atom) continue;
-
-        const auto& fa = atom_a.basis.functions[basis_map[bi].fn];
-        const auto& fb = atom_b.basis.functions[basis_map[bj].fn];
-        const int la = basis_map[bi].l, lb = basis_map[bj].l;
-
-        // Compute interatomic distance.
-        const double dx = atom_b.position[0] - atom_a.position[0];
-        const double dy = atom_b.position[1] - atom_a.position[1];
-        const double dz = atom_b.position[2] - atom_a.position[2];
-        const double R = std::sqrt(dx * dx + dy * dy + dz * dz);
-
-        if (la == 0 && lb == 0) {
-          // s-s: use tabulated spline.
-          auto S_spline = TabulateOverlapSS(fa, fb);
-          auto T_spline = TabulateKineticSS(fa, fb);
-          double s_val = S_spline.Eval(R);
-          double t_val = T_spline.Eval(R);
-          S[bi * n + bj] = s_val;
-          S[bj * n + bi] = s_val;
-          T[bi * n + bj] = t_val;
-          T[bj * n + bi] = t_val;
-        }
-        // Higher angular momentum: deferred to grid-based integration.
-        // For now, set to 0 (will be caught by linear dependence check).
-      }
-    }
+    grid_margin = std::max(grid_margin, max_rcut + 2.0);
 
     // Step 4: Count electrons.
     std::size_t n_electrons = 0;
@@ -442,6 +375,56 @@ class NaoDriver {
             orbitals[bi][g] = EvalNaoBasisFn(bf, m, {atom.position[0], atom.position[1], atom.position[2]}, {x, y, z});
           }
         }
+      }
+    }
+
+    // Step 6b: Assemble S and T matrices by direct grid integration.
+    // S_ab = ∫ φ_a φ_b d³r; T_ab = ½ ∫ ∇φ_a · ∇φ_b d³r (integration by parts).
+    // This supports all angular momenta and automatically handles overlaps of
+    // any (l_a, m_a, l_b, m_b) pair.
+    std::vector<double> S(n * n, 0.0);
+    std::vector<double> T(n * n, 0.0);
+    const double dv = grid_h * grid_h * grid_h;
+
+    // Compute gradients of every orbital by central differences.
+    std::vector<std::array<double, 3>> grad_orbitals(n * n0 * n1 * n2);
+    for (std::size_t bi = 0; bi < n; ++bi) {
+      for (std::size_t ix = 0; ix < n0; ++ix) {
+        for (std::size_t iy = 0; iy < n1; ++iy) {
+          for (std::size_t iz = 0; iz < n2; ++iz) {
+            const std::size_t g = grid.flatten(ix, iy, iz);
+            std::array<double, 3> grad = {0.0, 0.0, 0.0};
+            if (ix > 0 && ix + 1 < n0) {
+              grad[0] = (orbitals[bi][grid.flatten(ix + 1, iy, iz)] -
+                         orbitals[bi][grid.flatten(ix - 1, iy, iz)]) / (2.0 * grid_h);
+            }
+            if (iy > 0 && iy + 1 < n1) {
+              grad[1] = (orbitals[bi][grid.flatten(ix, iy + 1, iz)] -
+                         orbitals[bi][grid.flatten(ix, iy - 1, iz)]) / (2.0 * grid_h);
+            }
+            if (iz > 0 && iz + 1 < n2) {
+              grad[2] = (orbitals[bi][grid.flatten(ix, iy, iz + 1)] -
+                         orbitals[bi][grid.flatten(ix, iy, iz - 1)]) / (2.0 * grid_h);
+            }
+            grad_orbitals[bi * n0 * n1 * n2 + g] = grad;
+          }
+        }
+      }
+    }
+
+    for (std::size_t bi = 0; bi < n; ++bi) {
+      for (std::size_t bj = bi; bj < n; ++bj) {
+        double s_val = 0.0, t_val = 0.0;
+        for (std::size_t g = 0; g < n0 * n1 * n2; ++g) {
+          s_val += orbitals[bi][g] * orbitals[bj][g] * dv;
+          const auto& ga = grad_orbitals[bi * n0 * n1 * n2 + g];
+          const auto& gb = grad_orbitals[bj * n0 * n1 * n2 + g];
+          t_val += 0.5 * (ga[0] * gb[0] + ga[1] * gb[1] + ga[2] * gb[2]) * dv;
+        }
+        S[bi * n + bj] = s_val;
+        S[bj * n + bi] = s_val;
+        T[bi * n + bj] = t_val;
+        T[bj * n + bi] = t_val;
       }
     }
 

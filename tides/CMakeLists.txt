@@ -96,6 +96,8 @@ if(TIDES_ENABLE_CUDA)
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     set(CMAKE_CUDA_EXTENSIONS OFF)
+    set(TIDES_HAVE_CUDA ON CACHE BOOL "CUDA is available")
+    add_compile_definitions(TIDES_HAVE_CUDA=1)
 
     add_library(tides_cuda_tile STATIC
       core/tile/gemm_grouped.cu
@@ -243,7 +245,8 @@ if(TIDES_ENABLE_CUDA)
     target_compile_options(tides_cuda_grid PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
     set_target_properties(tides_cuda_grid PROPERTIES
-      CUDA_RUNTIME_LIBRARY Shared)
+      CUDA_RUNTIME_LIBRARY Shared
+      POSITION_INDEPENDENT_CODE TRUE)
 
     add_executable(tides_cuda_rho_build_tests
       core/grid/tests/cuda_rho_build_tests.cpp)
@@ -619,6 +622,15 @@ set_target_properties(tides_molecule_driver_tests PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME molecule_driver_end_to_end_scf
   COMMAND tides_molecule_driver_tests)
+
+add_executable(tides_nao_driver_tests
+  core/scf/tests/nao_driver_tests.cpp)
+target_link_libraries(tides_nao_driver_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_nao_driver_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME nao_driver_end_to_end_scf
+  COMMAND tides_nao_driver_tests)
 
 add_executable(tides_e6_dynamics_profile
   tests/per_engine/e6_dynamics/e6_test_profile.cpp)

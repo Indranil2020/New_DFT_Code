@@ -123,7 +123,16 @@ class NaoGenerator {
         f.r_cut = rc;
         f.R = states[0].R;
         f.r = states[0].r_grid;
-        // Truncate at r_cut (enforce strictly zero beyond).
+        // Smooth cutoff at r_cut: enforce R and dR/dr to zero at r_cut.
+        // Use a polynomial f(x) = (1 - x^2)^2 with x = r/rc, which has f(1)=0,
+        // f'(1)=0, and f(0)=1. This removes the derivative discontinuity from the
+        // hard-wall confinement and is required for accurate grid kinetic-energy
+        // integrals in the NAO SCF driver.
+        for (std::size_t i = 0; i < f.R.size() && f.r[i] <= rc; ++i) {
+          const double x = f.r[i] / rc;
+          const double cutoff = (1.0 - x * x) * (1.0 - x * x);
+          f.R[i] *= cutoff;
+        }
         for (std::size_t i = 0; i < f.R.size(); ++i)
           if (f.r[i] > rc) f.R[i] = 0.0;
         // Renormalize within [0, rc].
