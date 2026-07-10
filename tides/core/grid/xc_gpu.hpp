@@ -25,8 +25,4 @@ struct XCGpuResult {
     const std::vector<double>& rho,
     double zeta);
 
-[[nodiscard]] Result<XCGpuResult> XCEvalPbeCuda(
-    const UniformGrid3D& grid,
-    const std::vector<double>& rho);
-
 }  // namespace tides::grid

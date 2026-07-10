@@ -76,6 +76,44 @@ __global__ void VmatBuildKernel(
   }
 }
 
+// Direct device-native GGA adjoint for the frozen weighted-field contract.
+// A TileMat/GEMM backend may replace this reduction, but it must not insert a
+// divergence stencil or reapply quadrature weights.
+__global__ void GgaVmatDeviceKernel(
+    const double* phi, const double* grad_phi, const double* wv_rho,
+    const double* wv_grad, double* vmat, std::int64_t nbasis,
+    std::int64_t np, std::int64_t point_stride) {
+  const std::int64_t mu = static_cast<std::int64_t>(blockIdx.x);
+  const std::int64_t nu = static_cast<std::int64_t>(blockIdx.y);
+  if (mu >= nbasis || nu >= nbasis || nu < mu) return;
+  const std::int64_t basis_plane = nbasis * point_stride;
+  double partial = 0.0;
+  for (std::int64_t point = threadIdx.x; point < np; point += blockDim.x) {
+    const double phi_mu = phi[mu * point_stride + point];
+    const double phi_nu = phi[nu * point_stride + point];
+    double value = wv_rho[point] * phi_mu * phi_nu;
+    for (std::int64_t component = 0; component < 3; ++component) {
+      const std::int64_t grad_offset = component * basis_plane;
+      const double dphi_mu = grad_phi[grad_offset + mu * point_stride + point];
+      const double dphi_nu = grad_phi[grad_offset + nu * point_stride + point];
+      value += wv_grad[component * point_stride + point] *
+          (dphi_mu * phi_nu + phi_mu * dphi_nu);
+    }
+    partial += value;
+  }
+  __shared__ double reduction[256];
+  reduction[threadIdx.x] = partial;
+  __syncthreads();
+  for (int offset = 128; offset > 0; offset /= 2) {
+    if (threadIdx.x < offset) reduction[threadIdx.x] += reduction[threadIdx.x + offset];
+    __syncthreads();
+  }
+  if (threadIdx.x == 0) {
+    vmat[mu * nbasis + nu] = reduction[0];
+    vmat[nu * nbasis + mu] = reduction[0];
+  }
+}
+
 template <typename T>
 Status CopyToDevice(const std::vector<T>& host, T** device) {
   if (host.empty()) { *device = nullptr; return Status::Ok(); }
@@ -199,6 +237,33 @@ void FreeDevice(T* ptr) { if (ptr) cudaFree(ptr); }
       0.0, candidates, candidates, 0,
       "CUDA v->H adjoint map (potential to Hamiltonian tile)"});
   return result;
+}
+
+Status BuildGgaVmatDevice(const GgaVmatDeviceIn& input, double* vmat,
+                          cudaStream_t stream) {
+  if (input.nbasis <= 0 || input.np < 0 || input.point_stride < input.np) {
+    return Status::InvalidArgument(
+        "GGA vmat device build requires nbasis > 0, np >= 0, and point_stride >= np");
+  }
+  if (input.phi == nullptr || input.grad_phi == nullptr ||
+      input.wv_rho == nullptr || input.wv_grad == nullptr || vmat == nullptr) {
+    return Status::InvalidArgument(
+        "GGA vmat device build requires non-null device pointers");
+  }
+  if (input.np == 0) {
+    return CudaStatus(cudaMemsetAsync(
+                          vmat, 0,
+                          static_cast<std::size_t>(input.nbasis) * input.nbasis *
+                              sizeof(double),
+                          stream),
+                      "cudaMemsetAsync GGA vmat");
+  }
+  dim3 grid_dim(static_cast<unsigned int>(input.nbasis),
+                static_cast<unsigned int>(input.nbasis));
+  GgaVmatDeviceKernel<<<grid_dim, 256, 0, stream>>>(
+      input.phi, input.grad_phi, input.wv_rho, input.wv_grad, vmat,
+      input.nbasis, input.np, input.point_stride);
+  return CudaStatus(cudaGetLastError(), "GgaVmatDeviceKernel launch");
 }
 
 }  // namespace tides::grid

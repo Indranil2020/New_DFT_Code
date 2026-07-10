@@ -18,6 +18,8 @@
 #include <cmath>
 #include <cstddef>
 
+#include "grid/xc/functionals/lda_pw92.cuh"
+
 namespace tides::atomgen {
 
 class LdaXC {
@@ -69,29 +71,17 @@ class LdaXC {
   }
 
   static double EpsCParamagnetic(double rs) {
-    const double a = 0.0310907, a1 = 0.2137;
-    const double b1 = 7.5957, b2 = 3.5876, b3 = 1.6382, b4 = 0.49294;
-    const double sr = std::sqrt(rs);
-    const double Q = b1 * sr + b2 * rs + b3 * rs * sr + b4 * rs * rs;
-    return -2.0 * a * (1.0 + a1 * rs) * std::log(1.0 + 1.0 / (2.0 * a * Q));
+    return tides::grid::xc::LdaPw92::EvalParamagnetic(rs).eps;
   }
   static double EpsCFerromagnetic(double rs) {
-    const double a = 0.015545, a1 = 0.20548;
-    const double b1 = 14.1189, b2 = 6.1977, b3 = 3.3662, b4 = 0.62517;
-    const double sr = std::sqrt(rs);
-    const double Q = b1 * sr + b2 * rs + b3 * rs * sr + b4 * rs * rs;
-    return -2.0 * a * (1.0 + a1 * rs) * std::log(1.0 + 1.0 / (2.0 * a * Q));
+    return tides::grid::xc::LdaPw92::EvalFerromagnetic(rs).eps;
   }
-  // d(eps_c)/d(rs) via central finite difference (analytic derivative of the
-  // PW92 log form is algebraically heavy; FD with a tight relative step is
-  // accurate to ~1e-12, well within our SCF tolerance).
+  // Analytic PW92 derivatives shared with the Tier-0 device functor.
   static double DEpsCParamagneticDRs(double rs) {
-    const double h = 1e-6 * (1.0 + rs);
-    return (EpsCParamagnetic(rs + h) - EpsCParamagnetic(rs - h)) / (2.0 * h);
+    return tides::grid::xc::LdaPw92::EvalParamagnetic(rs).d_eps_d_rs;
   }
   static double DEpsCFerromagneticDRs(double rs) {
-    const double h = 1e-6 * (1.0 + rs);
-    return (EpsCFerromagnetic(rs + h) - EpsCFerromagnetic(rs - h)) / (2.0 * h);
+    return tides::grid::xc::LdaPw92::EvalFerromagnetic(rs).d_eps_d_rs;
   }
 
   // V_c = d(n eps_c)/dn. Computed via the chain rule using d(eps_c)/dn.

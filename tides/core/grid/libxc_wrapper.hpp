@@ -77,6 +77,12 @@ class LibxcFunctional {
     return xc_func_info_get_family(func_->info);
   }
 
+  // Exposes the initialized threshold so Tier-0 can mirror the pinned libxc
+  // oracle rather than copying an assumption into a device functor.
+  double DensityThreshold() const {
+    return (func_ != nullptr) ? func_->dens_threshold : 0.0;
+  }
+
   // Get the functional name.
   std::string Name() const {
     if (func_ == nullptr || func_->info == nullptr) return "unknown";

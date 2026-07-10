@@ -71,6 +71,8 @@ wp3:
     lda_energy: 1.0e-12            # uniform gas analytic (MET: 1e-13)
     pbe_fs0: "exact (=1.0)"
     pbe_fsinf: "exact (=1.804)"
+    rung0_rel: 5.0e-14             # Tier-0 FP64 pointwise vs CPU libxc
+    adjoint: 1.0e-9                # Tier-0 GGA Tr[V_xc dP] vs FD(E_xc)
 
 # --- WP4: Mid-range solvers (CPU foundation) ---
 wp4:

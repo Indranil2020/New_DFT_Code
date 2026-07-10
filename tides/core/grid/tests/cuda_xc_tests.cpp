@@ -1,10 +1,9 @@
-// T3.5: GPU XC functional evaluation tests — vs CPU reference.
+// T3.5: legacy GPU LDA functional evaluation tests — vs CPU reference.
 // Validates that the CUDA LDA-PW92 XC evaluation produces V_xc and eps_xc
 // equal to the CPU path within <=1e-12, and XC energy matches.
 
 #include "grid/xc.hpp"
 #include "grid/xc_gpu.hpp"
-#include "grid/libxc_wrapper.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,10 +16,7 @@ namespace {
 using tides::grid::XCGridEvaluator;
 using tides::grid::XCCudaAvailable;
 using tides::grid::XCEvalLdaCuda;
-using tides::grid::XCEvalPbeCuda;
-using tides::grid::XCGpuResult;
 using tides::grid::UniformGrid3D;
-using tides::grid::LibxcFunctional;
 
 double MaxAbsDifference(const std::vector<double>& a,
                         const std::vector<double>& b) {
@@ -76,9 +72,8 @@ int TestXCVsCpu() {
             << " gpu_energy=" << gpu_result.value().xc_energy
             << " energy_diff=" << energy_diff << '\n';
 
-  // GPU and CPU use the same LDA-PW92 formulas, so eps_xc agreement is
-  // machine-precision. V_xc uses a central FD derivative for d(eps_c)/d(rs),
-  // which has ~1e-10 rounding differences between GPU/CPU math libraries.
+  // The legacy GPU wrapper and CPU path share the analytic PW92 derivative.
+  // The independent libxc check belongs to the Tier-0 rung-0 oracle test.
   if (vxc_diff > 1e-9) {
     std::cerr << "FAIL: vxc_diff=" << vxc_diff << " > 1e-9\n";
     return 1;
@@ -172,87 +167,6 @@ int TestXCLedger() {
   return 0;
 }
 
-int TestPbeLibxc() {
-  // Test PBE GGA evaluation via libxc on a 16^3 grid.
-  UniformGrid3D grid;
-  grid.n = {16, 16, 16};
-  grid.h = {0.3, 0.3, 0.3};
-  grid.origin = {-2.4, -2.4, -2.4};
-
-  const auto rho = MakeGaussianRho(grid, 0.5, {0.0, 0.0, 0.0});
-
-  // Evaluate PBE via libxc wrapper (CPU).
-  const auto [n0, n1, n2] = grid.n;
-  const auto [h0, h1, h2] = grid.h;
-  auto pbe_cpu = LibxcFunctional::EvalPBEOnGrid(n0, n1, n2, h0, h1, h2, rho);
-
-  // Evaluate PBE via GPU path (libxc CPU + GPU energy reduction).
-  auto gpu_result = XCEvalPbeCuda(grid, rho);
-  if (!gpu_result.ok()) {
-    std::cerr << "XCEvalPbeCuda failed: " << gpu_result.status().message()
-              << '\n';
-    return 1;
-  }
-
-  const double eps_diff =
-      MaxAbsDifference(gpu_result.value().eps_xc, pbe_cpu.eps_xc);
-  const double vxc_diff =
-      MaxAbsDifference(gpu_result.value().vxc, pbe_cpu.vxc);
-
-  // Compute CPU energy for comparison.
-  const double dv = h0 * h1 * h2;
-  double cpu_energy = 0.0;
-  for (std::size_t i = 0; i < rho.size(); ++i)
-    cpu_energy += pbe_cpu.eps_xc[i] * rho[i] * dv;
-  const double energy_diff =
-      std::abs(gpu_result.value().xc_energy - cpu_energy);
-
-  std::cout << "pbe_libxc: grid=16^3"
-            << " eps_diff=" << eps_diff
-            << " vxc_diff=" << vxc_diff
-            << " cpu_energy=" << cpu_energy
-            << " gpu_energy=" << gpu_result.value().xc_energy
-            << " energy_diff=" << energy_diff << '\n';
-
-  // libxc CPU and GPU path use the same libxc evaluation, so agreement
-  // should be machine precision for eps_xc and vxc.
-  if (eps_diff > 1e-12) {
-    std::cerr << "FAIL: pbe eps_diff=" << eps_diff << " > 1e-12\n";
-    return 1;
-  }
-  if (vxc_diff > 1e-12) {
-    std::cerr << "FAIL: pbe vxc_diff=" << vxc_diff << " > 1e-12\n";
-    return 1;
-  }
-  if (energy_diff > 1e-10) {
-    std::cerr << "FAIL: pbe energy_diff=" << energy_diff << " > 1e-10\n";
-    return 1;
-  }
-
-  // Also verify that PBE gives different results from LDA (sanity check).
-  auto lda_result = XCEvalLdaCuda(grid, rho, 0.0);
-  if (lda_result.ok()) {
-    double lda_eps_max = 0.0, pbe_eps_max = 0.0;
-    for (std::size_t i = 0; i < rho.size(); ++i) {
-      lda_eps_max = std::max(lda_eps_max, std::abs(lda_result.value().eps_xc[i]));
-      pbe_eps_max = std::max(pbe_eps_max, std::abs(gpu_result.value().eps_xc[i]));
-    }
-    std::cout << "pbe_vs_lda: lda_eps_max=" << lda_eps_max
-              << " pbe_eps_max=" << pbe_eps_max << '\n';
-    // PBE and LDA should differ (PBE has gradient corrections).
-    double max_eps_diff = MaxAbsDifference(gpu_result.value().eps_xc,
-                                           lda_result.value().eps_xc);
-    if (max_eps_diff < 1e-6) {
-      std::cerr << "FAIL: PBE and LDA give nearly identical results "
-                << "(max_eps_diff=" << max_eps_diff << ")\n";
-      return 1;
-    }
-    std::cout << "pbe_vs_lda: max_eps_diff=" << max_eps_diff << " (expected > 1e-6)\n";
-  }
-
-  return 0;
-}
-
 }  // namespace
 
 int main() {
@@ -265,7 +179,6 @@ int main() {
   failures += TestXCVsCpu();
   failures += TestXCLargerGrid();
   failures += TestXCLedger();
-  failures += TestPbeLibxc();
 
   if (failures == 0) {
     std::cout << "All GPU XC evaluation tests passed.\n";

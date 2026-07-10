@@ -18,6 +18,27 @@ endif()
 
 enable_testing()
 
+# Tier-0 rung-0 tests receive their acceptance criterion from the YAML source
+# of truth at configure time. Do not duplicate this value in a test source.
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/verification/tolerances.yaml
+  TIDES_XC_RUNG0_TOLERANCE_LINE REGEX "^[ \t]*rung0_rel:")
+list(LENGTH TIDES_XC_RUNG0_TOLERANCE_LINE TIDES_XC_RUNG0_TOLERANCE_COUNT)
+if(NOT TIDES_XC_RUNG0_TOLERANCE_COUNT EQUAL 1)
+  message(FATAL_ERROR "Expected one xc_grid.rung0_rel tolerance")
+endif()
+list(GET TIDES_XC_RUNG0_TOLERANCE_LINE 0 TIDES_XC_RUNG0_TOLERANCE_LINE)
+string(REGEX REPLACE ".*:[ \t]*([^ \t#]+).*" "\\1" TIDES_XC_RUNG0_REL
+  "${TIDES_XC_RUNG0_TOLERANCE_LINE}")
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/verification/tolerances.yaml
+  TIDES_XC_ADJOINT_TOLERANCE_LINE REGEX "^[ \t]*adjoint:")
+list(LENGTH TIDES_XC_ADJOINT_TOLERANCE_LINE TIDES_XC_ADJOINT_TOLERANCE_COUNT)
+if(NOT TIDES_XC_ADJOINT_TOLERANCE_COUNT EQUAL 1)
+  message(FATAL_ERROR "Expected one xc_grid.adjoint tolerance")
+endif()
+list(GET TIDES_XC_ADJOINT_TOLERANCE_LINE 0 TIDES_XC_ADJOINT_TOLERANCE_LINE)
+string(REGEX REPLACE ".*:[ \t]*([^ \t#]+).*" "\\1" TIDES_XC_ADJOINT
+  "${TIDES_XC_ADJOINT_TOLERANCE_LINE}")
+
 add_executable(tides_tilemat_tests core/tile/tests/tilemat_tests.cpp)
 target_link_libraries(tides_tilemat_tests PRIVATE tides_core)
 add_test(NAME tilemat_analytical_invariants COMMAND tides_tilemat_tests)
@@ -237,7 +258,9 @@ if(TIDES_ENABLE_CUDA)
       core/grid/rho_build.cu
       core/grid/poisson_fft.cu
       core/grid/vmat_build.cu
-      core/grid/xc.cu)
+      core/grid/xc.cu
+      core/grid/xc/xc_engine.cu
+      core/grid/xc/kernels/xc_gga_kernel.cu)
     target_link_libraries(tides_cuda_grid PUBLIC tides_grid tides_cuda_tile cufft)
     target_compile_options(tides_cuda_grid PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
@@ -289,6 +312,45 @@ if(TIDES_ENABLE_CUDA)
     add_test(NAME cuda_xc_lda_vs_cpu
              COMMAND tides_cuda_xc_tests)
     set_tests_properties(cuda_xc_lda_vs_cpu PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_lda_device_oracle_tests
+      core/grid/xc/tests/lda_device_oracle.cpp)
+    target_link_libraries(tides_xc_lda_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_lda_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_lda_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rung0_lda_device_vs_libxc
+      COMMAND tides_xc_lda_device_oracle_tests)
+    set_tests_properties(xc_rung0_lda_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_pbe_device_oracle_tests
+      core/grid/xc/tests/pbe_device_oracle.cpp)
+    target_link_libraries(tides_xc_pbe_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_pbe_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_pbe_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rung0_pbe_device_vs_libxc
+      COMMAND tides_xc_pbe_device_oracle_tests)
+    set_tests_properties(xc_rung0_pbe_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_nao_pipeline_device_tests
+      core/grid/xc/tests/nao_pipeline_device_oracle.cpp)
+    target_link_libraries(tides_xc_nao_pipeline_device_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_nao_pipeline_device_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_nao_pipeline_device_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_nao_device_rho_pbe_vmat_pipeline
+      COMMAND tides_xc_nao_pipeline_device_tests)
+    set_tests_properties(xc_nao_device_rho_pbe_vmat_pipeline PROPERTIES
       SKIP_RETURN_CODE 77)
 
     # WP5 T5.3: GPU SP2 purification
@@ -449,6 +511,27 @@ add_executable(tides_libxc_pbe_tests
   core/grid/tests/libxc_pbe_tests.cpp)
 target_link_libraries(tides_libxc_pbe_tests PRIVATE tides_grid)
 add_test(NAME wp3_libxc_pbe_vs_analytical COMMAND tides_libxc_pbe_tests)
+
+add_executable(tides_xc_rung0_oracle_tests
+  core/grid/xc/tests/rung0_oracle_sweep.cpp)
+target_link_libraries(tides_xc_rung0_oracle_tests PRIVATE tides_grid)
+target_compile_definitions(tides_xc_rung0_oracle_tests PRIVATE
+  TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+add_test(NAME xc_rung0_lda_host_vs_libxc COMMAND tides_xc_rung0_oracle_tests)
+
+add_executable(tides_xc_pbe_functor_oracle_tests
+  core/grid/xc/tests/pbe_functor_oracle.cpp)
+target_link_libraries(tides_xc_pbe_functor_oracle_tests PRIVATE tides_grid)
+target_compile_definitions(tides_xc_pbe_functor_oracle_tests PRIVATE
+  TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+add_test(NAME xc_rung0_pbe_host_vs_libxc COMMAND tides_xc_pbe_functor_oracle_tests)
+
+add_executable(tides_xc_rung1_adjoint_tests
+  core/grid/xc/tests/rung1_adjoint_tests.cpp)
+target_link_libraries(tides_xc_rung1_adjoint_tests PRIVATE tides_grid)
+target_compile_definitions(tides_xc_rung1_adjoint_tests PRIVATE
+  TIDES_XC_ADJOINT=${TIDES_XC_ADJOINT})
+add_test(NAME xc_rung1_pbe_gga_adjoint COMMAND tides_xc_rung1_adjoint_tests)
 
 add_executable(tides_collinear_spin_xc_tests
   core/grid/tests/collinear_spin_xc_tests.cpp)
