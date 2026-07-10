@@ -72,6 +72,8 @@ wp3:
     pbe_fs0: "exact (=1.0)"
     pbe_fsinf: "exact (=1.804)"
     rung0_rel: 5.0e-14             # Tier-0 FP64 pointwise vs CPU libxc
+    energy_abs_ha: 1.0e-8          # T-X1.6: He/Ne/H2O vs PySCF refs
+    ab_budget_mev_atom: 0.5        # T-X4.4: nightly A/B mixed-vs-FP64
     adjoint: 1.0e-9                # Tier-0 GGA Tr[V_xc dP] vs FD(E_xc)
 
 # --- WP4: Mid-range solvers (CPU foundation) ---

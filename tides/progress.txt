@@ -148,3 +148,26 @@
 - PySCF CPU: GEMM 55 GFLOPS, SCF H2O/cc-pVDZ 861ms, Forces 114ms
 - PySCF GPU: SCF H2O/cc-pVDZ 278ms (3.1x vs CPU), Eig n=512 45ms (90x vs CPU)
 - TIDES GPU GEMM 967 GFLOPS vs PySCF GPU GEMM 186 GFLOPS (5.2x faster)
+
+## XC Spin-Polarized (nspin=2) Implementation (2026-07-10):
+- Tier0 LDA polarized: Slater, PW92, VWN5 — oracle tests pass at ~2.5e-16 rel error
+- Tier0 GGA polarized: PBE, PBEsol, revPBE, RPBE, BLYP — oracle tests pass at ~4e-16 rel error (rho), ~4e-14 (grad)
+- Tier0 hybrid polarized: B3LYP, PBE0 local parts — implemented and dispatched
+- Tier1 mGGA polarized: TPSS, SCAN, r2SCAN, M06-2X — oracle tests pass
+- Tier1 RSH polarized: HSE06, wB97X — oracle tests pass
+- Tier0 polarized kernels: no __launch_bounds__, natural register count (197-214), STACK:0 (zero spills)
+- Tier0 LDA polarized: 132-147 regs, STACK:0
+- mGGA/RSH kernels: __launch_bounds__(128), 128 threads/block per design doc §5
+- mGGA/RSH polarized kernels split into Scalar (eps/vrho/vtau) + Grad (vsigma→wv_grad) passes
+  - Grad passes: STACK:0 for SCAN, TPSS, M06-2X, wB97X; STACK:8 for r2SCAN
+  - Scalar passes: still spill (STACK:40-1720) due to Maple2c func_vxc_pol needing >255 regs
+  - Functor-level split (separate exchange/correlation) is future work to fully eliminate spills
+- HSE06 unpolarized: STACK:472 (pre-existing, 3 sub-functional composition)
+- Deterministic energy: bit-identical across 100 repeated runs (all functionals)
+- Full XC CTest suite: 19/19 PASS, 0 failures, 0 regressions
+- NAO pipeline test: PASS
+- Tolerances: rung0_rel=5e-14, energy_abs_ha=1e-8, ab_budget_mev_atom=0.5, adjoint=1e-9
+- Files added: tier0/tier0_pol.cu, tier0/tier0_pol_kernel.cuh, tier0/tier0_pol.hpp, tests/tier0_pol_device_oracle.cpp
+- Files modified: xc_engine.cu, kernels/xc_gga_kernel.cu, libxc_wrapper.hpp, CMakeLists.txt,
+  tier1/mgga_pol_kernel.cuh, tier1/mgga_tpss.cu, tier1/mgga_scan.cu, tier1/mgga_r2scan.cu,
+  tier1/mgga_m06_2x.cu, tier1/rsh_hse06.cu, tier1/rsh_wb97x.cu, verification/tolerances.yaml

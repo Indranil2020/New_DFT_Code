@@ -36,6 +36,11 @@ struct LdaPw92 {
     return correlation.eps - rs * correlation.d_eps_d_rs / 3.0;
   }
 
+  TIDES_XC_HOST_DEVICE static GgaEvaluation Eval(double rho) {
+    if (rho < detail::kLdaPw92DensityThreshold) return {};
+    return {EpsCorrelation(rho), VCorrelation(rho), 0.0};
+  }
+
  private:
   TIDES_XC_HOST_DEVICE static Correlation Eval(
       double rs, double a, double alpha1, double beta1, double beta2,

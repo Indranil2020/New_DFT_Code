@@ -1,7 +1,5 @@
 #include "grid/xc/xc_arena.hpp"
 #include "grid/xc/xc_engine.hpp"
-#include "grid/xc/functionals/lda_pw92.cuh"
-#include "grid/xc/functionals/lda_slater.cuh"
 #include "grid/xc/kernels/xc_gga_kernel.hpp"
 
 #include <cuda_runtime.h>
@@ -26,65 +24,72 @@ constexpr std::size_t kPointPadding = 512;
   return reinterpret_cast<std::uintptr_t>(pointer) % kDeviceAlignment == 0;
 }
 
-[[nodiscard]] bool IsLdaPw92(const XcSpec& spec) {
-  return spec.family == Family::kLda && spec.nspin == 1 &&
-         spec.precision == PrecisionPolicy::kFloat64 && spec.terms.size() == 1 &&
-         spec.terms[0].functional == Functional::kLdaPw92 &&
-         spec.terms[0].coefficient == 1.0;
-}
-
-[[nodiscard]] bool IsPbe(const XcSpec& spec) {
-  return spec.family == Family::kGga && spec.nspin == 1 &&
-         spec.precision == PrecisionPolicy::kFloat64 && spec.terms.size() == 1 &&
-         spec.terms[0].functional == Functional::kPbe &&
-         spec.terms[0].coefficient == 1.0;
-}
-
-__global__ void LdaPw92Kernel(const double* __restrict__ rho,
-                              const double* __restrict__ weights,
-                              double* __restrict__ wv_rho,
-                              double* __restrict__ exc,
-                              std::int64_t np, bool fast_reduction) {
-  double local_energy = 0.0;
-  for (std::int64_t point = static_cast<std::int64_t>(blockIdx.x) * blockDim.x +
-                            threadIdx.x;
-       point < np;
-       point += static_cast<std::int64_t>(gridDim.x) * blockDim.x) {
-    const double density = rho[point];
-    const double eps = LdaSlater::Eps(density) + LdaPw92::EpsCorrelation(density);
-    const double vrho = LdaSlater::V(density) + LdaPw92::VCorrelation(density);
-    wv_rho[point] = weights[point] * vrho;
-    if (fast_reduction) local_energy += weights[point] * density * eps;
+[[nodiscard]] bool IsSupportedFp64(const XcSpec& spec) {
+  if (spec.precision != PrecisionPolicy::kFloat64 ||
+      spec.terms.size() != 1 || spec.terms[0].coefficient != 1.0) {
+    return false;
   }
-  if (!fast_reduction) return;
-  for (int offset = 16; offset > 0; offset /= 2)
-    local_energy += __shfl_down_sync(0xffffffff, local_energy, offset);
-  if ((threadIdx.x & 31) == 0) atomicAdd(exc, local_energy);
-}
-
-__global__ void LdaPw92DeterministicEnergyKernel(const double* __restrict__ rho,
-                                                  const double* __restrict__ weights,
-                                                  double* __restrict__ exc,
-                                                  std::int64_t np) {
-  if (blockIdx.x != 0 || threadIdx.x != 0) return;
-  double energy = 0.0;
-  for (std::int64_t point = 0; point < np; ++point) {
-    const double density = rho[point];
-    const double eps = LdaSlater::Eps(density) + LdaPw92::EpsCorrelation(density);
-    energy += weights[point] * density * eps;
+  if (spec.nspin == 1) {
+    switch (spec.terms[0].functional) {
+      case Functional::kLdaPw92:
+      case Functional::kSvwn5:
+        return spec.family == Family::kLda;
+      case Functional::kPbe:
+      case Functional::kPbeSol:
+      case Functional::kRevPbe:
+      case Functional::kRpbe:
+      case Functional::kBlyp:
+      case Functional::kB3lyp:
+      case Functional::kPbe0:
+        return spec.family == Family::kGga;
+      case Functional::kTpss:
+      case Functional::kScan:
+      case Functional::kR2scan:
+      case Functional::kM06_2x:
+        return spec.family == Family::kMgga;
+      case Functional::kHse06:
+      case Functional::kWb97x:
+        return spec.family == Family::kRsh;
+      default:
+        return false;
+    }
   }
-  exc[0] = energy;
+  if (spec.nspin == 2) {
+    switch (spec.terms[0].functional) {
+      case Functional::kLdaPw92:
+      case Functional::kSvwn5:
+        return spec.family == Family::kLda;
+      case Functional::kPbe:
+      case Functional::kPbeSol:
+      case Functional::kRevPbe:
+      case Functional::kRpbe:
+      case Functional::kBlyp:
+      case Functional::kB3lyp:
+      case Functional::kPbe0:
+        return spec.family == Family::kGga;
+      case Functional::kHse06:
+      case Functional::kWb97x:
+        return spec.family == Family::kRsh;
+      case Functional::kTpss:
+      case Functional::kScan:
+      case Functional::kR2scan:
+      case Functional::kM06_2x:
+        return spec.family == Family::kMgga;
+      default:
+        return false;
+    }
+  }
+  return false;
 }
 
 }  // namespace
 
 Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
               cudaStream_t stream) {
-  const bool is_lda_pw92 = IsLdaPw92(spec);
-  const bool is_pbe = IsPbe(spec);
-  if (!is_lda_pw92 && !is_pbe) {
+  if (!IsSupportedFp64(spec)) {
     return Status::Unimplemented(
-        "Tier-0 supports only unpolarized LDA-PW92 or PBE in FP64");
+        "Tier-0 supports only FP64 LDA/GGA/mGGA/RSH functionals with nspin=1 or "
+        "nspin=2 in this build");
   }
   if (input.np < 0 || input.point_stride < input.np || input.nsys != 1) {
     return Status::InvalidArgument(
@@ -102,27 +107,24 @@ Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
     return Status::InvalidArgument(
         "rho, weights, and wv_rho must be non-null 256-byte-aligned device pointers");
   }
-  if (is_pbe &&
+  const bool needs_grad = (spec.family != Family::kLda);
+  if (needs_grad &&
       (input.grad == nullptr || output.wv_grad == nullptr ||
        !IsAligned(input.grad) || !IsAligned(output.wv_grad))) {
     return Status::InvalidArgument(
-        "PBE requires 256-byte-aligned grad and wv_grad device pointers");
+        "GGA functionals require 256-byte-aligned grad and wv_grad device pointers");
+  }
+  const bool needs_tau = (spec.family == Family::kMgga);
+  if (needs_tau &&
+      (input.tau == nullptr || output.wv_tau == nullptr ||
+       !IsAligned(input.tau) || !IsAligned(output.wv_tau))) {
+    return Status::InvalidArgument(
+        "mGGA functionals require 256-byte-aligned tau and wv_tau device pointers");
   }
 
   cudaError_t error = cudaMemsetAsync(output.exc_per_system, 0, sizeof(double), stream);
   if (error != cudaSuccess) return CudaStatus(error, "cudaMemsetAsync exc_per_system");
-  if (is_pbe) return LaunchPbeGgaKernel(input, output, stream, spec.deterministic);
-  constexpr int kThreads = 256;
-  const std::int64_t required_blocks = (input.np + kThreads - 1) / kThreads;
-  const int blocks = static_cast<int>(std::min<std::int64_t>(required_blocks, 65535));
-  LdaPw92Kernel<<<blocks, kThreads, 0, stream>>>(input.rho, input.w, output.wv_rho,
-                                                   output.exc_per_system, input.np,
-                                                   !spec.deterministic);
-  Status status = CudaStatus(cudaGetLastError(), "LdaPw92Kernel launch");
-  if (!status.ok() || !spec.deterministic) return status;
-  LdaPw92DeterministicEnergyKernel<<<1, 1, 0, stream>>>(
-      input.rho, input.w, output.exc_per_system, input.np);
-  return CudaStatus(cudaGetLastError(), "LdaPw92DeterministicEnergyKernel launch");
+  return LaunchXcFunctional(spec, input, output, stream);
 }
 
 class XcArena::Impl {

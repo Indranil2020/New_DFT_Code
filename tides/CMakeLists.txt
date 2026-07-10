@@ -260,7 +260,14 @@ if(TIDES_ENABLE_CUDA)
       core/grid/vmat_build.cu
       core/grid/xc.cu
       core/grid/xc/xc_engine.cu
-      core/grid/xc/kernels/xc_gga_kernel.cu)
+      core/grid/xc/kernels/xc_gga_kernel.cu
+      core/grid/xc/tier0/tier0_pol.cu
+      core/grid/xc/tier1/mgga_tpss.cu
+      core/grid/xc/tier1/mgga_scan.cu
+      core/grid/xc/tier1/mgga_r2scan.cu
+      core/grid/xc/tier1/mgga_m06_2x.cu
+      core/grid/xc/tier1/rsh_hse06.cu
+      core/grid/xc/tier1/rsh_wb97x.cu)
     target_link_libraries(tides_cuda_grid PUBLIC tides_grid tides_cuda_tile cufft)
     target_compile_options(tides_cuda_grid PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
@@ -338,6 +345,123 @@ if(TIDES_ENABLE_CUDA)
     add_test(NAME xc_rung0_pbe_device_vs_libxc
       COMMAND tides_xc_pbe_device_oracle_tests)
     set_tests_properties(xc_rung0_pbe_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_tpss_device_oracle_tests
+      core/grid/xc/tests/mgga_tpss_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_tpss_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_tpss_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_tpss_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_tpss_device_vs_libxc
+      COMMAND tides_xc_mgga_tpss_device_oracle_tests)
+    set_tests_properties(xc_mgga_tpss_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_scan_device_oracle_tests
+      core/grid/xc/tests/mgga_scan_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_scan_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_scan_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_scan_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_scan_device_vs_libxc
+      COMMAND tides_xc_mgga_scan_device_oracle_tests)
+    set_tests_properties(xc_mgga_scan_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_r2scan_device_oracle_tests
+      core/grid/xc/tests/mgga_r2scan_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_r2scan_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_r2scan_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_r2scan_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_r2scan_device_vs_libxc
+      COMMAND tides_xc_mgga_r2scan_device_oracle_tests)
+    set_tests_properties(xc_mgga_r2scan_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_m06_2x_device_oracle_tests
+      core/grid/xc/tests/mgga_m06_2x_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_m06_2x_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_m06_2x_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_m06_2x_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_m06_2x_device_vs_libxc
+      COMMAND tides_xc_mgga_m06_2x_device_oracle_tests)
+    set_tests_properties(xc_mgga_m06_2x_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_rsh_hse06_device_oracle_tests
+      core/grid/xc/tests/rsh_hse06_device_oracle.cpp)
+    target_link_libraries(tides_xc_rsh_hse06_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_rsh_hse06_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_rsh_hse06_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rsh_hse06_device_vs_libxc
+      COMMAND tides_xc_rsh_hse06_device_oracle_tests)
+    set_tests_properties(xc_rsh_hse06_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_rsh_wb97x_device_oracle_tests
+      core/grid/xc/tests/rsh_wb97x_device_oracle.cpp)
+    target_link_libraries(tides_xc_rsh_wb97x_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_rsh_wb97x_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_rsh_wb97x_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rsh_wb97x_device_vs_libxc
+      COMMAND tides_xc_rsh_wb97x_device_oracle_tests)
+    set_tests_properties(xc_rsh_wb97x_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_rsh_pol_device_oracle_tests
+      core/grid/xc/tests/rsh_pol_device_oracle.cpp)
+    target_link_libraries(tides_xc_rsh_pol_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_rsh_pol_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_rsh_pol_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rsh_pol_device_vs_libxc
+      COMMAND tides_xc_rsh_pol_device_oracle_tests)
+    set_tests_properties(xc_rsh_pol_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_pol_device_oracle_tests
+      core/grid/xc/tests/mgga_pol_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_pol_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_pol_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_pol_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_pol_device_vs_libxc
+      COMMAND tides_xc_mgga_pol_device_oracle_tests)
+    set_tests_properties(xc_mgga_pol_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_tier0_pol_device_oracle_tests
+      core/grid/xc/tests/tier0_pol_device_oracle.cpp)
+    target_link_libraries(tides_xc_tier0_pol_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_tier0_pol_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_tier0_pol_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_tier0_pol_device_vs_libxc
+      COMMAND tides_xc_tier0_pol_device_oracle_tests)
+    set_tests_properties(xc_tier0_pol_device_vs_libxc PROPERTIES
       SKIP_RETURN_CODE 77)
 
     add_executable(tides_xc_nao_pipeline_device_tests

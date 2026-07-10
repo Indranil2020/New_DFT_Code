@@ -25,8 +25,25 @@ namespace tides::grid {
 // libxc functional IDs (from xc_funcs.h)
 inline constexpr int kLibxc_LDA_X = XC_LDA_X;        // 1: Slater exchange
 inline constexpr int kLibxc_LDA_C_PW = XC_LDA_C_PW;  // 12: Perdew-Wang correlation
+inline constexpr int kLibxc_LDA_C_VWN = XC_LDA_C_VWN;  // 7: Vosko-Wilk-Nusair (VWN5)
 inline constexpr int kLibxc_GGA_X_PBE = XC_GGA_X_PBE;  // 101: PBE exchange
 inline constexpr int kLibxc_GGA_C_PBE = XC_GGA_C_PBE;  // 130: PBE correlation
+inline constexpr int kLibxc_GGA_C_PBE_SOL = XC_GGA_C_PBE_SOL;  // 133: PBEsol correlation
+inline constexpr int kLibxc_GGA_X_PBE_SOL = XC_GGA_X_PBE_SOL;  // 116: PBEsol exchange
+inline constexpr int kLibxc_GGA_X_PBE_R = XC_GGA_X_PBE_R;  // 102: revPBE exchange
+inline constexpr int kLibxc_GGA_X_RPBE = XC_GGA_X_RPBE;  // 117: RPBE exchange
+inline constexpr int kLibxc_GGA_X_B88 = XC_GGA_X_B88;  // 106: Becke 88 exchange
+inline constexpr int kLibxc_GGA_C_LYP = XC_GGA_C_LYP;  // 131: Lee-Yang-Parr correlation
+inline constexpr int kLibxc_MGGA_X_TPSS = XC_MGGA_X_TPSS;  // 201: TPSS exchange
+inline constexpr int kLibxc_MGGA_C_TPSS = XC_MGGA_C_TPSS;  // 202: TPSS correlation
+inline constexpr int kLibxc_MGGA_X_SCAN = XC_MGGA_X_SCAN;  // 263: SCAN exchange
+inline constexpr int kLibxc_MGGA_C_SCAN = XC_MGGA_C_SCAN;  // 267: SCAN correlation
+inline constexpr int kLibxc_MGGA_X_R2SCAN = XC_MGGA_X_R2SCAN;  // 497: r2SCAN exchange
+inline constexpr int kLibxc_MGGA_C_R2SCAN = XC_MGGA_C_R2SCAN;  // 498: r2SCAN correlation
+inline constexpr int kLibxc_HYB_MGGA_X_M06_2X = XC_HYB_MGGA_X_M06_2X;  // 450: M06-2X exchange
+inline constexpr int kLibxc_MGGA_C_M06_2X = XC_MGGA_C_M06_2X;  // 236: M06-2X correlation
+inline constexpr int kLibxc_HYB_GGA_XC_HSE06 = XC_HYB_GGA_XC_HSE06;  // 428: HSE06
+inline constexpr int kLibxc_HYB_GGA_XC_WB97X = XC_HYB_GGA_XC_WB97X;  // 464: wB97X
 
 // RAII wrapper for a libxc functional.
 class LibxcFunctional {
@@ -129,6 +146,39 @@ class LibxcFunctional {
     if (func_ == nullptr) return res;
     xc_gga_exc_vxc(func_, np, rho.data(), sigma.data(),
                    res.eps_xc.data(), res.vrho.data(), res.vsigma.data());
+    return res;
+  }
+
+  // Evaluate mGGA functional: eps_xc and V_xc from rho, sigma, lapl, and tau.
+  // rho: density array (size np for unpol, 2*np for pol)
+  // sigma: |grad rho|^2 array (size np for unpol, 3*np for pol)
+  // lapl: laplacian of density array (size np for unpol, 2*np for pol)
+  // tau: kinetic energy density array (size np for unpol, 2*np for pol)
+  struct MggaResult {
+    std::vector<double> eps_xc;   // per-particle energy
+    std::vector<double> vrho;     // dE/drho
+    std::vector<double> vsigma;   // dE/dsigma
+    std::vector<double> vlapl;    // dE/dlapl
+    std::vector<double> vtau;     // dE/dtau
+  };
+
+  MggaResult EvalMGGA(const std::vector<double>& rho,
+                      const std::vector<double>& sigma,
+                      const std::vector<double>& lapl,
+                      const std::vector<double>& tau,
+                      std::size_t np) const {
+    MggaResult res;
+    res.eps_xc.resize(np, 0.0);
+    const int nspin = (func_ != nullptr) ? func_->nspin : 1;
+    const int nsigma = (nspin == 2) ? 3 : 1;
+    res.vrho.resize(static_cast<std::size_t>(nspin) * np, 0.0);
+    res.vsigma.resize(static_cast<std::size_t>(nsigma) * np, 0.0);
+    res.vlapl.resize(static_cast<std::size_t>(nspin) * np, 0.0);
+    res.vtau.resize(static_cast<std::size_t>(nspin) * np, 0.0);
+    if (func_ == nullptr) return res;
+    xc_mgga_exc_vxc(func_, np, rho.data(), sigma.data(), lapl.data(), tau.data(),
+                    res.eps_xc.data(), res.vrho.data(), res.vsigma.data(),
+                    res.vlapl.data(), res.vtau.data());
     return res;
   }
 

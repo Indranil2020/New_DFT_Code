@@ -4,12 +4,6 @@
 
 namespace tides::grid::xc {
 
-struct GgaEvaluation {
-  double eps = 0.0;
-  double vrho = 0.0;
-  double vsigma = 0.0;
-};
-
 struct PbeParameters {
   static constexpr double kappa = 0.8040;
   static constexpr double mu = 0.2195149727645171;
@@ -28,95 +22,12 @@ struct RevPbeParameters {
   static constexpr double beta = 0.06672455060314922;
 };
 
-namespace detail {
-
-// Forward-mode differentiation of the local energy density e(rho, sigma).
-// This is analytic chain-rule differentiation, not a finite difference.
-struct DualRhoSigma {
-  double value;
-  double d_rho;
-  double d_sigma;
-
-  TIDES_XC_HOST_DEVICE DualRhoSigma(double value_in = 0.0,
-                                    double d_rho_in = 0.0,
-                                    double d_sigma_in = 0.0)
-      : value(value_in), d_rho(d_rho_in), d_sigma(d_sigma_in) {}
-};
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma operator+(
-    DualRhoSigma lhs, DualRhoSigma rhs) {
-  return {lhs.value + rhs.value, lhs.d_rho + rhs.d_rho,
-          lhs.d_sigma + rhs.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma operator-(
-    DualRhoSigma lhs, DualRhoSigma rhs) {
-  return {lhs.value - rhs.value, lhs.d_rho - rhs.d_rho,
-          lhs.d_sigma - rhs.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma operator-(DualRhoSigma value) {
-  return {-value.value, -value.d_rho, -value.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma operator*(
-    DualRhoSigma lhs, DualRhoSigma rhs) {
-  return {lhs.value * rhs.value,
-          lhs.d_rho * rhs.value + lhs.value * rhs.d_rho,
-          lhs.d_sigma * rhs.value + lhs.value * rhs.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma operator/(
-    DualRhoSigma lhs, DualRhoSigma rhs) {
-  const double inverse = 1.0 / rhs.value;
-  const double quotient = lhs.value * inverse;
-  return {quotient,
-          (lhs.d_rho - quotient * rhs.d_rho) * inverse,
-          (lhs.d_sigma - quotient * rhs.d_sigma) * inverse};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma Cbrt(DualRhoSigma value) {
-  const double root = detail::Cbrt(value.value);
-  const double factor = 1.0 / (3.0 * root * root);
-  return {root, factor * value.d_rho, factor * value.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma Sqrt(DualRhoSigma value) {
-  const double root = detail::Sqrt(value.value);
-  const double factor = 0.5 / root;
-  return {root, factor * value.d_rho, factor * value.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma Log(DualRhoSigma value) {
-  const double factor = 1.0 / value.value;
-  return {detail::Log(value.value), factor * value.d_rho, factor * value.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma Log1p(DualRhoSigma value) {
-  const double factor = 1.0 / (1.0 + value.value);
-  return {detail::Log1p(value.value), factor * value.d_rho,
-          factor * value.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma Exp(DualRhoSigma value) {
-  const double exponential = detail::Exp(value.value);
-  return {exponential, exponential * value.d_rho,
-          exponential * value.d_sigma};
-}
-
-TIDES_XC_HOST_DEVICE inline DualRhoSigma Expm1(DualRhoSigma value) {
-  const double exponential = detail::Exp(value.value);
-  return {detail::Expm1(value.value), exponential * value.d_rho,
-          exponential * value.d_sigma};
-}
-
-}  // namespace detail
-
 // PBE-family unpolarized GGA. The correlation expression follows libxc's
 // checked-in LDA_C_PW_MOD/PBE algebra and threshold semantics exactly. The
 // parameter type changes only the documented PBE-family constants.
 template <class Parameters>
 struct GgaPbe {
+  static constexpr Family kFamily = Family::kGga;
   static constexpr double kExchangeDensityThreshold = 1.0e-15;
   static constexpr double kExchangeSigmaThreshold = 1.0e-20;
   static constexpr double kCorrelationDensityThreshold = 1.0e-12;

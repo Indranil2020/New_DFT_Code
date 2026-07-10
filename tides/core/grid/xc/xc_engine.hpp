@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "common/status.hpp"
+#include "grid/xc/functionals/common.cuh"
 
 #if __has_include(<cuda_runtime_api.h>)
 #include <cuda_runtime_api.h>
@@ -19,8 +20,23 @@ using cudaStream_t = CUstream_st*;
 
 namespace tides::grid::xc {
 
-enum class Family : std::uint8_t { kLda, kGga, kMgga };
-enum class Functional : std::uint16_t { kLdaPw92, kPbe };
+enum class Functional : std::uint16_t {
+  kLdaPw92,
+  kSvwn5,
+  kPbe,
+  kPbeSol,
+  kRevPbe,
+  kRpbe,
+  kBlyp,
+  kB3lyp,
+  kPbe0,
+  kHse06,
+  kTpss,
+  kR2scan,
+  kScan,
+  kWb97x,
+  kM06_2x
+};
 enum class PrecisionPolicy : std::uint8_t { kFloat64, kFloat32MidScf };
 
 struct XcTerm {
