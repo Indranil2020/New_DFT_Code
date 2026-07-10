@@ -12,6 +12,7 @@
 
 #include "grid/poisson.hpp"
 #include "grid/dual_grid.hpp"
+#include "grid/gpu_arena.hpp"
 
 #include <cuda_runtime.h>
 #include <cufft.h>
@@ -176,7 +177,11 @@ struct PoissonFftGpuResult {
     host_rho_k[i].y = 0.0;
   }
 
-  // Allocate device memory.
+  // AUDIT B10: Use GPU arena for persistent device buffers and stream.
+  GpuArena& arena = GpuArena::Instance();
+  cudaStream_t stream = arena.Stream();
+
+  // Allocate device memory via arena (reuses cached blocks).
   cufftDoubleComplex* d_rho_k = nullptr;
   cufftDoubleComplex* d_V_k = nullptr;
   double* d_kx_sq = nullptr;
@@ -185,39 +190,42 @@ struct PoissonFftGpuResult {
   cufftHandle plan_fwd = 0, plan_inv = 0;
 
   auto cleanup = [&]() {
-    if (d_rho_k) cudaFree(d_rho_k);
-    if (d_V_k) cudaFree(d_V_k);
-    if (d_kx_sq) cudaFree(d_kx_sq);
-    if (d_ky_sq) cudaFree(d_ky_sq);
-    if (d_kz_sq) cudaFree(d_kz_sq);
+    if (d_rho_k) arena.Free(d_rho_k);
+    if (d_V_k) arena.Free(d_V_k);
+    if (d_kx_sq) arena.Free(d_kx_sq);
+    if (d_ky_sq) arena.Free(d_ky_sq);
+    if (d_kz_sq) arena.Free(d_kz_sq);
     if (plan_fwd) cufftDestroy(plan_fwd);
     if (plan_inv) cufftDestroy(plan_inv);
   };
 
-  cudaError_t err = cudaMalloc(reinterpret_cast<void**>(&d_rho_k),
-                                N * sizeof(cufftDoubleComplex));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc rho_k"); }
-  err = cudaMemcpy(d_rho_k, host_rho_k.data(), N * sizeof(cufftDoubleComplex),
-                   cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy rho_k"); }
+  d_rho_k = static_cast<cufftDoubleComplex*>(
+      arena.Alloc(N * sizeof(cufftDoubleComplex)));
+  if (!d_rho_k) { cleanup(); return Status::IoError("arena.Alloc failed for rho_k"); }
+  cudaError_t err = arena.H2D(d_rho_k, host_rho_k.data(),
+                               N * sizeof(cufftDoubleComplex));
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "arena.H2D rho_k"); }
 
-  err = cudaMalloc(reinterpret_cast<void**>(&d_V_k), N * sizeof(cufftDoubleComplex));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc V_k"); }
+  d_V_k = static_cast<cufftDoubleComplex*>(
+      arena.Alloc(N * sizeof(cufftDoubleComplex)));
+  if (!d_V_k) { cleanup(); return Status::IoError("arena.Alloc failed for V_k"); }
 
-  err = cudaMalloc(reinterpret_cast<void**>(&d_kx_sq), n0 * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc kx_sq"); }
-  err = cudaMemcpy(d_kx_sq, kx_sq.data(), n0 * sizeof(double), cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy kx_sq"); }
-  err = cudaMalloc(reinterpret_cast<void**>(&d_ky_sq), n1 * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc ky_sq"); }
-  err = cudaMemcpy(d_ky_sq, ky_sq.data(), n1 * sizeof(double), cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy ky_sq"); }
-  err = cudaMalloc(reinterpret_cast<void**>(&d_kz_sq), n2 * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc kz_sq"); }
-  err = cudaMemcpy(d_kz_sq, kz_sq.data(), n2 * sizeof(double), cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy kz_sq"); }
+  d_kx_sq = static_cast<double*>(arena.Alloc(n0 * sizeof(double)));
+  if (!d_kx_sq) { cleanup(); return Status::IoError("arena.Alloc failed for kx_sq"); }
+  err = arena.H2D(d_kx_sq, kx_sq.data(), n0 * sizeof(double));
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "arena.H2D kx_sq"); }
 
-  // Create C2C FFT plans (Z2Z for double-precision complex-to-complex).
+  d_ky_sq = static_cast<double*>(arena.Alloc(n1 * sizeof(double)));
+  if (!d_ky_sq) { cleanup(); return Status::IoError("arena.Alloc failed for ky_sq"); }
+  err = arena.H2D(d_ky_sq, ky_sq.data(), n1 * sizeof(double));
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "arena.H2D ky_sq"); }
+
+  d_kz_sq = static_cast<double*>(arena.Alloc(n2 * sizeof(double)));
+  if (!d_kz_sq) { cleanup(); return Status::IoError("arena.Alloc failed for kz_sq"); }
+  err = arena.H2D(d_kz_sq, kz_sq.data(), n2 * sizeof(double));
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "arena.H2D kz_sq"); }
+
+  // Create C2C FFT plans on the arena stream.
   cufftResult cufft_err = cufftPlan3d(&plan_fwd,
       static_cast<int>(n2), static_cast<int>(n1), static_cast<int>(n0),
       CUFFT_Z2Z);
@@ -225,6 +233,7 @@ struct PoissonFftGpuResult {
     cleanup();
     return CufftStatus(cufft_err, "cufftPlan3d Z2Z fwd");
   }
+  cufftSetStream(plan_fwd, stream);
   cufft_err = cufftPlan3d(&plan_inv,
       static_cast<int>(n2), static_cast<int>(n1), static_cast<int>(n0),
       CUFFT_Z2Z);
@@ -232,6 +241,7 @@ struct PoissonFftGpuResult {
     cleanup();
     return CufftStatus(cufft_err, "cufftPlan3d Z2Z inv");
   }
+  cufftSetStream(plan_inv, stream);
 
   auto kernel_start = std::chrono::steady_clock::now();
 
@@ -241,17 +251,17 @@ struct PoissonFftGpuResult {
     cleanup();
     return CufftStatus(cufft_err, "cufftExecZ2Z fwd");
   }
-  err = cudaDeviceSynchronize();
+  err = cudaStreamSynchronize(stream);
   if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "sync after fwd Z2Z"); }
 
   // Apply Green's function: V(k) = 4*pi*rho(k) / k^2.
   const int total = static_cast<int>(N);
   const int threads = 256;
   const int blocks = (total + threads - 1) / threads;
-  ApplyGreensFunctionKernel<<<blocks, threads>>>(
+  ApplyGreensFunctionKernel<<<blocks, threads, 0, stream>>>(
       d_V_k, d_rho_k, d_kx_sq, d_ky_sq, d_kz_sq,
       static_cast<int>(n0), static_cast<int>(n1), static_cast<int>(n2));
-  err = cudaDeviceSynchronize();
+  err = cudaStreamSynchronize(stream);
   if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "sync after Green's"); }
 
   // Inverse FFT: V(k) -> V(r).
@@ -260,18 +270,17 @@ struct PoissonFftGpuResult {
     cleanup();
     return CufftStatus(cufft_err, "cufftExecZ2Z inv");
   }
-  err = cudaDeviceSynchronize();
+  err = cudaStreamSynchronize(stream);
   if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "sync after inv Z2Z"); }
 
   auto kernel_end = std::chrono::steady_clock::now();
   result.kernel_ms =
       std::chrono::duration<double, std::milli>(kernel_end - kernel_start).count();
 
-  // Copy result back.
+  // Copy result back via arena D2H.
   std::vector<cufftDoubleComplex> host_V_k(N);
-  err = cudaMemcpy(host_V_k.data(), d_rho_k, N * sizeof(cufftDoubleComplex),
-                   cudaMemcpyDeviceToHost);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy V D2H"); }
+  err = arena.D2H(host_V_k.data(), d_rho_k, N * sizeof(cufftDoubleComplex));
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "arena.D2H V"); }
 
   cleanup();
 

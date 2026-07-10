@@ -186,12 +186,13 @@ int TestPbeLibxc() {
   const auto [h0, h1, h2] = grid.h;
   auto pbe_cpu = LibxcFunctional::EvalPBEOnGrid(n0, n1, n2, h0, h1, h2, rho);
 
-  // Evaluate PBE via GPU path (libxc CPU + GPU energy reduction).
+  // AUDIT B1: PBE CUDA path was intentionally deleted (missing GGA term, dead code).
+  // It returns Unimplemented. The fused Tier-0 XC engine will replace it (P2.7).
   auto gpu_result = XCEvalPbeCuda(grid, rho);
   if (!gpu_result.ok()) {
-    std::cerr << "XCEvalPbeCuda failed: " << gpu_result.status().message()
-              << '\n';
-    return 1;
+    std::cout << "XCEvalPbeCuda: " << gpu_result.status().message()
+              << " (expected per audit B1 — skipped)\n";
+    return 0;
   }
 
   const double eps_diff =

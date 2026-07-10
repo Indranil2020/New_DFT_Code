@@ -16,6 +16,7 @@
 #include "common/status.hpp"
 #include "scf/scf_driver.hpp"
 #include "scf/energy_assembly.hpp"
+#include "scf/molecule_driver.hpp"
 #include "forces/analytic_forces.hpp"
 #include "dynamics/xlbomd/xlbomd.hpp"
 #include "dynamics/optimizers/optimizers.hpp"
@@ -132,10 +133,11 @@ NB_MODULE(_native, m) {
            nb::arg("kT") = 0.0);
 
     // SCFDriver
+    // AUDIT B5/B7: energy_fn now receives eigenvalues from the SCF loop.
     nb::class_<scf::SCFDriver>(m, "SCFDriver")
         .def_static("run", [](std::size_t n, std::size_t n_occ, const std::vector<double>& S,
                               const std::function<std::vector<double>(const std::vector<double>&)>& build_H,
-                              const std::function<double(const std::vector<double>&)>& energy_fn,
+                              const std::function<double(const std::vector<double>&, const std::vector<double>&)>& energy_fn,
                               const std::vector<double>& P_init = {},
                               int max_iter = 100, double tol = 1e-10,
                               int mixing = 1, double alpha = 0.3) {
@@ -182,6 +184,42 @@ NB_MODULE(_native, m) {
         .def_rw("time_per_step_ms", &solvers::CalibEntry::time_per_step_ms)
         .def_rw("vram_mb", &solvers::CalibEntry::vram_mb)
         .def_rw("available", &solvers::CalibEntry::available);
+
+    // AUDIT C7: MoleculeDriver bindings — the real GTO-based SCF engine.
+    // This replaces the model Hamiltonian stub in Python.
+    // EnergyComponents already bound above as CppEnergyComponents.
+    nb::class_<scf::MoleculeDriverResult>(m, "MoleculeDriverResult")
+        .def_rw("scf", &scf::MoleculeDriverResult::scf)
+        .def_rw("energy", &scf::MoleculeDriverResult::energy)
+        .def_rw("n_basis", &scf::MoleculeDriverResult::n_basis)
+        .def_rw("n_electrons", &scf::MoleculeDriverResult::n_electrons)
+        .def_rw("n_atoms", &scf::MoleculeDriverResult::n_atoms)
+        .def_rw("grid_h", &scf::MoleculeDriverResult::grid_h)
+        .def_rw("wall_time_ms", &scf::MoleculeDriverResult::wall_time_ms)
+        .def_rw("forces", &scf::MoleculeDriverResult::forces);
+
+    nb::class_<scf::GTOMolecule>(m, "GTOMolecule")
+        .def_rw("atomic_numbers", &scf::GTOMolecule::atomic_numbers)
+        .def_rw("positions", &scf::GTOMolecule::positions)
+        .def_rw("n_basis", &scf::GTOMolecule::n_basis);
+
+    nb::class_<scf::MoleculeDriver>(m, "MoleculeDriver")
+        .def_static("build_molecule", [](const std::vector<int>& atomic_numbers,
+                                         const std::vector<double>& positions) {
+            return scf::MoleculeDriver::BuildMolecule(atomic_numbers, positions);
+        }, nb::arg("atomic_numbers"), nb::arg("positions"))
+        .def_static("run", [](const scf::GTOMolecule& mol,
+                              double grid_h, double grid_margin,
+                              int max_iter, double tol) {
+            return scf::MoleculeDriver::Run(mol, grid_h, grid_margin, max_iter, tol);
+        }, nb::arg("mol"),
+           nb::arg("grid_h") = 0.3, nb::arg("grid_margin") = 4.0,
+           nb::arg("max_iter") = 100, nb::arg("tol") = 1e-8)
+        .def_static("compute_forces", [](const scf::GTOMolecule& mol,
+                                         const scf::SCFResult& scf_result,
+                                         const scf::EnergyComponents& energy) {
+            return scf::MoleculeDriver::ComputeForces(mol, scf_result, energy);
+        }, nb::arg("mol"), nb::arg("scf_result"), nb::arg("energy"));
 
     m.attr("__version__") = "0.1.0-alpha";
 }

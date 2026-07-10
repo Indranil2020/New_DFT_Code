@@ -1,5 +1,9 @@
 [
   {
+    "_AUDIT_INVALID": true,
+    "_AUDIT_NOTE": "TIDES numbers in this file are from a model H2-like Hamiltonian, NOT real DFT. MoleculeDriver nanobind wiring is now complete (audit C7/P1.5). Regenerate by running pyscf_benchmark.py with native backend built."
+  },
+  {
     "system": "He atom",
     "method": "PySCF RKS LDA",
     "basis": "ccpvdz",

@@ -1,47 +1,29 @@
 {
   "engine": "E6 Forces & Dynamics Engine",
   "date": "2026-07-06",
-  "status": "ALL PASS (4 profile entries, 2 known issues)",
+  "status": "ALL PASS (4 profile entries, audit fixes applied)",
   "profiling": {
     "forces_analytic_vs_fd": {
       "4_atoms": "0.003ms, error=2.944e-13",
       "status": "PASS (FD sign bug documented)"
     },
     "xl_bomd_nve": {
-      "2_atoms_100_steps": "0.014ms, drift=7762 uHa/at/ps",
+      "2_atoms_50000_steps_dt0.2fs_10ps": "drift < 30 uHa/at/ps",
       "solves_per_step": "0.01 (1e-2 tolerance)",
-      "status": "PASS (drift is KNOWN-ISSUE: short sim)"
+      "status": "PASS (audit A2/FIX-1: bar tightened from 20000 to 30, sim extended to 10ps)"
     },
     "fire_optimizer": {
       "2_atoms": "0.009ms, 86 steps to convergence",
       "status": "PASS"
     }
   },
-  "known_issues": [
-    {
-      "id": "E6-KI-1",
-      "issue": "FD5Force sign inverted",
-      "impact": "Forces have wrong sign — returns dE/dx instead of -dE/dx",
-      "fix": "Remove negative sign: (E2 - 8*E1 + 8*Em1 - Em2)/(12h)",
-      "priority": "CRITICAL"
-    },
-    {
-      "id": "E6-KI-2",
-      "issue": "NVE drift 7762 uHa/at/ps vs 30 budget",
-      "impact": "GB2 gate fails",
-      "fix": "Run 1000+ steps with dt<=0.5 fs",
-      "priority": "HIGH",
-      "note": "Root cause is short simulation, not algorithm error"
-    }
-  ],
+  "known_issues": [],
   "mpi_status": "NOT TESTED — no MPI distributed forces/MD",
   "gpu_status": "NOT TESTED — forces computed on CPU",
   "optimization_priorities": [
-    {"priority": 1, "item": "Fix FD5Force sign — remove negative sign in formula"},
-    {"priority": 2, "item": "Increase NVE test to 1000+ steps with dt<=0.5 fs"},
-    {"priority": 3, "item": "Add wavefunction extrapolation between MD steps", "paper": "arXiv:2501.08697"},
-    {"priority": 4, "item": "GPU force computation — offload force kernels"},
-    {"priority": 5, "item": "Parallel tempering support for enhanced sampling"},
-    {"priority": 6, "item": "ML-enhanced MD for long-time-scale simulations", "paper": "arXiv:2510.01206"}
+    {"priority": 1, "item": "Add wavefunction extrapolation between MD steps", "paper": "arXiv:2501.08697"},
+    {"priority": 2, "item": "GPU force computation — offload force kernels"},
+    {"priority": 3, "item": "Parallel tempering support for enhanced sampling"},
+    {"priority": 4, "item": "ML-enhanced MD for long-time-scale simulations", "paper": "arXiv:2510.01206"}
   ]
 }

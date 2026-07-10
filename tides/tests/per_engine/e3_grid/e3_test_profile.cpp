@@ -225,16 +225,16 @@ int TestVmatBuild() {
   return failures;
 }
 
-// --- Test 4: Poisson FFT (CPU + GPU) ---
+// --- Test 4: Poisson FFT (CPU FFTW + GPU cuFFT) ---
+// AUDIT A3: Previous CPU baseline was naive O(N²) DFT, giving misleading
+// 43000× speedup. Now using FFTW3 CPU (SolvePeriodicFFT) as honest baseline.
+// Expect ~5-50× speedup, not 43000×.
 int TestPoissonFFT() {
-  std::cout << "\n=== E3.4: Poisson FFT (CPU + GPU) ===\n";
+  std::cout << "\n=== E3.4: Poisson FFT (CPU FFTW + GPU cuFFT) ===\n";
   PrintHeader();
   int failures = 0;
 
-  // NOTE: CPU Poisson uses naive O(N^2) DFT for periodic BC.
-  // n=16 -> N=4096 -> 16M ops (fast). n=32 -> N=32768 -> 1B ops (~10s).
-  // Larger sizes would hang the CPU reference. GPU uses cuFFT (O(N log N)).
-  for (auto n : {16, 32}) {
+  for (auto n : {16, 32, 64}) {
     UniformGrid3D grid = MakeGrid(n);
     std::size_t N = grid.total_points();
     std::vector<double> rho(N, 0.0);
@@ -249,23 +249,23 @@ int TestPoissonFFT() {
       rho[i] = std::exp(-(dx*dx + dy*dy + dz*dz) / (2 * sigma * sigma));
     }
 
-    // CPU Poisson (periodic for FFT comparison).
+    // CPU Poisson via FFTW3 (honest baseline per audit A3).
     UniformGrid3D grid_p = grid;
     grid_p.bc = {BoundaryCondition::kPeriodic, BoundaryCondition::kPeriodic, BoundaryCondition::kPeriodic};
 
     auto t0 = std::chrono::steady_clock::now();
-    auto cpu_v = PoissonSolver::Solve(grid_p, rho);
+    auto cpu_v = PoissonSolver::SolvePeriodicFFT(grid_p, rho);
     auto t1 = std::chrono::steady_clock::now();
     double cpu_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-    // GPU Poisson.
+    // GPU Poisson via cuFFT.
     auto t2 = std::chrono::steady_clock::now();
     auto gpu = tides::grid::PoissonFftCuda(grid_p, rho);
     auto t3 = std::chrono::steady_clock::now();
     double gpu_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
 
     if (!gpu.ok()) {
-      Log("Poisson", "GPU",
+      Log("Poisson", "GPU-cuFFT",
           std::to_string(n) + "^3",
           gpu_ms, 0, "FAIL: " + gpu.status().message());
       failures++;
@@ -276,10 +276,10 @@ int TestPoissonFFT() {
     std::string status = (diff < 1e-8) ? "PASS" : "FAIL";
     if (diff >= 1e-8) failures++;
 
-    Log("Poisson", "CPU",
+    Log("Poisson", "CPU-FFTW",
         std::to_string(n) + "^3",
         cpu_ms, 0, "ref");
-    Log("Poisson", "GPU",
+    Log("Poisson", "GPU-cuFFT",
         std::to_string(n) + "^3",
         gpu_ms, diff, status);
   }

@@ -204,46 +204,82 @@ __global__ void GroupedGemmFp16AccumWmmaKernel(
   const __half* b = b_all + b_offsets[problem];
   double* c = c_all + c_offsets[problem];
 
+  // AUDIT A4: Shared-memory staging with double buffering.
+  // Previously loaded WMMA fragments straight from global memory.
+  // Now stage A and B tiles through shared memory, enabling coalesced
+  // loads and overlapping memory traffic with MMA computation.
+  // Each warp owns 2 A-buffers and 2 B-buffers for double buffering.
+  __shared__ __half a_smem[kWarpsPerBlock][2][kWmmaM * kWmmaK];
+  __shared__ __half b_smem[kWarpsPerBlock][2][kWmmaN * kWmmaK];
+
   wmma::fragment<wmma::matrix_a, kWmmaM, kWmmaN, kWmmaK, __half, wmma::row_major> a_frag;
   wmma::fragment<wmma::matrix_b, kWmmaM, kWmmaN, kWmmaK, __half, wmma::row_major> b_frag;
   wmma::fragment<wmma::accumulator, kWmmaM, kWmmaN, kWmmaK, float> c_frag;
 
   wmma::fill_fragment(c_frag, 0.0f);
 
+  // Preload first K-tile into buffer 0.
+  int buf = 0;
+  {
+    __half* a_buf = a_smem[warp_id][buf];
+    __half* b_buf = b_smem[warp_id][buf];
+    for (int idx = lane; idx < kWmmaM * kWmmaK; idx += 32) {
+      int i = idx / kWmmaK;
+      int p = idx % kWmmaK;
+      int r = row0 + i;
+      a_buf[idx] = (r < static_cast<int>(m) && p < static_cast<int>(k))
+          ? a[r * k + p] : __float2half(0.0f);
+    }
+    for (int idx = lane; idx < kWmmaN * kWmmaK; idx += 32) {
+      int j = idx / kWmmaK;
+      int p = idx % kWmmaK;
+      int cc = col0 + j;
+      b_buf[idx] = (cc < static_cast<int>(n) && p < static_cast<int>(k))
+          ? b[p * n + cc] : __float2half(0.0f);
+    }
+    __syncwarp();
+  }
+
   for (int ki = 0; ki < static_cast<int>(k); ki += kWmmaK) {
     int k_remaining = static_cast<int>(k) - ki;
-    if (k_remaining >= kWmmaK) {
-      // Full tile — use WMMA
-      wmma::load_matrix_sync(a_frag, a + row0 * k + ki, k);
-      wmma::load_matrix_sync(b_frag, b + ki * n + col0, n);
-      wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
-    } else {
-      // Partial K tile — pad with zeros in shared memory
-      __shared__ __half a_pad[kWmmaTileY * kWmmaM * kWmmaK];
-      __shared__ __half b_pad[kWmmaTileX * kWmmaN * kWmmaK];
-      __half* a_smem = a_pad + warp_row * kWmmaM * kWmmaK;
-      __half* b_smem = b_pad + warp_col * kWmmaN * kWmmaK;
+    int next_ki = ki + kWmmaK;
+    int next_buf = 1 - buf;
 
-      // Cooperatively load and zero-pad the K dimension
+    // Prefetch next tile into the other buffer (if not last).
+    if (k_remaining > kWmmaK && next_ki < static_cast<int>(k)) {
+      __half* a_next = a_smem[warp_id][next_buf];
+      __half* b_next = b_smem[warp_id][next_buf];
+      int next_remaining = static_cast<int>(k) - next_ki;
       for (int idx = lane; idx < kWmmaM * kWmmaK; idx += 32) {
         int i = idx / kWmmaK;
         int p = idx % kWmmaK;
         int r = row0 + i;
-        a_smem[i * kWmmaK + p] = (r < static_cast<int>(m) && p < k_remaining)
-            ? a[r * k + ki + p] : __float2half(0.0f);
+        a_next[idx] = (r < static_cast<int>(m) && p < next_remaining)
+            ? a[r * k + next_ki + p] : __float2half(0.0f);
       }
       for (int idx = lane; idx < kWmmaN * kWmmaK; idx += 32) {
         int j = idx / kWmmaK;
         int p = idx % kWmmaK;
         int cc = col0 + j;
-        b_smem[j * kWmmaK + p] = (cc < static_cast<int>(n) && p < k_remaining)
-            ? b[(ki + p) * n + cc] : __float2half(0.0f);
+        b_next[idx] = (cc < static_cast<int>(n) && p < next_remaining)
+            ? b[(next_ki + p) * n + cc] : __float2half(0.0f);
       }
-      __syncwarp();
-      wmma::load_matrix_sync(a_frag, a_smem, kWmmaK);
-      wmma::load_matrix_sync(b_frag, b_smem, kWmmaK);
+    }
+
+    // Load from current buffer and compute MMA.
+    if (k_remaining >= kWmmaK) {
+      wmma::load_matrix_sync(a_frag, a_smem[warp_id][buf], kWmmaK);
+      wmma::load_matrix_sync(b_frag, b_smem[warp_id][buf], kWmmaK);
+      wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
+    } else {
+      // Partial K tile — current buffer already has zero-padded data.
+      wmma::load_matrix_sync(a_frag, a_smem[warp_id][buf], kWmmaK);
+      wmma::load_matrix_sync(b_frag, b_smem[warp_id][buf], kWmmaK);
       wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
     }
+
+    __syncwarp();
+    buf = next_buf;
   }
 
   // Store with epilogue scaling

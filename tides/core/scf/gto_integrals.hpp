@@ -186,11 +186,125 @@ class GTOIntegrals {
     return V_H;
   }
 
+  // AUDIT B8: Cached ERI tensor with 8-fold symmetry and Schwarz screening.
+  // The ERI tensor (ij|kl) is geometry-constant across SCF iterations.
+  // Compute once at setup, then CoulombMatrixCached contracts with P each iter.
+  //
+  // 8-fold permutational symmetry:
+  //   (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk) = (kl|ij) = (lk|ij) = (kl|ji) = (lk|ji)
+  // Only compute unique (i<=j, k<=l, ij<=kl) elements.
+  //
+  // Schwarz screening:
+  //   Skip (ij|kl) if sqrt(|(ij|ij)| * |(kl|kl)|) < schwarz_threshold.
+  struct ERICache {
+    std::vector<double> tensor;  // flat n*n*n*n, only unique elements filled
+    std::size_t n = 0;
+    bool valid = false;
+  };
+
+  static ERICache BuildERICache(const GTOMolecule& mol,
+                                 double schwarz_threshold = 1e-12) {
+    const std::size_t n = mol.n_basis;
+    ERICache cache;
+    cache.n = n;
+    cache.tensor.assign(n * n * n * n, 0.0);
+    cache.valid = true;
+
+    // Precompute diagonal (ij|ij) for Schwarz screening.
+    std::vector<double> schwarz_diag(n * n, 0.0);
+
+    // First pass: compute (ij|ij) for Schwarz bounds.
+    {
+      std::size_t i = 0;
+      for (const auto& si : mol.shells) {
+        for (int mi = 0; mi < NumCartesian(si.l); ++mi, ++i) {
+          std::size_t j = 0;
+          for (const auto& sj : mol.shells) {
+            for (int mj = 0; mj < NumCartesian(sj.l); ++mj, ++j) {
+              if (j > i) continue;
+              double val = ERI_Basis(mol, i, j, i, j);
+              schwarz_diag[i * n + j] = std::sqrt(std::fabs(val));
+              schwarz_diag[j * n + i] = schwarz_diag[i * n + j];
+            }
+          }
+        }
+      }
+    }
+
+    // Second pass: compute unique (ij|kl) with i<=j, k<=l, ij<=kl.
+    // Apply Schwarz screening and fill all 8 symmetric partners.
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j <= i; ++j) {
+        const std::size_t ij = i * n + j;
+        for (std::size_t k = 0; k <= i; ++k) {
+          const std::size_t k_max = (k == i) ? j : k;
+          for (std::size_t l = 0; l <= k_max; ++l) {
+            const std::size_t kl = k * n + l;
+            // Schwarz screening.
+            const double bound = schwarz_diag[ij] * schwarz_diag[kl];
+            if (bound < schwarz_threshold) continue;
+
+            double eri = ERI_Basis(mol, i, j, k, l);
+            if (std::fabs(eri) < 1e-15) continue;
+
+            // Fill all 8 permutational symmetric partners.
+            const std::size_t ji = j * n + i;
+            const std::size_t lk = l * n + k;
+            // (ij|kl), (ji|kl), (ij|lk), (ji|lk)
+            cache.tensor[ij * n * n + kl] = eri;
+            cache.tensor[ji * n * n + kl] = eri;
+            cache.tensor[ij * n * n + lk] = eri;
+            cache.tensor[ji * n * n + lk] = eri;
+            // (kl|ij), (lk|ij), (kl|ji), (lk|ji)
+            cache.tensor[kl * n * n + ij] = eri;
+            cache.tensor[lk * n * n + ij] = eri;
+            cache.tensor[kl * n * n + ji] = eri;
+            cache.tensor[lk * n * n + ji] = eri;
+          }
+        }
+      }
+    }
+    return cache;
+  }
+
+  // Build Coulomb matrix from cached ERI tensor: V_H[i,j] = sum_{k,l} P[k,l] * (ij|kl)
+  static std::vector<double> CoulombMatrixCached(
+      const ERICache& cache, const std::vector<double>& P) {
+    const std::size_t n = cache.n;
+    std::vector<double> V_H(n * n, 0.0);
+    if (!cache.valid || n == 0) return V_H;
+
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j < n; ++j) {
+        double sum = 0.0;
+        for (std::size_t k = 0; k < n; ++k) {
+          for (std::size_t l = 0; l < n; ++l) {
+            sum += P[k * n + l] * cache.tensor[(i * n + j) * n * n + (k * n + l)];
+          }
+        }
+        V_H[i * n + j] = sum;
+      }
+    }
+    return V_H;
+  }
+
   // Compute the XC energy density matrix: eps_xc_mat[i,j] = <phi_i|eps_xc(rho)|phi_j>
   // This requires the XC energy density on the grid, so we still use the grid for XC.
   // But V_H is now analytic.
 
  private:
+  // AUDIT B8: ERI by basis function indices (maps to shell/m and calls ERI).
+  static double ERI_Basis(const GTOMolecule& mol,
+                           std::size_t i, std::size_t j,
+                           std::size_t k, std::size_t l) {
+    auto [si, mi] = BasisIndexToShell(mol, i);
+    auto [sj, mj] = BasisIndexToShell(mol, j);
+    auto [sk, mk] = BasisIndexToShell(mol, k);
+    auto [sl, ml] = BasisIndexToShell(mol, l);
+    return ERI(mol, mol.shells[si], mi, mol.shells[sj], mj,
+                  mol.shells[sk], mk, mol.shells[sl], ml);
+  }
+
   static std::pair<std::size_t, int> BasisIndexToShell(
       const GTOMolecule& mol, std::size_t idx) {
     std::size_t i = 0;

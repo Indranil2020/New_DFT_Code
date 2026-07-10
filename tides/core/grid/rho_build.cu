@@ -14,6 +14,7 @@
 
 #include "grid/rho_build.hpp"
 #include "grid/dual_grid.hpp"
+#include "grid/gpu_arena.hpp"
 
 #include <cuda_runtime.h>
 
@@ -183,42 +184,31 @@ struct RhoBuildGpuResult {
   std::copy(flat_orbitals.begin(), flat_orbitals.end(), h_orbitals);
   std::copy(occupations.begin(), occupations.end(), h_occupations);
 
-  // Create stream for async operations.
-  cudaStream_t stream;
-  err = cudaStreamCreate(&stream);
-  if (err != cudaSuccess) { cudaFreeHost(h_orbitals); cudaFreeHost(h_occupations); return CudaStatus(err, "cudaStreamCreate"); }
+  // AUDIT B10: Use GPU arena for persistent device buffers and stream.
+  // Previously: cudaMalloc/cudaFree/cudaStreamCreate per call → residency defect.
+  GpuArena& arena = GpuArena::Instance();
+  cudaStream_t stream = arena.Stream();
 
-  // Allocate device memory.
-  double* d_orbitals = nullptr;
-  double* d_occupations = nullptr;
-  double* d_rho = nullptr;
-
-  auto cleanup = [&]() {
-    if (d_orbitals) cudaFreeAsync(d_orbitals, stream);
-    if (d_occupations) cudaFreeAsync(d_occupations, stream);
-    if (d_rho) cudaFreeAsync(d_rho, stream);
-    cudaStreamDestroy(stream);
-    cudaFreeHost(h_orbitals);
-    cudaFreeHost(h_occupations);
-  };
-
+  // Allocate device memory via arena (reuses cached blocks).
   const std::size_t orb_bytes = flat_orbitals.size() * sizeof(double);
-  err = cudaMallocAsync(reinterpret_cast<void**>(&d_orbitals), orb_bytes, stream);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMallocAsync orbitals"); }
-  err = cudaMemcpyAsync(d_orbitals, h_orbitals, orb_bytes, cudaMemcpyHostToDevice, stream);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpyAsync orbitals"); }
+  double* d_orbitals = static_cast<double*>(arena.Alloc(orb_bytes));
+  if (!d_orbitals) return Status::IoError("arena.Alloc failed for orbitals");
 
   const std::size_t occ_bytes = occupations.size() * sizeof(double);
-  err = cudaMallocAsync(reinterpret_cast<void**>(&d_occupations), occ_bytes, stream);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMallocAsync occupations"); }
-  err = cudaMemcpyAsync(d_occupations, h_occupations, occ_bytes, cudaMemcpyHostToDevice, stream);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpyAsync occupations"); }
+  double* d_occupations = static_cast<double*>(arena.Alloc(occ_bytes));
+  if (!d_occupations) { arena.Free(d_orbitals); return Status::IoError("arena.Alloc failed for occ"); }
 
   const std::size_t rho_bytes = n_points * sizeof(double);
-  err = cudaMallocAsync(reinterpret_cast<void**>(&d_rho), rho_bytes, stream);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMallocAsync rho"); }
+  double* d_rho = static_cast<double*>(arena.Alloc(rho_bytes));
+  if (!d_rho) { arena.Free(d_orbitals); arena.Free(d_occupations); return Status::IoError("arena.Alloc failed for rho"); }
 
-  // Launch rho build kernel on the stream.
+  // Async H2D on arena stream.
+  err = arena.H2D(d_orbitals, h_orbitals, orb_bytes);
+  if (err != cudaSuccess) { arena.Free(d_orbitals); arena.Free(d_occupations); arena.Free(d_rho); cudaFreeHost(h_orbitals); cudaFreeHost(h_occupations); return CudaStatus(err, "arena.H2D orbitals"); }
+  err = arena.H2D(d_occupations, h_occupations, occ_bytes);
+  if (err != cudaSuccess) { arena.Free(d_orbitals); arena.Free(d_occupations); arena.Free(d_rho); cudaFreeHost(h_orbitals); cudaFreeHost(h_occupations); return CudaStatus(err, "arena.H2D occ"); }
+
+  // Launch rho build kernel on the arena stream.
   const int threads = 256;
   const int blocks = static_cast<int>((n_points + threads - 1) / threads);
   cudaEvent_t start_ev, stop_ev;
@@ -233,14 +223,14 @@ struct RhoBuildGpuResult {
   cudaEventElapsedTime(&kernel_ms_f, start_ev, stop_ev);
   cudaEventDestroy(start_ev);
   cudaEventDestroy(stop_ev);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "RhoBuildKernel"); }
+  if (err != cudaSuccess) { arena.Free(d_orbitals); arena.Free(d_occupations); arena.Free(d_rho); cudaFreeHost(h_orbitals); cudaFreeHost(h_occupations); return CudaStatus(err, "RhoBuildKernel"); }
 
   result.kernel_ms = static_cast<double>(kernel_ms_f);
 
-  // Copy rho back.
+  // Copy rho back via arena D2H.
   result.rho.resize(n_points);
-  err = cudaMemcpyAsync(result.rho.data(), d_rho, rho_bytes, cudaMemcpyDeviceToHost, stream);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpyAsync rho D2H"); }
+  err = arena.D2H(result.rho.data(), d_rho, rho_bytes);
+  if (err != cudaSuccess) { arena.Free(d_orbitals); arena.Free(d_occupations); arena.Free(d_rho); cudaFreeHost(h_orbitals); cudaFreeHost(h_occupations); return CudaStatus(err, "arena.D2H rho"); }
 
   // Compute integral on GPU via reduction.
   const auto [h0, h1, h2] = grid.h;
@@ -248,23 +238,29 @@ struct RhoBuildGpuResult {
   const int red_threads = 256;
   const int red_blocks = static_cast<int>((n_points + red_threads - 1) / red_threads);
   std::vector<double> partial_sums(red_blocks, 0.0);
-  double* d_partial = nullptr;
-  err = cudaMallocAsync(reinterpret_cast<void**>(&d_partial), red_blocks * sizeof(double), stream);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMallocAsync partial"); }
+  double* d_partial = static_cast<double*>(arena.Alloc(red_blocks * sizeof(double)));
+  if (!d_partial) { arena.Free(d_orbitals); arena.Free(d_occupations); arena.Free(d_rho); cudaFreeHost(h_orbitals); cudaFreeHost(h_occupations); return Status::IoError("arena.Alloc failed for partial"); }
 
   RhoIntegralKernel<<<red_blocks, red_threads, red_threads * sizeof(double), stream>>>(
       d_rho, n_points, dv, d_partial, static_cast<std::size_t>(red_blocks));
-  err = cudaStreamSynchronize(stream);
+  err = arena.Sync();
   if (err != cudaSuccess) {
-    cudaFreeAsync(d_partial, stream);
-    cleanup();
+    arena.Free(d_partial); arena.Free(d_orbitals); arena.Free(d_occupations); arena.Free(d_rho);
+    cudaFreeHost(h_orbitals); cudaFreeHost(h_occupations);
     return CudaStatus(err, "RhoIntegralKernel");
   }
 
   err = cudaMemcpy(partial_sums.data(), d_partial,
                    red_blocks * sizeof(double), cudaMemcpyDeviceToHost);
-  cudaFreeAsync(d_partial, stream);
-  cleanup();
+
+  // Return arena blocks to pool (no cudaFree).
+  arena.Free(d_partial);
+  arena.Free(d_orbitals);
+  arena.Free(d_occupations);
+  arena.Free(d_rho);
+  cudaFreeHost(h_orbitals);
+  cudaFreeHost(h_occupations);
+
   if (err != cudaSuccess) { return CudaStatus(err, "cudaMemcpy partial D2H"); }
 
   result.integral = 0.0;

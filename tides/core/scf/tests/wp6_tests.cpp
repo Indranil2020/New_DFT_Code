@@ -66,7 +66,8 @@ int TestSCF() {
   auto build_H = [&](const std::vector<double>& P) -> std::vector<double> {
     return BuildH(R, n);
   };
-  auto energy_fn = [&](const std::vector<double>& P) -> double {
+  auto energy_fn = [&](const std::vector<double>& P,
+                       const std::vector<double>& eigenvalues) -> double {
     return ModelEnergy(R);
   };
 

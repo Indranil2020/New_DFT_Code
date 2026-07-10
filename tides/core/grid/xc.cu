@@ -11,6 +11,7 @@
 #include "grid/xc.hpp"
 #include "grid/dual_grid.hpp"
 #include "grid/libxc_wrapper.hpp"
+#include "grid/gpu_arena.hpp"
 
 #include <cuda_runtime.h>
 
@@ -63,15 +64,35 @@ __device__ double EpsCFerromagneticDevice(double rs) {
   return -2.0 * a * (1.0 + a1 * rs) * log(1.0 + 1.0 / (2.0 * a * Q));
 }
 
-// Device-side d(eps_c)/d(rs) via central finite difference.
+// AUDIT B2: Analytic derivative of PW92 correlation energy w.r.t. rs.
+// Replaces central finite differences (h=1e-6) that introduce ~1e-11 noise
+// into the "oracle" comparisons (A5). The analytic form is exact and ~3× cheaper.
+//
+// eps_c(rs) = -2a(1 + a1*rs) * ln(1 + 1/(2a*Q(rs)))
+// Q = b1*sqrt(rs) + b2*rs + b3*rs*sqrt(rs) + b4*rs^2
+// Q' = b1/(2*sqrt(rs)) + b2 + (3/2)*b3*sqrt(rs) + 2*b4*rs
+// d(eps_c)/d(rs) = -2a*a1*ln(1 + 1/(2a*Q))
+//                  + (-2a*(1+a1*rs)) * (-Q' / (2a*Q^2 + Q))
 __device__ double DEpsCParamagneticDRsDevice(double rs) {
-  const double h = 1e-6 * (1.0 + rs);
-  return (EpsCParamagneticDevice(rs + h) - EpsCParamagneticDevice(rs - h)) / (2.0 * h);
+  const double a = 0.0310907, a1 = 0.2137;
+  const double b1 = 7.5957, b2 = 3.5876, b3 = 1.6382, b4 = 0.49294;
+  const double sr = sqrt(rs);
+  const double Q = b1 * sr + b2 * rs + b3 * rs * sr + b4 * rs * rs;
+  const double Qprime = b1 / (2.0 * sr) + b2 + 1.5 * b3 * sr + 2.0 * b4 * rs;
+  const double log_term = log(1.0 + 1.0 / (2.0 * a * Q));
+  const double dlog = -Qprime / (2.0 * a * Q * Q + Q);
+  return -2.0 * a * a1 * log_term + (-2.0 * a * (1.0 + a1 * rs)) * dlog;
 }
 
 __device__ double DEpsCFerromagneticDRsDevice(double rs) {
-  const double h = 1e-6 * (1.0 + rs);
-  return (EpsCFerromagneticDevice(rs + h) - EpsCFerromagneticDevice(rs - h)) / (2.0 * h);
+  const double a = 0.015545, a1 = 0.20548;
+  const double b1 = 14.1189, b2 = 6.1977, b3 = 3.3662, b4 = 0.62517;
+  const double sr = sqrt(rs);
+  const double Q = b1 * sr + b2 * rs + b3 * rs * sr + b4 * rs * rs;
+  const double Qprime = b1 / (2.0 * sr) + b2 + 1.5 * b3 * sr + 2.0 * b4 * rs;
+  const double log_term = log(1.0 + 1.0 / (2.0 * a * Q));
+  const double dlog = -Qprime / (2.0 * a * Q * Q + Q);
+  return -2.0 * a * a1 * log_term + (-2.0 * a * (1.0 + a1 * rs)) * dlog;
 }
 
 // Device-side spin polarization factor.
@@ -200,69 +221,80 @@ struct XCGpuResult {
   const auto [h0, h1, h2] = grid.h;
   const double dv = h0 * h1 * h2;
 
-  // Allocate device memory.
-  double* d_rho = nullptr;
-  double* d_vxc = nullptr;
-  double* d_eps_xc = nullptr;
+  // AUDIT B10: Use persistent arena + stream instead of per-call alloc/free/sync.
+  GpuArena& arena = GpuArena::Instance();
 
-  auto cleanup = [&]() {
-    if (d_rho) cudaFree(d_rho);
-    if (d_vxc) cudaFree(d_vxc);
-    if (d_eps_xc) cudaFree(d_eps_xc);
-  };
+  // Allocate device memory via arena (reuses cached buffers).
+  double* d_rho = static_cast<double*>(arena.Alloc(N * sizeof(double)));
+  double* d_vxc = static_cast<double*>(arena.Alloc(N * sizeof(double)));
+  double* d_eps_xc = static_cast<double*>(arena.Alloc(N * sizeof(double)));
 
-  cudaError_t err = cudaMalloc(reinterpret_cast<void**>(&d_rho), N * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc rho"); }
-  err = cudaMemcpy(d_rho, rho.data(), N * sizeof(double), cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy rho"); }
+  if (!d_rho || !d_vxc || !d_eps_xc) {
+    if (d_rho) arena.Free(d_rho);
+    if (d_vxc) arena.Free(d_vxc);
+    if (d_eps_xc) arena.Free(d_eps_xc);
+    return Status::IoError("GPU arena allocation failed for XC evaluation");
+  }
 
-  err = cudaMalloc(reinterpret_cast<void**>(&d_vxc), N * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc vxc"); }
-  err = cudaMalloc(reinterpret_cast<void**>(&d_eps_xc), N * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc eps_xc"); }
+  // Async H2D on persistent stream.
+  cudaError_t err = arena.H2D(d_rho, rho.data(), N * sizeof(double));
+  if (err != cudaSuccess) {
+    arena.Free(d_rho); arena.Free(d_vxc); arena.Free(d_eps_xc);
+    return CudaStatus(err, "arena H2D rho");
+  }
 
-  // Launch XC evaluation kernel.
+  // Launch XC evaluation kernel on arena stream.
   const int threads = 256;
   const int blocks = static_cast<int>((N + threads - 1) / threads);
   auto kernel_start = std::chrono::steady_clock::now();
-  XCEvalKernel<<<blocks, threads>>>(d_rho, d_vxc, d_eps_xc, N, zeta);
-  err = cudaDeviceSynchronize();
+  XCEvalKernel<<<blocks, threads, 0, arena.Stream()>>>(d_rho, d_vxc, d_eps_xc, N, zeta);
+  err = arena.Sync();
   auto kernel_end = std::chrono::steady_clock::now();
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "XCEvalKernel"); }
+  if (err != cudaSuccess) {
+    arena.Free(d_rho); arena.Free(d_vxc); arena.Free(d_eps_xc);
+    return CudaStatus(err, "XCEvalKernel");
+  }
 
   result.kernel_ms =
       std::chrono::duration<double, std::milli>(kernel_end - kernel_start).count();
 
-  // Copy results back.
+  // Copy results back via arena async D2H.
   result.vxc.resize(N);
   result.eps_xc.resize(N);
-  err = cudaMemcpy(result.vxc.data(), d_vxc, N * sizeof(double), cudaMemcpyDeviceToHost);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy vxc D2H"); }
-  err = cudaMemcpy(result.eps_xc.data(), d_eps_xc, N * sizeof(double), cudaMemcpyDeviceToHost);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy eps_xc D2H"); }
+  err = arena.D2H(result.vxc.data(), d_vxc, N * sizeof(double));
+  if (err != cudaSuccess) {
+    arena.Free(d_rho); arena.Free(d_vxc); arena.Free(d_eps_xc);
+    return CudaStatus(err, "arena D2H vxc");
+  }
+  err = arena.D2H(result.eps_xc.data(), d_eps_xc, N * sizeof(double));
+  if (err != cudaSuccess) {
+    arena.Free(d_rho); arena.Free(d_vxc); arena.Free(d_eps_xc);
+    return CudaStatus(err, "arena D2H eps_xc");
+  }
+  arena.Sync();
 
   // Compute XC energy via GPU reduction.
   const int red_threads = 256;
   const int red_blocks = static_cast<int>((N + red_threads - 1) / red_threads);
   std::vector<double> partial_sums(red_blocks, 0.0);
-  double* d_partial = nullptr;
-  err = cudaMalloc(reinterpret_cast<void**>(&d_partial), red_blocks * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc partial"); }
+  double* d_partial = static_cast<double*>(arena.Alloc(red_blocks * sizeof(double)));
+  if (!d_partial) {
+    arena.Free(d_rho); arena.Free(d_vxc); arena.Free(d_eps_xc);
+    return Status::IoError("GPU arena allocation failed for reduction");
+  }
 
-  XCEnergyKernel<<<red_blocks, red_threads, red_threads * sizeof(double)>>>(
+  XCEnergyKernel<<<red_blocks, red_threads, red_threads * sizeof(double), arena.Stream()>>>(
       d_eps_xc, d_rho, N, dv, d_partial);
-  err = cudaDeviceSynchronize();
+  err = arena.Sync();
   if (err != cudaSuccess) {
-    cudaFree(d_partial);
-    cleanup();
+    arena.Free(d_rho); arena.Free(d_vxc); arena.Free(d_eps_xc); arena.Free(d_partial);
     return CudaStatus(err, "XCEnergyKernel");
   }
 
-  err = cudaMemcpy(partial_sums.data(), d_partial,
-                   red_blocks * sizeof(double), cudaMemcpyDeviceToHost);
-  cudaFree(d_partial);
-  cleanup();
-  if (err != cudaSuccess) { return CudaStatus(err, "cudaMemcpy partial D2H"); }
+  err = arena.D2H(partial_sums.data(), d_partial, red_blocks * sizeof(double));
+  // Return all blocks to arena.
+  arena.Free(d_rho); arena.Free(d_vxc); arena.Free(d_eps_xc); arena.Free(d_partial);
+  if (err != cudaSuccess) { return CudaStatus(err, "arena D2H partial"); }
 
   result.xc_energy = 0.0;
   for (double s : partial_sums) result.xc_energy += s;
@@ -285,88 +317,19 @@ struct XCGpuResult {
   return result;
 }
 
-// PBE GGA evaluation via libxc (CPU) + GPU energy reduction.
-// The functional evaluation is done on CPU via libxc, then the energy
-// reduction is performed on GPU for consistency with the LDA path.
+// AUDIT B1: PBE CUDA path deleted.
+// The previous implementation was broken (missing -2∇·(v_σ∇ρ) GGA term)
+// and was dead code (driver is LDA-only). It also used the anti-pattern
+// of CPU libxc eval + GPU-only reduction with two PCIe round-trips.
+// PBE will be implemented as part of the fused Tier-0 XC engine (P2.7).
 [[nodiscard]] Result<XCGpuResult> XCEvalPbeCuda(
     const UniformGrid3D& grid,
     const std::vector<double>& rho) {
-  const std::size_t N = grid.total_points();
-  XCGpuResult result;
-  result.n_points = N;
-
-  if (N == 0) return result;
-  if (rho.size() != N)
-    return Status::InvalidArgument("rho size mismatch with grid");
-
-  const auto [n0, n1, n2] = grid.n;
-  const auto [h0, h1, h2] = grid.h;
-  const double dv = h0 * h1 * h2;
-
-  // Evaluate PBE on CPU using libxc.
-  auto pbe = LibxcFunctional::EvalPBEOnGrid(n0, n1, n2, h0, h1, h2, rho);
-
-  // Copy results to GPU for energy reduction.
-  double* d_rho = nullptr;
-  double* d_eps_xc = nullptr;
-  double* d_partial = nullptr;
-
-  auto cleanup = [&]() {
-    if (d_rho) cudaFree(d_rho);
-    if (d_eps_xc) cudaFree(d_eps_xc);
-    if (d_partial) cudaFree(d_partial);
-  };
-
-  cudaError_t err = cudaMalloc(reinterpret_cast<void**>(&d_rho), N * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc rho"); }
-  err = cudaMemcpy(d_rho, rho.data(), N * sizeof(double), cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy rho"); }
-
-  err = cudaMalloc(reinterpret_cast<void**>(&d_eps_xc), N * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc eps_xc"); }
-  err = cudaMemcpy(d_eps_xc, pbe.eps_xc.data(), N * sizeof(double),
-                   cudaMemcpyHostToDevice);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy eps_xc"); }
-
-  // Energy reduction on GPU.
-  const int red_threads = 256;
-  const int red_blocks = static_cast<int>((N + red_threads - 1) / red_threads);
-  std::vector<double> partial_sums(red_blocks, 0.0);
-  err = cudaMalloc(reinterpret_cast<void**>(&d_partial),
-                   red_blocks * sizeof(double));
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc partial"); }
-
-  XCEnergyKernel<<<red_blocks, red_threads, red_threads * sizeof(double)>>>(
-      d_eps_xc, d_rho, N, dv, d_partial);
-  err = cudaDeviceSynchronize();
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "XCEnergyKernel"); }
-
-  err = cudaMemcpy(partial_sums.data(), d_partial,
-                   red_blocks * sizeof(double), cudaMemcpyDeviceToHost);
-  cleanup();
-  if (err != cudaSuccess) return CudaStatus(err, "cudaMemcpy partial D2H");
-
-  result.xc_energy = 0.0;
-  for (double s : partial_sums) result.xc_energy += s;
-  result.vxc = std::move(pbe.vxc);
-  result.eps_xc = std::move(pbe.eps_xc);
-
-  // Ledger.
-  tides::tile::PrecisionDescriptor desc;
-  desc.storage = tides::tile::NumericFormat::kFloat64;
-  desc.compute = tides::tile::NumericFormat::kFloat64;
-  desc.reduction = tides::tile::NumericFormat::kFloat64;
-  desc.determinism = tides::tile::DeterminismMode::kDeterministic;
-  desc.label = "cuda-xc-pbe";
-  result.ledger.Add(tides::tile::OperationLedgerEntry{
-      tides::tile::OperationKind::kXcFunctional,
-      desc,
-      tides::tile::ErrorBudget{tides::tile::ErrorMetric::kAbsolute, 0.0,
-          "GPU PBE XC (libxc) vs CPU reference"},
-      0.0, static_cast<std::uint64_t>(N), static_cast<std::uint64_t>(N), 0,
-      "CUDA PBE GGA XC evaluation (libxc functional + GPU reduction)"});
-
-  return result;
+  (void)grid;
+  (void)rho;
+  return Status::Unimplemented(
+      "PBE CUDA path deleted (audit B1): missing GGA term, dead code. "
+      "Use fused Tier-0 XC engine when implemented (P2.7).");
 }
 
 }  // namespace tides::grid

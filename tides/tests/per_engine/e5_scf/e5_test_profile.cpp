@@ -96,8 +96,10 @@ int TestSCFConvergence() {
       return H;
     };
 
-    // energy_fn: E = Tr(P H) - 0.05 * Tr(P^2) (double-counting correction).
-    auto energy_fn = [&](const std::vector<double>& P) -> double {
+    // AUDIT B5/B7: energy_fn now receives eigenvalues from SCFDriver.
+    // No re-diagonalization or H rebuild needed.
+    auto energy_fn = [&](const std::vector<double>& P,
+                         const std::vector<double>& eigenvalues) -> double {
       auto H = build_H(P);
       double e = 0.0;
       for (std::size_t i = 0; i < n * n; ++i)

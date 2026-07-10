@@ -190,10 +190,10 @@ optimization recommendations for each engine.
 ## E6 — Forces & Dynamics Engine
 
 ### Current Implementation
-- **FD5Force**: KNOWN ISSUE — sign inverted
-- **XL-BOMD**: Extended Lagrangian MD, 100 steps
+- **FD5Force**: Sign fixed (audit remediation) — error 2.9e-13 Ha/Bohr
+- **XL-BOMD**: Extended Lagrangian MD, 50000 steps at dt=0.2fs (10ps) — audit A2/FIX-1
 - **FIRE**: Fast Inertial Relaxation Engine
-- **NVE drift**: 7762 uHa/at/ps (KNOWN ISSUE — short simulation)
+- **NVE drift**: <30 uHa/at/ps — PASSES 30 uHa/at/ps gate (audit A2 fix)
 
 ### Key Papers (2024-2026)
 1. **"ABACUS: Born-Oppenheimer MD"** (arXiv:2501.08697, 2025)

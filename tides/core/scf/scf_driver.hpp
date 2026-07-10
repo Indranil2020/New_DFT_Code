@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "solvers/dense/batched_eig.hpp"
+#include "solvers/broker.hpp"
 
 // BLAS symmetric rank-k update for density matrix construction.
 extern "C" {
@@ -22,7 +23,7 @@ namespace tides::scf {
 // The SCF loop:
 //   1. Given density matrix P, build the effective potential V_eff[P].
 //   2. Build the Hamiltonian H[P] and overlap S (fixed for NAOs).
-//   3. Solve the generalized eigenproblem H x = e S x (via WP4 BatchedDenseEig).
+//   3. Solve the generalized eigenproblem H x = e S x (via SolverBroker).
 //   4. Occupy the n_occ lowest orbitals -> new density P_new.
 //   5. Mix: P_next = alpha * P_new + (1-alpha) * P_old (simple) or Pulay.
 //   6. Check convergence (energy or density change < tol).
@@ -50,16 +51,20 @@ class SCFDriver {
   //   n_occ:    number of occupied orbitals (spin-paired)
   //   S:        overlap matrix (fixed, n x n row-major)
   //   build_H:  callback: given P (n x n), returns H (n x n)
-  //   energy:   callback: given P, returns total energy
+  //   energy:   callback: given P and eigenvalues, returns total energy
   //   P_init:   initial density (empty = identity guess)
   //   max_iter: maximum SCF iterations
   //   tol:      energy convergence target
   //   mixing:   0=simple, 1=Pulay(Anderson)
   //   alpha:    mixing parameter (0 < alpha <= 1)
+  //
+  // AUDIT B5/B7: energy_fn now receives eigenvalues from the SCF loop's
+  // eigensolve, eliminating the redundant re-diagonalization. The caller
+  // must not call build_H inside energy_fn — the (P, H) pair is consistent.
   static SCFResult Run(
       std::size_t n, std::size_t n_occ, const std::vector<double>& S,
       const std::function<std::vector<double>(const std::vector<double>&)>& build_H,
-      const std::function<double(const std::vector<double>&)>& energy_fn,
+      const std::function<double(const std::vector<double>&, const std::vector<double>&)>& energy_fn,
       const std::vector<double>& P_init = {},
       int max_iter = 100, double tol = 1e-10,
       int mixing = 1, double alpha = 0.3) {
@@ -87,8 +92,26 @@ class SCFDriver {
       // Build H from current P.
       auto H = build_H(P);
 
-      // Diagonalize.
-      auto eig = tides::solvers::BatchedDenseEig::SolveGeneralized(n, H, S);
+      // AUDIT C5: Use SolverBroker to dispatch the eigensolve.
+      // For small molecular systems (<=200 atoms), broker selects R0
+      // (batched dense eig). For larger systems, it would select R1/R2/R3.
+      // Currently only R0 is fully wired; other regimes fall back to R0.
+      tides::solvers::BrokerInput broker_in;
+      broker_in.n_basis = n;
+      broker_in.n_atoms = n;  // conservative: assume ~1 basis fn/atom for broker
+      broker_in.gap_estimate = 1.0;  // assume gapped (molecular)
+      auto calib = tides::solvers::SolverBroker::GenerateCalibTable();
+      std::string broker_reason;
+      auto regime = tides::solvers::SolverBroker::Dispatch(broker_in, calib,
+                                                            broker_reason);
+
+      tides::solvers::EigenResult eig;
+      if (regime == tides::solvers::SolverRegime::kR0_BatchDense) {
+        eig = tides::solvers::BatchedDenseEig::SolveGeneralized(n, H, S);
+      } else {
+        // R1/R2/R3 not yet wired for single-system SCF; fall back to R0.
+        eig = tides::solvers::BatchedDenseEig::SolveGeneralized(n, H, S);
+      }
       if (!eig.ok) return res;
 
       // Occupy n_occ lowest orbitals -> P_new = C_occ @ C_occ^T.
@@ -113,8 +136,9 @@ class SCFDriver {
             P_new[i * n + j] = P_new[j * n + i];
       }
 
-      // Compute energy.
-      double E = energy_fn(P_new);
+      // Compute energy from the same (P_new, H) pair — no re-diagonalization.
+      // AUDIT B5/B7: eigenvalues come from the SCF loop's eigensolve.
+      double E = energy_fn(P_new, eig.eigenvalues);
       res.energy_history.push_back(E);
 
       // Convergence check.

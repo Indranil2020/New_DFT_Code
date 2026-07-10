@@ -277,7 +277,69 @@ class TidesCalculator:
         n = self._n_basis
         n_occ = self._n_occ
 
-        # Build overlap (identity for the model)
+        # AUDIT C7: Use real MoleculeDriver when native backend is available.
+        # This replaces the model Hamiltonian stub with actual GTO-based DFT.
+        if self._backend == "native" and hasattr(_NATIVE, "MoleculeDriver"):
+            atomic_numbers = self._config.system.atomic_numbers
+            # Positions: config uses Angstrom, C++ expects Bohr.
+            # 1 Angstrom = 1.889726125 Bohr.
+            ANG_TO_BOHR = 1.889726125
+            positions_flat = []
+            for pos in self._config.system.positions:
+                positions_flat.extend([p * ANG_TO_BOHR for p in pos])
+
+            mol = _NATIVE.MoleculeDriver.build_molecule(
+                atomic_numbers=atomic_numbers,
+                positions=positions_flat,
+            )
+            if mol.n_basis == 0:
+                return Result.err(Status.invalid_argument(
+                    "STO-3G basis not available for requested elements"))
+
+            grid_h = getattr(self._config.grid, 'h', 0.3)
+            grid_margin = getattr(self._config.grid, 'margin', 4.0)
+            max_iter = getattr(self._config.scf, 'max_iter', 100)
+            tol = getattr(self._config.scf, 'energy_tol', 1e-8)
+
+            cpp_result = _NATIVE.MoleculeDriver.run(
+                mol=mol,
+                grid_h=grid_h,
+                grid_margin=grid_margin,
+                max_iter=max_iter,
+                tol=tol,
+            )
+
+            # Convert C++ MoleculeDriverResult to Python SCFResult
+            e = cpp_result.energy
+            result = SCFResult(
+                energy=cpp_result.scf.energy,
+                energy_components={
+                    "E_kin": e.E_kin,
+                    "E_ne": e.E_ne,
+                    "E_H": e.E_H,
+                    "E_xc": e.E_xc,
+                    "E_ion": e.E_ion,
+                    "E_total": e.E_total,
+                },
+                density_matrix=list(cpp_result.scf.P),
+                eigenvalues=list(cpp_result.scf.eigenvalues),
+                n_iterations=cpp_result.scf.n_iterations,
+                converged=cpp_result.scf.converged,
+                energy_history=list(cpp_result.scf.energy_history),
+            )
+            self._last_scf = result
+            return Result.ok(result)
+
+        # Fallback: model Hamiltonian (AUDIT A1: physically meaningless).
+        # Per audit Section E: benchmarks must refuse to run on stubs.
+        # The API logs a warning; benchmarks should check backend before using.
+        import warnings as _w
+        _w.warn(
+            "TIDES is using the model Hamiltonian stub, NOT real DFT. "
+            "Results are physically meaningless. Build nanobind bindings "
+            "to use the real MoleculeDriver. (audit A1/Section E)",
+            stacklevel=2,
+        )
         S = [0.0] * (n * n)
         for i in range(n):
             S[i * n + i] = 1.0
@@ -291,8 +353,7 @@ class TidesCalculator:
             def build_H(P_flat):
                 return _build_model_h(R, n)
 
-            def energy_fn(P_flat):
-                eigenvalues, _ = _diag_2x2(_build_model_h(R, n), S, n)
+            def energy_fn(P_flat, eigenvalues):
                 return sum(eigenvalues[:n_occ]) * 2.0
 
             cpp_result = _NATIVE.SCFDriver.run(

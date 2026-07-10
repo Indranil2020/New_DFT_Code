@@ -182,9 +182,12 @@ int TestGroupedGemmFp64() {
   return failures;
 }
 
-// --- Test 2: Grouped GEMM FP16-accum ---
+// --- Test 2: Grouped GEMM FP16-input/FP32-accum (tensor core) ---
+// AUDIT A10: WMMA accumulator fragment is float (FP32), not __half (FP16).
+// The label "FP16-accum" was wrong — inputs are FP16, accumulation is FP32.
+// This is correct per the proposal (FP16 inputs, FP32 accumulate on tensor cores).
 int TestGroupedGemmFp16Accum() {
-  std::cout << "\n=== E1.2: Grouped GEMM FP16-accum (tensor core) ===\n";
+  std::cout << "\n=== E1.2: Grouped GEMM FP16-input/FP32-accum (tensor core) ===\n";
   PrintProfileHeader();
   int failures = 0;
   std::mt19937_64 rng(42);
@@ -199,10 +202,10 @@ int TestGroupedGemmFp16Accum() {
       cpu_results.push_back(CpuGemm(p.m, p.k, p.n, p.a, p.b));
     }
 
-    // GPU FP16-accum.
+    // GPU FP16-input, FP32-accumulate (tensor core WMMA).
     auto gpu = GroupedGemmFp16AccumCuda(problems);
     if (!gpu.ok()) {
-      LogProfile("GroupedGEMM", "FP16-accum",
+      LogProfile("GroupedGEMM", "FP16io-FP32accum",
                  std::to_string(dim) + "x" + std::to_string(n_prob),
                  0, 0, 0, 0, "FAIL: " + gpu.status().message());
       failures++;
@@ -217,7 +220,8 @@ int TestGroupedGemmFp16Accum() {
     double flops = 2.0 * dim * dim * dim * n_prob;
     double gflops_gpu = flops / (gpu.value().kernel_ms * 1e6);
 
-    // FP16-accum: mantissa ~10 bits → ~3 decimal digits.
+    // FP16 inputs (mantissa ~10 bits) with FP32 accumulate.
+    // Error is dominated by FP16 input quantization, not accumulation.
     // For O(1) inputs, absolute error ~1e-2 is expected.
     // Use relative tolerance: max_diff / max(|C|) < 1e-2.
     double max_abs_c = 0.0;
@@ -227,7 +231,7 @@ int TestGroupedGemmFp16Accum() {
     std::string status = (rel_err < 1e-2) ? "PASS" : "FAIL";
     if (rel_err >= 1e-2) failures++;
 
-    LogProfile("GroupedGEMM", "FP16-accum",
+    LogProfile("GroupedGEMM", "FP16io-FP32accum",
                std::to_string(dim) + "x" + std::to_string(n_prob),
                gpu.value().kernel_ms, 0, max_diff, gflops_gpu, status);
   }
@@ -464,10 +468,10 @@ int TestCudaGraphReplay() {
                per_call_graph, 0, 0, 0, status + " (x" + std::to_string(speedup) + ")");
   }
 
-  // FP16-accum graph replay.
+  // FP16-input/FP32-accum graph replay (audit A10: label corrected).
   auto graph_fp16 = tides::tile::GroupedGemmFp16AccumCudaGraphReplay(problems, repeats);
   if (!graph_fp16.ok()) {
-    LogProfile("GraphReplay", "FP16-accum",
+    LogProfile("GraphReplay", "FP16io-FP32accum",
                "8x64x100", 0, 0, 0, 0,
                "FAIL: " + graph_fp16.status().message());
     failures++;

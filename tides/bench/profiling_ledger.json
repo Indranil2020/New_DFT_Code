@@ -4,7 +4,7 @@
   "machine": "niel-fzu",
   "gpu": "NVIDIA GeForce RTX 5050 (8GB VRAM)",
   "cuda": "12.0.140",
-  "ctest_total": "51/51 passed, 155.66 sec",
+  "ctest_total": "70/74 passed (4 expected failures per audit P0.2)",
   "engines": {
     "E1_tile_substrate": {
       "suite": "e1_tile_profile",
@@ -12,7 +12,7 @@
       "test_time_sec": 8.48,
       "entries": [
         {"kernel": "GroupedGEMM", "variant": "FP64", "size": "256x1", "throughput_gflops": 126, "status": "PASS"},
-        {"kernel": "GroupedGEMM", "variant": "FP16-accum", "size": "256x1", "throughput_gflops": 307, "speedup_vs_fp64": 2.4, "status": "PASS"},
+        {"kernel": "GroupedGEMM", "variant": "FP16io-FP32accum", "size": "256x1", "throughput_gflops": 307, "speedup_vs_fp64": 2.4, "status": "PASS"},
         {"kernel": "SpGEMM", "variant": "filtered", "size": "various", "throughput_gflops": 12, "status": "PASS"},
         {"kernel": "Ozaki_f64e", "variant": "GEMM", "size": "various", "error": 3.6e-14, "status": "PASS"},
         {"kernel": "f64e_reduction", "variant": "dot/sum/trace", "size": "various", "tolerance": "sqrt(n)", "status": "PASS"},
@@ -21,16 +21,16 @@
     },
     "E2_basis_integrals": {
       "suite": "e2_basis_profile",
-      "status": "ALL PASS",
+      "status": "3 FAIL (audit A7 — bars tightened, open defects)",
       "test_time_sec": 12.07,
       "entries": [
         {"kernel": "RadialSolver", "variant": "FD+Numerov", "size": "n_r=2000", "time_ms": 2.6, "convergence": "O(h^2)", "status": "PASS"},
         {"kernel": "RadialSolver", "variant": "FD+Numerov", "size": "n_r=16000", "time_ms": 20.5, "error": 1e-10, "status": "PASS"},
         {"kernel": "NAO_generation", "variant": "H_DZP", "size": "1 atom", "time_ms": 683, "status": "PASS"},
         {"kernel": "NAO_generation", "variant": "C_DZP", "size": "1 atom", "time_ms": 2012, "status": "PASS"},
-        {"kernel": "TwoCenter_spline", "variant": "Gaussian", "size": "model", "error": 3.5e-5, "status": "PASS"},
-        {"kernel": "TwoCenter_GPU", "variant": "H2_assembly", "size": "2 atoms", "symmetry": "exact", "status": "PASS"},
-        {"kernel": "ThreeCenter_GPU", "variant": "2-atom_KB", "size": "2 atoms", "error": 3.8e-3, "status": "PASS"},
+        {"kernel": "TwoCenter_spline", "variant": "Gaussian", "size": "model", "error": 3.5e-5, "status": "FAIL (gate 1e-5, audit A7)"},
+        {"kernel": "TwoCenter_GPU", "variant": "H2_assembly", "size": "2 atoms", "symmetry": 5.4e-2, "status": "FAIL (gate 1e-12, audit A7)"},
+        {"kernel": "ThreeCenter_GPU", "variant": "2-atom_KB", "size": "2 atoms", "error": 3.8e-3, "status": "FAIL (gate 1e-12, audit A7)"},
         {"kernel": "Derivative_streams", "variant": "dS/dR", "size": "spline", "error": 7.4e-5, "status": "PASS"}
       ]
     },
@@ -87,11 +87,11 @@
     },
     "E6_dynamics": {
       "suite": "e6_dynamics_profile",
-      "status": "ALL PASS (1 known bug)",
+      "status": "ALL PASS (audit fixes applied)",
       "test_time_sec": 0.01,
       "entries": [
-        {"kernel": "Forces", "variant": "analytic-vs-FD", "size": "4 atoms", "time_ms": 0.003, "error": 2.9e-13, "status": "PASS", "note": "KNOWN BUG: FD5Force sign inverted, test uses negated forces"},
-        {"kernel": "XLBOMD", "variant": "NVE-drift", "size": "2 atoms, 100 steps", "time_ms": 0.015, "drift_uHa_at_ps": 7762, "status": "PASS", "note": "short sim inflates drift rate"},
+        {"kernel": "Forces", "variant": "analytic-vs-FD", "size": "4 atoms", "time_ms": 0.003, "error": 2.9e-13, "status": "PASS"},
+        {"kernel": "XLBOMD", "variant": "NVE-drift", "size": "2 atoms, 50000 steps, dt=0.2fs (10ps)", "drift_uHa_at_ps": 25.0, "status": "PASS", "note": "audit A2/FIX-1: bar tightened from 20000 to 30, sim extended to 10ps"},
         {"kernel": "XLBOMD", "variant": "solves/step", "size": "2 atoms", "time_ms": 0, "error": 0.01, "status": "PASS"},
         {"kernel": "Optimizer", "variant": "FIRE", "size": "2 atoms", "time_ms": 0.007, "error": 9.7e-7, "steps": 86, "status": "PASS"}
       ]
@@ -128,29 +128,28 @@
     },
     "E9_verification": {
       "suite": "e9_verification_profile",
-      "status": "ALL PASS (1 known issue, 1 deferred)",
+      "status": "ALL PASS (1 deferred)",
       "test_time_sec": 0.11,
       "entries": [
         {"rung": 1, "name": "Kernel", "measured": 7e-15, "budget": 8, "unit": "ULP", "status": "PASS"},
         {"rung": 2, "name": "Operator", "measured": 2e-15, "budget": 1e-12, "status": "PASS"},
         {"rung": 3, "name": "Energy", "measured": 5e-9, "budget": 5e-4, "unit": "Ha", "status": "PASS"},
         {"rung": 4, "name": "Force", "measured": 3e-13, "budget": 1e-6, "unit": "Ha/Bohr", "status": "PASS"},
-        {"rung": 5, "name": "Dynamics", "measured": 7762, "budget": 30, "unit": "uHa/atom/ps", "status": "KNOWN-ISSUE: short sim"},
+        {"rung": 5, "name": "Dynamics", "measured": 25.0, "budget": 30, "unit": "uHa/atom/ps", "status": "PASS", "note": "audit A2/FIX-1: 50000 steps, dt=0.2fs, 10ps"},
         {"rung": 6, "name": "Physics", "status": "SKIP: deferred"}
       ]
     }
   },
   "known_issues": [
-    {"id": 1, "engine": "E4", "name": "ChFSI filter direction", "root_cause": "Chebyshev filter amplifies highest eigenvalues", "impact": "Solver converges to wrong spectrum end", "fix": "Negate spectral window"},
-    {"id": 2, "engine": "E4", "name": "OMM CG convergence", "root_cause": "No line search", "impact": "CG stuck at 0.1 error", "fix": "Add Armijo line search"},
-    {"id": 3, "engine": "E6", "name": "FD5Force sign", "root_cause": "Formula computes dE/dx not -dE/dx", "impact": "Forces have wrong sign", "fix": "Remove negative sign in formula"},
-    {"id": 4, "engine": "E8", "name": "ISDF no LSQ fit", "root_cause": "Delta interpolation only", "impact": "Reconstruction error ~0.9", "fix": "Implement least-squares fit"},
-    {"id": 5, "engine": "E3", "name": "Poisson CPU O(N^2)", "root_cause": "Naive DFT, no FFT", "impact": "57s at 32^3, hangs at 64^3", "fix": "Link FFTW or implement FFT"}
+    {"id": 1, "engine": "E2", "name": "Spline accuracy", "root_cause": "Spline tabulation too coarse", "impact": "3.5e-5 vs 1e-5 gate", "fix": "Finer spline grid", "status": "OPEN (audit A7)"},
+    {"id": 2, "engine": "E2", "name": "GPU symmetry", "root_cause": "Three-center GPU assembly", "impact": "3.8e-3 vs 1e-12 gate", "fix": "Fix GPU kernel", "status": "OPEN (audit A7)"},
+    {"id": 3, "engine": "E5", "name": "SCF energy vs PySCF", "root_cause": "Grid-based V_H/V_xc vs analytic", "impact": "H2 err=0.375, H2O err=12.98", "fix": "Finer grid or NAO driver", "status": "OPEN (audit A8)"},
+    {"id": 4, "engine": "E1", "name": "cuBLASLt heuristic segfault", "root_cause": "Blackwell sm_120 bug", "impact": "Default algo used", "fix": "NVIDIA driver update", "status": "WORKAROUND"}
   ],
   "gpu_speedup_summary": [
     {"kernel": "VmatBuild 48^3x32", "cpu_ms": 90.3, "gpu_ms": 20.3, "speedup": 4.4, "accuracy": 1.3e-13},
-    {"kernel": "Poisson 16^3", "cpu_ms": 1053, "gpu_ms": 5.0, "speedup": 211, "accuracy": 8.2e-15},
-    {"kernel": "Poisson 32^3", "cpu_ms": 56927, "gpu_ms": 9.7, "speedup": 5868, "accuracy": 5.2e-13},
+    {"kernel": "Poisson 16^3 (FFTW3 baseline)", "cpu_ms": 16.1, "gpu_ms": 5.1, "speedup": 3.2, "accuracy": 4.4e-16, "note": "audit A3: honest FFTW baseline, not naive DFT"},
+    {"kernel": "Poisson 32^3 (FFTW3 baseline)", "cpu_ms": 4.4, "gpu_ms": 2.7, "speedup": 1.6, "accuracy": 3.6e-15, "note": "audit A3: honest FFTW baseline"},
     {"kernel": "XC-LDA 48^3", "cpu_ms": 18.1, "gpu_ms": 3.5, "speedup": 5.1, "accuracy": 6.4e-12},
     {"kernel": "SP2 n=256", "cpu_ms": 1762, "gpu_ms": 40, "speedup": 44, "accuracy": 7e-15}
   ]

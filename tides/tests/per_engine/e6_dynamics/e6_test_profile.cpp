@@ -142,25 +142,29 @@ int TestXLBOMD() {
     return {1.0};
   };
 
-  // Run 100 steps NVE. dt=0.1fs = 4.13 a.u.
-  // Stability: dt < 2/sqrt(k/m) = 2/0.1 = 20 a.u. ✓
+  // AUDIT P3: Run 50000 steps NVE at dt=0.2 fs = 10 ps (audit requires ≥10 ps).
+  // Previous: 100 steps at 0.1 fs (0.01 ps) — far too short, drift dominated
+  // by initial transient. dt=0.2fs = 8.27 a.u. is safely within Verlet stability
+  // (bound: dt < 2/sqrt(k/m) = 20 a.u.). dt=0.4fs (16.5 a.u.) was too close to
+  // the bound and diverged to NaN after ~15000 steps.
+  const double dt_fs = 0.2;
+  const int n_steps = 50000;
   auto t0 = std::chrono::steady_clock::now();
-  auto result = XLBOMD::Run(init_R, masses, 0.1, 100,
+  auto result = XLBOMD::Run(init_R, masses, dt_fs, n_steps,
                               force_fn, energy_fn, density_fn, 0, 0.0);
   auto t1 = std::chrono::steady_clock::now();
   double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
   // Check NVE drift.
   double drift = result.total_drift;
-  // dt=0.1fs, k=0.01, 100 steps: total time ~0.01ps.
-  // Drift rate is dE/dt_per_atom in uHa/atom/ps.
-  // For Verlet with dt << period, dE ~ O(dt^2) ~ 1e-4 Ha.
-  // Drift = dE * 1e6 / (n_atoms * dt_ps) ~ 1e-4 * 1e6 / (2 * 0.01) ~ 5000.
-  // This is expected for such a short simulation.
-  std::string status = (std::isfinite(drift) && drift < 20000.0) ? "PASS" : "FAIL";
-  if (!std::isfinite(drift) || drift >= 20000.0) failures++;
+  // AUDIT A2: tolerances.yaml rung5_nve_drift = 30.0 uHa/atom/ps.
+  // With 50000 steps at 0.2 fs (10 ps), the drift rate should be stable.
+  // If it still fails, the root cause is algorithmic, not simulation length.
+  const double DRIFT_BUDGET = 30.0;  // uHa/atom/ps per tolerances.yaml
+  std::string status = (std::isfinite(drift) && drift < DRIFT_BUDGET) ? "PASS" : "FAIL";
+  if (!std::isfinite(drift) || drift >= DRIFT_BUDGET) failures++;
   Log("XLBOMD", "NVE-drift",
-      "2 atoms, 100 steps",
+      "2 atoms, 50000 steps, dt=0.2fs (10ps)",
       ms, drift, status);
 
   // Check solves per step = 1.

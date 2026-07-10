@@ -9,6 +9,7 @@
 
 #include "grid/vmat_build_gpu.hpp"
 #include "grid/vmat_build.hpp"
+#include "grid/gpu_arena.hpp"
 
 #include <cuda_runtime.h>
 
@@ -76,19 +77,20 @@ __global__ void VmatBuildKernel(
   }
 }
 
+// AUDIT B10: Arena-based device allocation helpers.
 template <typename T>
-Status CopyToDevice(const std::vector<T>& host, T** device) {
+Status CopyToDeviceArena(GpuArena& arena, const std::vector<T>& host, T** device) {
   if (host.empty()) { *device = nullptr; return Status::Ok(); }
   const std::size_t bytes = host.size() * sizeof(T);
-  cudaError_t error = cudaMalloc(reinterpret_cast<void**>(device), bytes);
-  if (error != cudaSuccess) return CudaStatus(error, "cudaMalloc");
-  error = cudaMemcpy(*device, host.data(), bytes, cudaMemcpyHostToDevice);
-  if (error != cudaSuccess) { cudaFree(*device); *device = nullptr; }
-  return CudaStatus(error, "cudaMemcpy H2D");
+  *device = static_cast<T*>(arena.Alloc(bytes));
+  if (*device == nullptr) return Status::IoError("arena.Alloc failed");
+  cudaError_t error = arena.H2D(*device, host.data(), bytes);
+  if (error != cudaSuccess) { arena.Free(*device); *device = nullptr; }
+  return CudaStatus(error, "arena.H2D");
 }
 
 template <typename T>
-void FreeDevice(T* ptr) { if (ptr) cudaFree(ptr); }
+void FreeDeviceArena(GpuArena& arena, T* ptr) { if (ptr) arena.Free(ptr); }
 
 }  // namespace
 
@@ -143,44 +145,52 @@ void FreeDevice(T* ptr) { if (ptr) cudaFree(ptr); }
     std::copy(orbitals[k].begin(), orbitals[k].end(),
               flat_orb.begin() + k * N);
 
-  // Allocate device memory.
+  // AUDIT B10: Use GPU arena for persistent device buffers and stream.
+  GpuArena& arena = GpuArena::Instance();
+  cudaStream_t stream = arena.Stream();
+
+  // Allocate device memory via arena.
   double* d_orb = nullptr;
   double* d_v = nullptr;
   double* d_H = nullptr;
 
   auto cleanup = [&]() {
-    FreeDevice(d_orb);
-    FreeDevice(d_v);
-    FreeDevice(d_H);
+    FreeDeviceArena(arena, d_orb);
+    FreeDeviceArena(arena, d_v);
+    FreeDeviceArena(arena, d_H);
   };
 
-  auto st = CopyToDevice(flat_orb, &d_orb);
+  auto st = CopyToDeviceArena(arena, flat_orb, &d_orb);
   if (!st.ok()) { cleanup(); return st; }
-  st = CopyToDevice(v, &d_v);
+  st = CopyToDeviceArena(arena, v, &d_v);
   if (!st.ok()) { cleanup(); return st; }
 
   const std::size_t mat_bytes = n_orb * n_orb * sizeof(double);
-  cudaError_t err = cudaMalloc(reinterpret_cast<void**>(&d_H), mat_bytes);
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMalloc H"); }
-  cudaMemset(d_H, 0, mat_bytes);
+  d_H = static_cast<double*>(arena.Alloc(mat_bytes));
+  if (!d_H) { cleanup(); return Status::IoError("arena.Alloc failed for H"); }
+  cudaMemsetAsync(d_H, 0, mat_bytes, stream);
 
-  // Launch with 2D grid: (i, j) for upper triangle.
+  // Launch with 2D grid: (i, j) for upper triangle on arena stream.
   dim3 grid_dim(static_cast<unsigned int>(n_orb),
                 static_cast<unsigned int>(n_orb));
   const int threads = 256;
-  auto t0 = std::chrono::steady_clock::now();
-  VmatBuildKernel<<<grid_dim, threads>>>(
+  cudaEvent_t start_ev, stop_ev;
+  cudaEventCreate(&start_ev);
+  cudaEventCreate(&stop_ev);
+  cudaEventRecord(start_ev, stream);
+  VmatBuildKernel<<<grid_dim, threads, 0, stream>>>(
       d_orb, d_v, d_H, n_orb, N, dv);
-  err = cudaDeviceSynchronize();
-  auto t1 = std::chrono::steady_clock::now();
-  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "VmatBuildKernel"); }
+  cudaEventRecord(stop_ev, stream);
+  arena.Sync();
+  float kernel_ms_f = 0.0f;
+  cudaEventElapsedTime(&kernel_ms_f, start_ev, stop_ev);
+  cudaEventDestroy(start_ev);
+  cudaEventDestroy(stop_ev);
+  result.kernel_ms = static_cast<double>(kernel_ms_f);
 
-  result.kernel_ms =
-      std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-  err = cudaMemcpy(result.H.data(), d_H, mat_bytes, cudaMemcpyDeviceToHost);
+  cudaError_t err = arena.D2H(result.H.data(), d_H, mat_bytes);
   cleanup();
-  if (err != cudaSuccess) return CudaStatus(err, "cudaMemcpy H D2H");
+  if (err != cudaSuccess) return CudaStatus(err, "arena.D2H H");
 
   // Ledger.
   tides::tile::PrecisionDescriptor desc;
