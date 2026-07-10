@@ -71,13 +71,63 @@ class SCFDriver {
     SCFResult res;
     if (n == 0 || n_occ == 0 || n_occ > n) return res;
 
+    // --- S^{-1/2} with eigenvalue filtering (Löwdin orthogonalization) ---
+    // Diagonalize S = V Λ V^T, filter eigenvalues below threshold, and form
+    // X = V Λ^{-1/2} V^T (truncated to retained subspace). This handles
+    // near-linear dependence in NAO basis sets (small S eigenvalues).
+    const double s_filter = 1e-8;  // relative threshold: discard evals < s_filter * max_eval
+    std::vector<double> S_copy(S);
+    std::vector<double> s_eval(n, 0.0);
+    std::vector<double> s_evec(n * n, 0.0);  // column-major eigenvectors
+    {
+      int nn = static_cast<int>(n);
+      char jobz = 'V';
+      char uplo = 'L';
+      int lda = nn;
+      int lwork = -1;
+      double wkopt = 0.0;
+      int info = 0;
+      dsyev_(&jobz, &uplo, &nn, S_copy.data(), &lda, s_eval.data(), &wkopt, &lwork, &info);
+      if (info != 0) return res;
+      lwork = static_cast<int>(wkopt);
+      std::vector<double> work(static_cast<std::size_t>(lwork));
+      dsyev_(&jobz, &uplo, &nn, S_copy.data(), &lda, s_eval.data(), work.data(), &lwork, &info);
+      if (info != 0) return res;
+      // S_copy now holds eigenvectors as columns (column-major).
+      s_evec = S_copy;
+    }
+    double s_max = s_eval[n - 1];  // ascending order
+    double s_thresh = s_filter * s_max;
+    std::size_t n_retained = 0;
+    for (std::size_t i = 0; i < n; ++i)
+      if (s_eval[i] > s_thresh) ++n_retained;
+    // Build X = V_retained Λ^{-1/2} (n x n_retained, column-major)
+    // We store X as row-major n x n_retained for convenience.
+    // s_evec is column-major: evec[j + i*nn] = component j of eigvec i.
+    // X[i * n_retained + k] = s_evec[j + (skip+k)*nn] / sqrt(s_eval[skip+k])
+    std::size_t skip = n - n_retained;  // number of discarded small eigenvalues
+    std::vector<double> X(n * n_retained, 0.0);  // row-major: X[i * n_retained + k]
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t k = 0; k < n_retained; ++k) {
+        // s_evec is column-major: column (skip+k), row i
+        X[i * n_retained + k] = s_evec[i + (skip + k) * n] / std::sqrt(s_eval[skip + k]);
+      }
+    }
+    // For convenience also store X^T (n_retained x n, row-major)
+    std::vector<double> Xt(n_retained * n, 0.0);  // Xt[k * n + i] = X[i * n_retained + k]
+    for (std::size_t i = 0; i < n; ++i)
+      for (std::size_t k = 0; k < n_retained; ++k)
+        Xt[k * n + i] = X[i * n_retained + k];
+
     // Initialize density.
     std::vector<double> P;
     if (P_init.size() == n * n) {
       P = P_init;
     } else {
       P.assign(n * n, 0.0);
-      for (std::size_t i = 0; i < n; ++i) P[i * n + i] = 0.5;  // diagonal guess
+      const double p_init =
+          (n > 0) ? static_cast<double>(n_occ) / static_cast<double>(n) : 0.0;
+      for (std::size_t i = 0; i < n; ++i) P[i * n + i] = p_init;  // diagonal guess
     }
 
     // Pulay/DIIS history.
@@ -92,27 +142,64 @@ class SCFDriver {
       // Build H from current P.
       auto H = build_H(P);
 
-      // AUDIT C5: Use SolverBroker to dispatch the eigensolve.
-      // For small molecular systems (<=200 atoms), broker selects R0
-      // (batched dense eig). For larger systems, it would select R1/R2/R3.
-      // Currently only R0 is fully wired; other regimes fall back to R0.
-      tides::solvers::BrokerInput broker_in;
-      broker_in.n_basis = n;
-      broker_in.n_atoms = n;  // conservative: assume ~1 basis fn/atom for broker
-      broker_in.gap_estimate = 1.0;  // assume gapped (molecular)
-      auto calib = tides::solvers::SolverBroker::GenerateCalibTable();
-      std::string broker_reason;
-      auto regime = tides::solvers::SolverBroker::Dispatch(broker_in, calib,
-                                                            broker_reason);
-
-      tides::solvers::EigenResult eig;
-      if (regime == tides::solvers::SolverRegime::kR0_BatchDense) {
-        eig = tides::solvers::BatchedDenseEig::SolveGeneralized(n, H, S);
-      } else {
-        // R1/R2/R3 not yet wired for single-system SCF; fall back to R0.
-        eig = tides::solvers::BatchedDenseEig::SolveGeneralized(n, H, S);
+      // Transform H to orthogonal basis: H' = X^T H X (n_retained x n_retained)
+      // Step 1: tmp = H X  (n x n_retained, row-major)
+      std::vector<double> tmp(n * n_retained, 0.0);
+      for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t j = 0; j < n_retained; ++j) {
+          double s = 0.0;
+          for (std::size_t k = 0; k < n; ++k)
+            s += H[i * n + k] * X[k * n_retained + j];
+          tmp[i * n_retained + j] = s;
+        }
+      // Step 2: H' = X^T tmp (n_retained x n_retained, row-major)
+      std::vector<double> Hp(n_retained * n_retained, 0.0);
+      for (std::size_t k = 0; k < n_retained; ++k)
+        for (std::size_t l = 0; l < n_retained; ++l) {
+          double s = 0.0;
+          for (std::size_t i = 0; i < n; ++i)
+            s += Xt[k * n + i] * tmp[i * n_retained + l];
+          Hp[k * n_retained + l] = s;
+        }
+      // Solve standard eigenproblem H' y = e y (n_retained x n_retained)
+      std::vector<double> Hp_work = Hp;
+      std::vector<double> y_eval(n_retained, 0.0);
+      std::vector<double> y_evec(n_retained * n_retained, 0.0);
+      {
+        int nn2 = static_cast<int>(n_retained);
+        char jobz = 'V';
+        char uplo = 'L';
+        int lda = nn2;
+        int lwork = -1;
+        double wkopt = 0.0;
+        int info = 0;
+        dsyev_(&jobz, &uplo, &nn2, Hp_work.data(), &lda, y_eval.data(), &wkopt, &lwork, &info);
+        if (info != 0) return res;
+        lwork = static_cast<int>(wkopt);
+        std::vector<double> work(static_cast<std::size_t>(lwork));
+        dsyev_(&jobz, &uplo, &nn2, Hp_work.data(), &lda, y_eval.data(), work.data(), &lwork, &info);
+        if (info != 0) return res;
+        y_evec = Hp_work;  // column-major eigenvectors
       }
-      if (!eig.ok) return res;
+      // Back-transform: C = X y (n x n_retained)
+      // y_evec is column-major n_retained x n_retained: y_evec[j + k*n_retained] = comp j of evec k
+      // C[i, k] = sum_j X[i, j] * y_evec[j + k*n_retained]
+      std::vector<double> C_evec(n * n_retained, 0.0);  // row-major
+      for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t k = 0; k < n_retained; ++k) {
+          double s = 0.0;
+          for (std::size_t j = 0; j < n_retained; ++j)
+            s += X[i * n_retained + j] * y_evec[j + k * n_retained];
+          C_evec[i * n_retained + k] = s;
+        }
+      // Pack into EigenResult format (same as SolveGeneralized: evec[k*n + j])
+      tides::solvers::EigenResult eig;
+      eig.eigenvalues = y_eval;
+      eig.eigenvectors.resize(n * n_retained, 0.0);
+      for (std::size_t k = 0; k < n_retained; ++k)
+        for (std::size_t i = 0; i < n; ++i)
+          eig.eigenvectors[k * n + i] = C_evec[i * n_retained + k];
+      eig.ok = true;
 
       // Occupy n_occ lowest orbitals -> P_new = C_occ @ C_occ^T.
       // Use BLAS dsyrk for O(n^2 * n_occ) symmetric rank-k update.
@@ -130,12 +217,12 @@ class SCFDriver {
         dsyrk_(&uplo, &trans, &nn, &kk, &alpha_blas,
                eig.eigenvectors.data(), &nn,
                &beta_blas, P_new.data(), &nn);
-        // Symmetrize: copy lower triangle to upper
+        // Symmetrize: dsyrk_ uplo='L' writes column-major lower = row-major
+        // upper. Copy row-major upper (computed) to row-major lower (zeros).
         for (std::size_t i = 0; i < n; ++i)
           for (std::size_t j = i + 1; j < n; ++j)
-            P_new[i * n + j] = P_new[j * n + i];
+            P_new[j * n + i] = P_new[i * n + j];
       }
-
       // Compute energy from the same (P_new, H) pair — no re-diagonalization.
       // AUDIT B5/B7: eigenvalues come from the SCF loop's eigensolve.
       double E = energy_fn(P_new, eig.eigenvalues);

@@ -74,7 +74,7 @@ int TestH2() {
   std::vector<int> Z = {1, 1};
   std::vector<double> pos = {0.0, 0.0, 0.0, 1.4, 0.0, 0.0};
 
-  auto result = NaoDriver::Run(Z, pos, 0.25, 4.0, 100, 1e-6);
+  auto result = NaoDriver::Run(Z, pos, 0.2, 4.0, 100, 1e-6);
 
   std::cout << "  n_basis = " << result.n_basis << ", n_electrons = " << result.n_electrons << "\n";
   std::cout << "  Converged: " << (result.scf.converged ? "YES" : "NO") << "\n";

@@ -25,6 +25,7 @@
 // against the GTO oracle for the same XC functional and grid, not against
 // exact basis-set agreement.
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -251,13 +252,14 @@ class NaoDriver {
     if (r > bf.r_cut || r < 1e-12) return 0.0;
 
     // Radial part: interpolate R(r) from the tabulated grid.
+    // The radial grid is monotonic, so use binary search (O(log n_r)).
     const auto& rg = bf.r;
     const auto& Rg = bf.R;
     double R_val = 0.0;
     if (r >= rg.front() && r <= rg.back()) {
-      std::size_t j = 0;
-      while (j + 1 < rg.size() && rg[j + 1] < r) ++j;
-      if (j + 1 < rg.size()) {
+      auto it = std::upper_bound(rg.begin(), rg.end(), r);
+      if (it != rg.begin() && it != rg.end()) {
+        const std::size_t j = static_cast<std::size_t>(it - rg.begin() - 1);
         const double t = (r - rg[j]) / (rg[j + 1] - rg[j]);
         R_val = (1.0 - t) * Rg[j] + t * Rg[j + 1];
       } else {
@@ -265,12 +267,14 @@ class NaoDriver {
       }
     }
 
-    if (bf.l == 0) return R_val;  // s orbital: no angular part
-
     // Angular part: real spherical harmonic Y_lm(theta, phi).
+    // For l=0, Y_00 = 1/sqrt(4π), so all basis functions are consistently
+    // the full 3D normalized product R_nl(r) * Y_lm.
     const double theta = std::acos(dz / std::max(r, 1e-15));
     const double phi = std::atan2(dy, dx);
-    double angular = basis::RealSphericalHarmonics::Eval(bf.l, m, theta, phi);
+    double angular = (bf.l == 0)
+                        ? (1.0 / std::sqrt(4.0 * M_PI))
+                        : basis::RealSphericalHarmonics::Eval(bf.l, m, theta, phi);
     return R_val * angular;
   }
 
@@ -285,10 +289,23 @@ class NaoDriver {
       double tol = 1e-8) {
     NaoDriverResult result;
     auto t0 = std::chrono::steady_clock::now();
+    auto t_last = t0;
+    auto step = [&](const std::string& name) {
+      auto t = std::chrono::steady_clock::now();
+      std::cout << "[NaoDriver] " << name << " (elapsed="
+                << std::chrono::duration<double, std::milli>(t - t0).count() << " ms, step="
+                << std::chrono::duration<double, std::milli>(t - t_last).count() << " ms)"
+                << std::endl;
+      t_last = t;
+    };
 
     // Step 1: Generate NAO basis per atom.
+    std::cout << "[NaoDriver] Starting Run (Z={ ";
+    for (int Z : atomic_numbers) std::cout << Z << " ";
+    std::cout << "}, grid_h=" << grid_h << ")" << std::endl;
     auto atoms = BuildAtoms(atomic_numbers, positions);
     result.n_atoms = atoms.size();
+    step("basis generation");
 
     // Step 2: Count basis functions and build index mapping.
     const std::size_t n = CountBasisFunctions(atoms);
@@ -323,11 +340,12 @@ class NaoDriver {
     }
     grid_margin = std::max(grid_margin, max_rcut + 2.0);
 
-    // Step 4: Count electrons.
+    // Step 4: Count electrons and occupied orbitals (closed-shell, spin-paired).
+    // Odd electron counts are rounded up so H (1e) has 1 occupied orbital.
     std::size_t n_electrons = 0;
     for (int Z : atomic_numbers) n_electrons += static_cast<std::size_t>(Z);
     result.n_electrons = n_electrons;
-    const std::size_t n_occ = n_electrons / 2;
+    const std::size_t n_occ = (n_electrons + 1) / 2;
 
     // Step 5: Set up the grid (same as MoleculeDriver).
     double rmin[3] = {1e30, 1e30, 1e30};
@@ -377,6 +395,7 @@ class NaoDriver {
         }
       }
     }
+    step("grid basis evaluation");
 
     // Step 6b: Assemble S and T matrices by direct grid integration.
     // S_ab = ∫ φ_a φ_b d³r; T_ab = ½ ∫ ∇φ_a · ∇φ_b d³r (integration by parts).
@@ -427,6 +446,14 @@ class NaoDriver {
         T[bj * n + bi] = t_val;
       }
     }
+    step("S/T assembly");
+
+    // Occupancy factor: SCFDriver uses n_occ doubly/singly occupied orbitals and
+    // stores P with trace(P,S) = n_occ. The total density must integrate to the
+    // actual number of electrons (e.g., H atom: 1e, n_occ=1, factor=1; H2: 2e,
+    // n_occ=1, factor=2; closed shell: factor=2).
+    const double occ_factor =
+        (n_occ > 0) ? static_cast<double>(n_electrons) / static_cast<double>(n_occ) : 0.0;
 
     // Step 7: V_ext via grid (nuclear attraction).
     // For NAO, we project -Z/|r-R| onto the basis via VmatBuilder.
@@ -449,12 +476,14 @@ class NaoDriver {
       }
     }
     auto V_ext = grid::VmatBuilder::BuildHmat(grid, orbitals, v_ext_grid);
+    step("V_ext assembly");
 
     // Step 8: Ion-ion energy.
     double E_ion = EnergyAssembly::EwaldIonIon(
         positions,
         std::vector<double>(atomic_numbers.begin(), atomic_numbers.end()),
         false);
+    std::cout << "[NaoDriver] E_ion = " << E_ion << std::endl;
 
     // Step 9: SCF loop.
     // V_H via grid Poisson (no ERIs for NAO).
@@ -467,10 +496,12 @@ class NaoDriver {
       std::vector<double> P2;
     };
     CachedHBuild cache;
+    int scf_iter = 0;
 
     auto build_H = [&](const std::vector<double>& P) -> std::vector<double> {
+      ++scf_iter;
       cache.P2.assign(n * n, 0.0);
-      for (std::size_t i = 0; i < n * n; ++i) cache.P2[i] = 2.0 * P[i];
+      for (std::size_t i = 0; i < n * n; ++i) cache.P2[i] = occ_factor * P[i];
 
       // Grid-based Hartree: rho → V_H via Poisson.
       cache.rho = grid::VmatBuilder::BuildRho(grid, orbitals, cache.P2);
@@ -495,7 +526,7 @@ class NaoDriver {
                          const std::vector<double>& eigenvalues) -> double {
       double sum_eps = 0.0;
       for (std::size_t k = 0; k < n_occ && k < n; ++k)
-        sum_eps += 2.0 * eigenvalues[k];
+        sum_eps += occ_factor * eigenvalues[k];
 
       double E_xc_grid = grid::XCGridEvaluator::XCEnergy(grid, cache.xc, cache.rho);
 
@@ -519,13 +550,17 @@ class NaoDriver {
       return E_total;
     };
 
+    std::cout << "[NaoDriver] launching SCF (n=" << n << ", n_occ=" << n_occ << ")" << std::endl;
     result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
                                  {}, max_iter, tol, 1, 0.3);
+    step("SCF");
 
-    // Build basis info string.
+    // Build basis info string (total m-degenerate functions per atom).
     std::string info;
     for (const auto& atom : atoms) {
-      info += atom.element + "(" + std::to_string(atom.basis.functions.size()) + "fns) ";
+      std::size_t n_per_atom = 0;
+      for (const auto& f : atom.basis.functions) n_per_atom += 2 * f.l + 1;
+      info += atom.element + "(" + std::to_string(n_per_atom) + "fns) ";
     }
     result.basis_info = info;
 
