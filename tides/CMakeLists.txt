@@ -89,7 +89,7 @@ if(TIDES_ENABLE_CUDA)
   check_language(CUDA)
   if(CMAKE_CUDA_COMPILER)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-      set(CMAKE_CUDA_ARCHITECTURES 75-virtual 90-virtual CACHE STRING
+      set(CMAKE_CUDA_ARCHITECTURES 75-virtual 86-virtual CACHE STRING
           "CUDA architectures; PTX targets keep builds runnable on newer GPUs")
     endif()
     enable_language(CUDA)
