@@ -439,6 +439,59 @@ class TidesCalculator:
         self._last_scf = result
         return Result.ok(result)
 
+    def run_nao_scf(self) -> Result[SCFResult]:
+        """Run SCF using the NAO (Numeric Atom-Centered Orbital) basis.
+
+        This is the product pipeline (DZP basis, grid-based Poisson for
+        Hartree, LDA XC). Requires the native C++ backend with NaoDriver
+        bindings.
+
+        Returns Result[SCFResult]. Check .ok before accessing .value.
+        """
+        if self._backend != "native" or not hasattr(_NATIVE, "NaoDriver"):
+            return Result.err(Status.unimplemented(
+                "NaoDriver not available — build nanobind bindings with NAO support"))
+
+        atomic_numbers = self._config.system.atomic_numbers
+        ANG_TO_BOHR = 1.889726125
+        positions_flat = []
+        for pos in self._config.system.positions:
+            positions_flat.extend([p * ANG_TO_BOHR for p in pos])
+
+        grid_h = getattr(self._config.grid, 'h', 0.3)
+        grid_margin = getattr(self._config.grid, 'margin', 4.0)
+        max_iter = getattr(self._config.scf, 'max_iter', 100)
+        tol = getattr(self._config.scf, 'energy_tol', 1e-8)
+
+        cpp_result = _NATIVE.NaoDriver.run(
+            atomic_numbers=atomic_numbers,
+            positions=positions_flat,
+            grid_h=grid_h,
+            grid_margin=grid_margin,
+            max_iter=max_iter,
+            tol=tol,
+        )
+
+        e = cpp_result.energy
+        result = SCFResult(
+            energy=cpp_result.scf.energy,
+            energy_components={
+                "E_kin": e.E_kin,
+                "E_ne": e.E_ne,
+                "E_H": e.E_H,
+                "E_xc": e.E_xc,
+                "E_ion": e.E_ion,
+                "E_total": e.E_total,
+            },
+            density_matrix=list(cpp_result.scf.P),
+            eigenvalues=list(cpp_result.scf.eigenvalues),
+            n_iterations=cpp_result.scf.n_iterations,
+            converged=cpp_result.scf.converged,
+            energy_history=list(cpp_result.scf.energy_history),
+        )
+        self._last_scf = result
+        return Result.ok(result)
+
     def compute_energy(self) -> Result[EnergyResult]:
         """Compute total energy (requires a prior SCF or runs one)."""
         if self._last_scf is None:

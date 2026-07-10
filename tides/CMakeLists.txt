@@ -509,7 +509,8 @@ if(LAPACK_FOUND)
 endif()
 add_test(NAME physics_validation COMMAND tides_physics_tests)
 
-# --- P3.3: GPU regression tests ---
+# --- P3.3: GPU regression tests (requires CUDA) ---
+if(TIDES_HAVE_CUDA)
 add_executable(tides_gpu_regression_tests
   core/tests/gpu_regression_tests.cpp)
 target_link_libraries(tides_gpu_regression_tests PRIVATE
@@ -522,8 +523,10 @@ set_target_properties(tides_gpu_regression_tests PROPERTIES
 add_test(NAME gpu_regression COMMAND tides_gpu_regression_tests)
 set_tests_properties(gpu_regression PROPERTIES
   SKIP_RETURN_CODE 77)
+endif()
 
-# --- P4: Benchmark suite ---
+# --- P4: Benchmark suite (requires CUDA for GPU kernels) ---
+if(TIDES_HAVE_CUDA)
 add_executable(tides_benchmark
   core/tests/benchmark.cpp)
 target_link_libraries(tides_benchmark PRIVATE
@@ -533,6 +536,7 @@ if(LAPACK_FOUND)
 endif()
 set_target_properties(tides_benchmark PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
+endif()
 
 # T5.8: 10⁴-atom single-card benchmark
 add_executable(tides_10k_atom_benchmark
@@ -573,6 +577,9 @@ add_executable(tides_roofline_analysis
 add_test(NAME roofline_analysis COMMAND tides_roofline_analysis)
 
 # --- Per-Engine Test & Profile Suites (E1-E8) ---
+# E1-E4 profiles require CUDA libraries; guard them so CPU-only builds work.
+if(TIDES_HAVE_CUDA)
+
 add_executable(tides_e1_tile_profile
   tests/per_engine/e1_tile/e1_test_profile.cpp
   core/tile/reduce_f64e.cpp)
@@ -606,6 +613,8 @@ set_target_properties(tides_e4_solvers_profile PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME e4_solvers_profile COMMAND tides_e4_solvers_profile)
 
+endif() # TIDES_HAVE_CUDA for E1-E4 profiles
+
 add_executable(tides_e5_scf_profile
   tests/per_engine/e5_scf/e5_test_profile.cpp)
 target_link_libraries(tides_e5_scf_profile PRIVATE
@@ -631,6 +640,15 @@ set_target_properties(tides_nao_driver_tests PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME nao_driver_end_to_end_scf
   COMMAND tides_nao_driver_tests)
+
+add_executable(tides_nao_benchmark_tests
+  core/scf/tests/nao_benchmark_tests.cpp)
+target_link_libraries(tides_nao_benchmark_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_nao_benchmark_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME nao_benchmark_vs_pyscf
+  COMMAND tides_nao_benchmark_tests)
 
 add_executable(tides_e6_dynamics_profile
   tests/per_engine/e6_dynamics/e6_test_profile.cpp)
@@ -679,7 +697,9 @@ endif()
 if(TIDES_HAVE_CUDA)
   target_link_libraries(tides_scf INTERFACE tides_cuda_grid)
 else()
-  add_library(tides_xc_engine_cpu STATIC core/grid/xc/xc_engine_cpu.cpp)
+  add_library(tides_xc_engine_cpu STATIC
+    core/grid/xc/xc_engine_cpu.cpp
+    core/grid/cuda_stubs.cpp)
   target_link_libraries(tides_xc_engine_cpu PUBLIC tides_grid)
   set_target_properties(tides_xc_engine_cpu PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_link_libraries(tides_scf INTERFACE tides_xc_engine_cpu)

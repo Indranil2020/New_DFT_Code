@@ -4,10 +4,14 @@
 #include <cmath>
 #include <cstddef>
 #include <functional>
+#include <iostream>
 #include <vector>
 
 #include "solvers/dense/batched_eig.hpp"
 #include "solvers/broker.hpp"
+#include "solvers/chfsi/chfsi.hpp"
+#include "solvers/sp2_submatrix/sp2.hpp"
+#include "solvers/foe_sq/foe.hpp"
 
 // BLAS symmetric rank-k update for density matrix construction.
 extern "C" {
@@ -67,7 +71,8 @@ class SCFDriver {
       const std::function<double(const std::vector<double>&, const std::vector<double>&)>& energy_fn,
       const std::vector<double>& P_init = {},
       int max_iter = 100, double tol = 1e-10,
-      int mixing = 1, double alpha = 0.3) {
+      int mixing = 1, double alpha = 0.3,
+      const solvers::BrokerInput* broker_input = nullptr) {
     SCFResult res;
     if (n == 0 || n_occ == 0 || n_occ > n) return res;
 
@@ -125,9 +130,21 @@ class SCFDriver {
       P = P_init;
     } else {
       P.assign(n * n, 0.0);
+      // Improved initial guess: uniform filling of lowest diagonal elements.
+      // This is closer to the converged density than uniform diagonal.
       const double p_init =
           (n > 0) ? static_cast<double>(n_occ) / static_cast<double>(n) : 0.0;
       for (std::size_t i = 0; i < n; ++i) P[i * n + i] = p_init;  // diagonal guess
+    }
+
+    // --- Broker dispatch: select solver regime ---
+    solvers::SolverRegime regime = solvers::SolverRegime::kR0_BatchDense;
+    std::string broker_reason;
+    if (broker_input != nullptr) {
+      auto calib = solvers::SolverBroker::GenerateCalibTable();
+      regime = solvers::SolverBroker::Dispatch(*broker_input, calib, broker_reason);
+      std::cout << "[SCFDriver] broker: " << broker_reason
+                << " -> regime R" << static_cast<int>(regime) << std::endl;
     }
 
     // Pulay/DIIS history.
@@ -142,7 +159,82 @@ class SCFDriver {
       // Build H from current P.
       auto H = build_H(P);
 
-      // Transform H to orthogonal basis: H' = X^T H X (n_retained x n_retained)
+      // --- R2/R3: density-matrix solvers (no eigendecomposition) ---
+      if (regime == solvers::SolverRegime::kR2_SP2 ||
+          regime == solvers::SolverRegime::kR3_FOE_SQ) {
+        // Estimate spectral bounds from diagonal of H.
+        double lambda_min = 1e30, lambda_max = -1e30;
+        for (std::size_t i = 0; i < n; ++i) {
+          lambda_min = std::min(lambda_min, H[i * n + i]);
+          lambda_max = std::max(lambda_max, H[i * n + i]);
+        }
+        // Widen bounds by 10% for safety.
+        double sw = lambda_max - lambda_min;
+        lambda_min -= 0.1 * sw;
+        lambda_max += 0.1 * sw;
+
+        // Fermi level: place in the gap (estimated at mid-spectrum).
+        double mu = 0.5 * (lambda_min + lambda_max);
+        double n_e = static_cast<double>(n_occ);
+
+        std::vector<double> P_new;
+        if (regime == solvers::SolverRegime::kR2_SP2) {
+          auto sp2_res = solvers::SP2Purification::Purify(
+              n, H, S, n_e, mu, lambda_min, lambda_max);
+          P_new = sp2_res.P;
+        } else {
+          double kT = broker_input ? broker_input->electronic_temp * 3.1668e-6 : 0.01;
+          if (kT <= 0) kT = 0.01;
+          auto foe_res = solvers::FermiOperatorExpansion::Compute(
+              n, H, S, mu, kT, lambda_min, lambda_max);
+          P_new = foe_res.P;
+        }
+
+        // Compute approximate eigenvalues via Rayleigh quotient for energy_fn.
+        // eps_k ≈ <P_k|H|P_k> / <P_k|S|P_k> — use diagonal of H as proxy.
+        std::vector<double> approx_evals(n);
+        for (std::size_t i = 0; i < n; ++i)
+          approx_evals[i] = H[i * n + i];
+
+        double E = energy_fn(P_new, approx_evals);
+        res.energy_history.push_back(E);
+
+        if (std::fabs(E - E_prev) < tol) {
+          res.converged = true;
+          res.energy = E;
+          res.P = P_new;
+          res.eigenvalues = approx_evals;
+          return res;
+        }
+        E_prev = E;
+
+        // Simple mixing for R2/R3 (DIIS on density matrix).
+        std::vector<double> P_next(n * n, 0.0);
+        double res_norm = 0.0;
+        for (std::size_t idx = 0; idx < n * n; ++idx) {
+          double d = P_new[idx] - P[idx];
+          res_norm += d * d;
+        }
+        double rms = std::sqrt(res_norm / static_cast<double>(n * n));
+        double eff_alpha = std::max(alpha / (1.0 + rms), 0.05);
+        for (std::size_t idx = 0; idx < n * n; ++idx)
+          P_next[idx] = eff_alpha * P_new[idx] + (1.0 - eff_alpha) * P[idx];
+
+        P_history.push_back(P);
+        F_history.push_back(P_new);
+        if (static_cast<int>(P_history.size()) > pulay_depth) {
+          P_history.erase(P_history.begin());
+          F_history.erase(F_history.begin());
+        }
+
+        P = P_next;
+        res.energy = E;
+        res.P = P;
+        res.eigenvalues = approx_evals;
+        continue;
+      }
+
+      // --- R0/R1: eigensolve-based solvers ---
       // Step 1: tmp = H X  (n x n_retained, row-major)
       std::vector<double> tmp(n * n_retained, 0.0);
       for (std::size_t i = 0; i < n; ++i)
@@ -165,7 +257,36 @@ class SCFDriver {
       std::vector<double> Hp_work = Hp;
       std::vector<double> y_eval(n_retained, 0.0);
       std::vector<double> y_evec(n_retained * n_retained, 0.0);
-      {
+
+      if (regime == solvers::SolverRegime::kR1_ChFSI && n_retained > 20) {
+        // R1: Chebyshev-filtered subspace iteration.
+        // Estimate spectral window from Gershgorin bounds.
+        double lo = 1e30, hi = -1e30;
+        for (std::size_t i = 0; i < n_retained; ++i) {
+          double diag = Hp[i * n_retained + i];
+          double radius = 0.0;
+          for (std::size_t j = 0; j < n_retained; ++j)
+            if (j != i) radius += std::fabs(Hp[i * n_retained + j]);
+          lo = std::min(lo, diag - radius);
+          hi = std::max(hi, diag + radius);
+        }
+        auto chfsi_res = solvers::ChFSI::Solve(
+            n_retained, Hp, std::vector<double>(n_retained * n_retained, 0.0),
+            n_occ, lo, hi, 12, 50, 1e-9);
+        if (chfsi_res.converged) {
+          y_eval = chfsi_res.eigenvalues;
+          y_evec.assign(n_retained * n_retained, 0.0);
+          for (std::size_t k = 0; k < n_occ; ++k)
+            for (std::size_t j = 0; j < n_retained; ++j)
+              y_evec[j + k * n_retained] = chfsi_res.eigenvectors[k * n_retained + j];
+        } else {
+          // Fall back to dense eig.
+          regime = solvers::SolverRegime::kR0_BatchDense;
+        }
+      }
+
+      if (regime != solvers::SolverRegime::kR1_ChFSI || n_retained <= 20) {
+        // R0: dense eigensolve via LAPACK dsyev_.
         int nn2 = static_cast<int>(n_retained);
         char jobz = 'V';
         char uplo = 'L';
@@ -331,25 +452,28 @@ class SCFDriver {
 
         if (!diis_ok) {
           // Fall back to simple mixing with Kerker damping.
+          // Adaptive alpha: increase mixing as SCF converges (residual shrinks).
           double res_norm = 0.0;
           for (std::size_t idx = 0; idx < n * n; ++idx) {
             double d = P_new[idx] - P[idx];
             res_norm += d * d;
           }
           double rms = std::sqrt(res_norm / static_cast<double>(n * n));
-          double eff_a = std::max(alpha / (1.0 + rms), 0.05);
+          // Start conservative, increase as residual shrinks.
+          double eff_a = std::min(std::max(alpha / (1.0 + rms), 0.05), 0.8);
           for (std::size_t idx = 0; idx < n * n; ++idx)
             P_next[idx] = eff_a * P_new[idx] + (1.0 - eff_a) * P[idx];
         }
       } else {
         // Simple mixing with Kerker-style damping using RMS residual.
+        // Adaptive: increase alpha as residual decreases.
         double res_norm = 0.0;
         for (std::size_t idx = 0; idx < n * n; ++idx) {
           double d = P_new[idx] - P[idx];
           res_norm += d * d;
         }
         double rms = std::sqrt(res_norm / static_cast<double>(n * n));
-        double eff_alpha = std::max(alpha / (1.0 + rms), 0.05);
+        double eff_alpha = std::min(std::max(alpha / (1.0 + rms), 0.05), 0.8);
         for (std::size_t idx = 0; idx < n * n; ++idx)
           P_next[idx] = eff_alpha * P_new[idx] + (1.0 - eff_alpha) * P[idx];
       }

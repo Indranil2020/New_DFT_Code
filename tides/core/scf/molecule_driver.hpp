@@ -105,7 +105,8 @@ class MoleculeDriver {
       int max_iter = 100,
       double tol = 1e-8,
       bool use_grid_hartree = false,
-      grid::xc::XcSpec xc_spec = {}) {
+      grid::xc::XcSpec xc_spec = {},
+      bool use_grid_vext = false) {
     MoleculeDriverResult result;
     result.n_basis = mol.n_basis;
     result.n_atoms = mol.atomic_numbers.size();
@@ -179,9 +180,35 @@ class MoleculeDriver {
           mol, i, gx, gy, gz, n0, n1, n2);
     }
 
-    // Step 4: Compute V_ext analytically (nuclear attraction integrals).
-    // This is critical: grid-based V_ext poorly captures the 1/r singularity.
-    auto V_ext = GTOIntegrals::NuclearAttraction(mol);
+    // Step 4: Compute V_ext (nuclear attraction).
+    // When use_grid_vext=true, compute on grid (avoids analytic OS recursion
+    // bug for p-orbital nuclear attraction). When false, use analytic integrals.
+    std::vector<double> V_ext;
+    if (use_grid_vext) {
+      const std::size_t N_grid_tmp = n0 * n1 * n2;
+      std::vector<double> v_ext_grid(N_grid_tmp, 0.0);
+      for (std::size_t ix = 0; ix < n0; ++ix) {
+        for (std::size_t iy = 0; iy < n1; ++iy) {
+          for (std::size_t iz = 0; iz < n2; ++iz) {
+            const std::size_t g = grid.flatten(ix, iy, iz);
+            auto [x, y, z] = grid.coord(ix, iy, iz);
+            double v = 0.0;
+            for (std::size_t a = 0; a < mol.atomic_numbers.size(); ++a) {
+              const double dx = x - mol.positions[3 * a];
+              const double dy = y - mol.positions[3 * a + 1];
+              const double dz = z - mol.positions[3 * a + 2];
+              const double r = std::sqrt(dx * dx + dy * dy + dz * dz);
+              if (r > 1e-10)
+                v -= static_cast<double>(mol.atomic_numbers[a]) / r;
+            }
+            v_ext_grid[g] = v;
+          }
+        }
+      }
+      V_ext = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_ext_grid);
+    } else {
+      V_ext = GTOIntegrals::NuclearAttraction(mol);
+    }
 
     // Step 5: Compute ion-ion energy.
     double E_ion = EnergyAssembly::EwaldIonIon(

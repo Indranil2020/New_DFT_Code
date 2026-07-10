@@ -17,6 +17,7 @@
 #include "scf/scf_driver.hpp"
 #include "scf/energy_assembly.hpp"
 #include "scf/molecule_driver.hpp"
+#include "scf/nao_driver.hpp"
 #include "forces/analytic_forces.hpp"
 #include "dynamics/xlbomd/xlbomd.hpp"
 #include "dynamics/optimizers/optimizers.hpp"
@@ -248,7 +249,7 @@ NB_MODULE(_native, m) {
                 spec.family = grid::xc::XcFamily::kLda;
             }
             return scf::MoleculeDriver::Run(mol, grid_h, grid_margin, max_iter, tol,
-                                             use_grid_hartree, spec);
+                                             use_grid_hartree, spec, false);
         }, nb::arg("mol"),
            nb::arg("grid_h") = 0.3, nb::arg("grid_margin") = 4.0,
            nb::arg("max_iter") = 100, nb::arg("tol") = 1e-8,
@@ -259,6 +260,56 @@ NB_MODULE(_native, m) {
                                          const scf::EnergyComponents& energy) {
             return scf::MoleculeDriver::ComputeForces(mol, scf_result, energy);
         }, nb::arg("mol"), nb::arg("scf_result"), nb::arg("energy"));
+
+    // NaoDriver — the NAO-based SCF engine (product pipeline).
+    nb::class_<scf::NaoDriverResult>(m, "NaoDriverResult")
+        .def_rw("scf", &scf::NaoDriverResult::scf)
+        .def_rw("energy", &scf::NaoDriverResult::energy)
+        .def_rw("n_basis", &scf::NaoDriverResult::n_basis)
+        .def_rw("n_electrons", &scf::NaoDriverResult::n_electrons)
+        .def_rw("n_atoms", &scf::NaoDriverResult::n_atoms)
+        .def_rw("grid_h", &scf::NaoDriverResult::grid_h)
+        .def_rw("wall_time_ms", &scf::NaoDriverResult::wall_time_ms)
+        .def_rw("basis_info", &scf::NaoDriverResult::basis_info)
+        .def_prop_ro("grid_n", [](const scf::NaoDriverResult& r) {
+            return std::vector<std::size_t>{r.grid_n[0], r.grid_n[1], r.grid_n[2]};
+        });
+
+    nb::class_<scf::NaoDriver>(m, "NaoDriver")
+        .def_static("run", [](const std::vector<int>& atomic_numbers,
+                              const std::vector<double>& positions,
+                              double grid_h, double grid_margin,
+                              int max_iter, double tol) {
+            return scf::NaoDriver::Run(atomic_numbers, positions,
+                                        grid_h, grid_margin, max_iter, tol);
+        }, nb::arg("atomic_numbers"), nb::arg("positions"),
+           nb::arg("grid_h") = 0.3, nb::arg("grid_margin") = 4.0,
+           nb::arg("max_iter") = 100, nb::arg("tol") = 1e-8)
+        .def_static("compute_forces", [](const std::vector<int>& atomic_numbers,
+                                          const std::vector<double>& positions,
+                                          double grid_h, double grid_margin,
+                                          int max_iter, double tol,
+                                          double h) {
+            return scf::NaoDriver::ComputeForces(atomic_numbers, positions,
+                                                  grid_h, grid_margin,
+                                                  max_iter, tol, h);
+        }, nb::arg("atomic_numbers"), nb::arg("positions"),
+           nb::arg("grid_h") = 0.3, nb::arg("grid_margin") = 4.0,
+           nb::arg("max_iter") = 50, nb::arg("tol") = 1e-6,
+           nb::arg("h") = 0.001)
+        .def_static("run_xlbomd", [](const std::vector<int>& atomic_numbers,
+                                     const std::vector<double>& init_positions,
+                                     const std::vector<double>& masses,
+                                     double dt, int n_steps,
+                                     double grid_h, double grid_margin,
+                                     int max_iter, double tol) {
+            return scf::NaoDriver::RunXLBOMD(atomic_numbers, init_positions,
+                                               masses, dt, n_steps,
+                                               grid_h, grid_margin, max_iter, tol);
+        }, nb::arg("atomic_numbers"), nb::arg("init_positions"),
+           nb::arg("masses"), nb::arg("dt"), nb::arg("n_steps"),
+           nb::arg("grid_h") = 0.3, nb::arg("grid_margin") = 4.0,
+           nb::arg("max_iter") = 50, nb::arg("tol") = 1e-6);
 
     m.attr("__version__") = "0.1.0-alpha";
 }
