@@ -1,6 +1,6 @@
 # TIDES GPU XC Integration — Progress
 
-## Session: 2025-07-11
+## Session: 2025-07-11 (pre-merge)
 
 ### Completed
 - **G-1 (§2.2/§2.3):** Created `xc_host_bridge.hpp` — production host bridge that calls `XcEval` on device-resident arena. Migrated `molecule_driver.hpp` from `XCGridEvaluator::EvaluateLDA` (CPU-only) to `xc::EvalLdaOnHostGrid` (GPU XcEval). XcEval is now the only XC entry point in production code.
@@ -9,16 +9,64 @@
 - **G-4 (§9):** Nsight trace attempted (nsys 2022.4 — importer unavailable). XC roofline benchmark: LDA 74-77%, PBE 85-87% of compute roofline (target ≥60%, PASS). XC kernel time ~5-10ms per call on typical grids. Host bridge H2D/D2H per call is a known transitional limitation; full arena-resident SCF integration is future work.
 - **G-5 (Phase P):** All 25 XC tests pass. All SCF/grid/physics/GPU regression tests pass. Pre-existing H2O energy test failure (-88.04 vs expected -60..-85) confirmed identical before and after changes — not a regression.
 
-### Known Issues
+### Known Issues (pre-merge)
 - H2O molecule_driver test: energy -88.04 Ha outside test range (-60..-85). Pre-existing, not introduced by XC integration.
 - `broyden_mixer.hpp` missing `<functional>` include — pre-existing build failure, unrelated.
 - `multi_gpu.hpp` missing `<cstdint>` for `SIZE_MAX` — pre-existing build failure, unrelated.
 - Host bridge (`xc_host_bridge.hpp`) allocates + H2D/D2H + syncs per SCF iteration. Future: keep arena resident across iterations.
 
-### Files Changed
+### Files Changed (pre-merge)
 - `tides/core/grid/xc/xc_host_bridge.hpp` (new)
 - `tides/core/grid/xc.hpp` (removed FD ReducedGradient, updated comments)
 - `tides/core/scf/molecule_driver.hpp` (use xc::EvalLdaOnHostGrid)
 - `tides/CMakeLists.txt` (libxc submodule path, tides_cuda_grid link)
 - `external/libxc` (new submodule, tag 7.0.0)
 - `.gitmodules` (new)
+
+## Session: 2025-07-11 (merge)
+
+### Merge Complete
+- Merged local (6 commits, XC engine) with origin/main (14 commits, TIDES engine).
+- All 22 commits preserved in merged HEAD. Backup at `backup-main-pre-merge`.
+- 14 conflicts resolved:
+  - 8 add/add (XC functors/kernels): kept local (supersets)
+  - 2 modify/delete (xc.cu, cuda_xc_tests.cpp): kept deletion (retirement path)
+  - 4 content conflicts: manually merged (vmat_build.cu, CMakeLists.txt, lda_xc.hpp, molecule_driver.hpp)
+- Post-merge fixes: CUDA guards in xc_engine.cu, recreated xc_gpu.hpp shim, updated nao_driver.hpp + _native.cpp for Host-prefixed XC API.
+
+### Remote Work Brought In
+- `nao_driver.hpp` (938 lines) — NAO product driver with GPU dispatch
+- `analytic_forces.hpp` — Hellmann-Feynman + Pulay forces
+- `nao_pseudo_tests.cpp` — pseudopotential SCF validation
+- `broker_dispatch_tests.cpp` — solver broker dispatch (ChFSI/SP2)
+- `gto_integrals.hpp` — cached ERI tensor, OS nuclear attraction fix
+- `scf_driver.hpp` — SCF driver with eigenvalue callback
+- `molecule_driver.hpp` — GEMM rho/vmat, profiling, grid Hartree, forces
+- `gemm_grouped.cu`, `spgemm_filtered.cu` — tile engine improvements
+- Benchmark/profiling scripts, audit remediation fixes
+
+## Remaining Tasks (post-merge scan vs execution plan)
+
+### CRITICAL — Gate GX1 not met
+- **T-X1.6 (device-resident SCF):** `nao_driver.hpp` SCF loop uses host path
+  (BuildRhoGemm → XcEvalHost → BuildHmatGemm). The device-resident pipeline
+  (BuildRhoGradientDevice → XcEval → BuildGgaVmatDevice) exists in
+  `nao_pipeline_device_oracle.cpp` test but is NOT wired into the NAO driver
+  SCF loop. Gate GX1 (zero H2D/D2H in SCF iteration trace) is NOT met.
+
+### MEDIUM — Functional gaps
+- **T-X3.4 (occupancy report):** No dedicated Nsight Compute occupancy report
+  with register spill analysis for mGGA kernels. `P4_benchmark_report.md`
+  mentions occupancy briefly but not the required ncu report.
+- **T-X4.5 (f_xc order-2):** `stress_fxc_test.cpp` exists with 12 references
+  to f_xc/second-derivative concepts. Needs verification that order-2
+  derivatives are actually implemented and tested vs libxc maxorder=2.
+- **Molecule driver functional parameterization:** `molecule_driver.hpp`
+  accepts `HostXcSpec` but hardcodes LDA path in the fallback. NAO driver
+  hardcodes `kLdaPw92` — needs parameterization for GGA/mGGA families.
+
+### LOW — Documentation / verification
+- **T-X2.4 (batched graph):** `batched_graph_test.cpp` exists with 18
+  CUDA graph references. Needs verification of 10³×30-atom batch acceptance.
+- **Build verification:** Merged codebase has not been compiled. Potential
+  issues with include paths, type mismatches, or missing dependencies.
