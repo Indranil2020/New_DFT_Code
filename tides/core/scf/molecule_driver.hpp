@@ -31,6 +31,7 @@
 #include "grid/poisson.hpp"
 #include "grid/vmat_build.hpp"
 #include "grid/xc.hpp"
+#include "grid/xc/xc_host_bridge.hpp"
 
 namespace tides::scf {
 
@@ -146,9 +147,9 @@ class MoleculeDriver {
       // Analytic Coulomb (Hartree) matrix from ERIs.
       auto V_H = GTOIntegrals::CoulombMatrix(mol, P2);
 
-      // Grid-based XC: build rho, evaluate XC, project to matrix.
+      // Grid-based XC: build rho, evaluate XC via XcEval, project to matrix.
       auto rho = grid::VmatBuilder::BuildRho(grid, orbitals, P2);
-      auto xc = grid::XCGridEvaluator::EvaluateLDA(grid, rho);
+      auto xc = grid::xc::EvalLdaOnHostGrid(grid, rho);
       auto V_xc = grid::VmatBuilder::BuildHmat(grid, orbitals, xc.vxc);
 
       // Assemble H = T + V_ext + V_H + V_xc.
@@ -167,9 +168,9 @@ class MoleculeDriver {
       // Analytic Coulomb matrix.
       auto V_H = GTOIntegrals::CoulombMatrix(mol, P2);
 
-      // Grid-based XC.
+      // Grid-based XC via XcEval.
       auto rho = grid::VmatBuilder::BuildRho(grid, orbitals, P2);
-      auto xc = grid::XCGridEvaluator::EvaluateLDA(grid, rho);
+      auto xc = grid::xc::EvalLdaOnHostGrid(grid, rho);
       auto V_xc = grid::VmatBuilder::BuildHmat(grid, orbitals, xc.vxc);
       auto eps_xc_mat = grid::VmatBuilder::BuildHmat(grid, orbitals, xc.eps_xc);
 

@@ -254,15 +254,17 @@ if(TIDES_ENABLE_CUDA)
       SKIP_RETURN_CODE 77)
 
     # WP3 T3.2: GPU rho builder
-    # T-X4.1: Configurable libxc maple2c source path.
-    # Defaults to /home/niel/src/libxc-7.0.0 for local dev; override with
-    # -DTIDES_LIBXC_ROOT=/path/to/libxc when building elsewhere.
-    set(TIDES_LIBXC_ROOT "/home/niel/src/libxc-7.0.0" CACHE PATH
+    # T-X4.1: libxc maple2c source path — defaults to the pinned submodule
+    # at external/libxc (tag 7.0.0).  Override with -DTIDES_LIBXC_ROOT for
+    # custom builds.
+    set(TIDES_LIBXC_ROOT "${CMAKE_SOURCE_DIR}/../external/libxc" CACHE PATH
         "Root directory of libxc source tree (for maple2c device compilation)")
     set(TIDES_LIBXC_MAPLE2C_DIR "${TIDES_LIBXC_ROOT}/src/maple2c")
     if(NOT EXISTS "${TIDES_LIBXC_MAPLE2C_DIR}")
       message(WARNING "TIDES_LIBXC_MAPLE2C_DIR=${TIDES_LIBXC_MAPLE2C_DIR} does not exist. "
-        "Tier-1 XC kernels will fail to compile. Set -DTIDES_LIBXC_ROOT=<path>.")
+        "Tier-1 XC kernels will fail to compile. "
+        "Run: git submodule update --init external/libxc  "
+        "or set -DTIDES_LIBXC_ROOT=<path>.")
     endif()
 
     # T-X4.2: Peephole pow→cbrt optimization on maple2c sources.
@@ -758,7 +760,9 @@ target_include_directories(tides_grid INTERFACE ${FFTW3_INCLUDE_DIRS})
 target_link_libraries(tides_grid INTERFACE ${FFTW3_LIBRARIES})
 
 # --- libxc linking (T3.5) -----------------------------------------------------
-# libxc is installed at /home/niel/src/libxc-7.0.0-install/
+# libxc installed library (CPU oracle + Tier-2 fallback).  Built from the
+# external/libxc submodule (tag 7.0.0) via autotools:
+#   cd external/libxc && autoreconf -i && ./configure --prefix=$PWD/../install && make install
 set(LIBXC_ROOT "/home/niel/src/libxc-7.0.0-install" CACHE PATH "libxc install prefix")
 find_path(LIBXC_INCLUDE_DIR xc.h PATHS ${LIBXC_ROOT}/include REQUIRED)
 find_library(LIBXC_LIBRARY NAMES xc PATHS ${LIBXC_ROOT}/lib REQUIRED)
@@ -970,7 +974,7 @@ add_test(NAME e5_scf_profile COMMAND tides_e5_scf_profile)
 add_executable(tides_molecule_driver_tests
   core/scf/tests/molecule_driver_tests.cpp)
 target_link_libraries(tides_molecule_driver_tests PRIVATE
-  tides_scf tides_grid tides_solvers)
+  tides_scf tides_grid tides_cuda_grid tides_solvers)
 set_target_properties(tides_molecule_driver_tests PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME molecule_driver_end_to_end_scf
@@ -1013,6 +1017,9 @@ add_test(NAME e9_verification_profile COMMAND tides_e9_verification_profile)
 add_library(tides_scf INTERFACE)
 target_include_directories(tides_scf INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(tides_scf INTERFACE tides_solvers tides_basis)
+if(TIDES_ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+  target_link_libraries(tides_scf INTERFACE tides_cuda_grid)
+endif()
 if(LAPACK_FOUND)
   target_link_libraries(tides_scf INTERFACE ${LAPACK_LIBRARIES})
   target_compile_definitions(tides_scf INTERFACE TIDES_HAVE_LAPACK=1)

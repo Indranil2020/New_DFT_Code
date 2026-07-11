@@ -1,0 +1,24 @@
+# TIDES GPU XC Integration — Progress
+
+## Session: 2025-07-11
+
+### Completed
+- **G-1 (§2.2/§2.3):** Created `xc_host_bridge.hpp` — production host bridge that calls `XcEval` on device-resident arena. Migrated `molecule_driver.hpp` from `XCGridEvaluator::EvaluateLDA` (CPU-only) to `xc::EvalLdaOnHostGrid` (GPU XcEval). XcEval is now the only XC entry point in production code.
+- **G-2 (§0.2):** Removed FD-based `ReducedGradient` from `xc.hpp`. Marked `XCGridEvaluator` as CPU reference for testing only (comment update). `PBE_EnhancementFactor` retained for analytic test.
+- **G-3 (§8):** Added `external/libxc` as git submodule pinned to tag 7.0.0. Updated `CMakeLists.txt` to default `TIDES_LIBXC_ROOT` to the submodule path. Added `tides_cuda_grid` link to `tides_scf` (conditional on CUDA).
+- **G-4 (§9):** Nsight trace attempted (nsys 2022.4 — importer unavailable). XC roofline benchmark: LDA 74-77%, PBE 85-87% of compute roofline (target ≥60%, PASS). XC kernel time ~5-10ms per call on typical grids. Host bridge H2D/D2H per call is a known transitional limitation; full arena-resident SCF integration is future work.
+- **G-5 (Phase P):** All 25 XC tests pass. All SCF/grid/physics/GPU regression tests pass. Pre-existing H2O energy test failure (-88.04 vs expected -60..-85) confirmed identical before and after changes — not a regression.
+
+### Known Issues
+- H2O molecule_driver test: energy -88.04 Ha outside test range (-60..-85). Pre-existing, not introduced by XC integration.
+- `broyden_mixer.hpp` missing `<functional>` include — pre-existing build failure, unrelated.
+- `multi_gpu.hpp` missing `<cstdint>` for `SIZE_MAX` — pre-existing build failure, unrelated.
+- Host bridge (`xc_host_bridge.hpp`) allocates + H2D/D2H + syncs per SCF iteration. Future: keep arena resident across iterations.
+
+### Files Changed
+- `tides/core/grid/xc/xc_host_bridge.hpp` (new)
+- `tides/core/grid/xc.hpp` (removed FD ReducedGradient, updated comments)
+- `tides/core/scf/molecule_driver.hpp` (use xc::EvalLdaOnHostGrid)
+- `tides/CMakeLists.txt` (libxc submodule path, tides_cuda_grid link)
+- `external/libxc` (new submodule, tag 7.0.0)
+- `.gitmodules` (new)
