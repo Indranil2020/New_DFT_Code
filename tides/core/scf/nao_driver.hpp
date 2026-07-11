@@ -64,6 +64,7 @@ struct NaoDriverResult {
   std::array<std::size_t, 3> grid_n = {0, 0, 0};
   double wall_time_ms = 0.0;
   std::string basis_info;
+  std::string xc_functional;  // Name of XC functional used
   // Tile substrate stats (Gap 3).
   std::size_t tile_count_H = 0;    // non-zero tiles in Hamiltonian
   std::size_t tile_count_S = 0;    // non-zero tiles in overlap
@@ -302,7 +303,8 @@ class NaoDriver {
       double grid_margin = 4.0,
       int max_iter = 100,
       double tol = 1e-8,
-      const std::vector<basis::Pseudopotential>* pseudopotentials = nullptr) {
+      const std::vector<basis::Pseudopotential>* pseudopotentials = nullptr,
+      grid::xc::HostXcSpec xc_spec = {}) {
     NaoDriverResult result;
     auto t0 = std::chrono::steady_clock::now();
     auto t_last = t0;
@@ -441,26 +443,26 @@ class NaoDriver {
     const double dv = grid_h * grid_h * grid_h;
 
     // Compute gradients of every orbital by central differences.
-    std::vector<std::array<double, 3>> grad_orbitals(n * n0 * n1 * n2);
+    // Stored as [3][n_orb][N] for compatibility with BuildRhoWithGrad and BuildGgaHmatGemm.
+    std::array<std::vector<std::vector<double>>, 3> grad_orbitals_3d;
+    for (int c = 0; c < 3; ++c) grad_orbitals_3d[c].resize(n, std::vector<double>(n0 * n1 * n2, 0.0));
     for (std::size_t bi = 0; bi < n; ++bi) {
       for (std::size_t ix = 0; ix < n0; ++ix) {
         for (std::size_t iy = 0; iy < n1; ++iy) {
           for (std::size_t iz = 0; iz < n2; ++iz) {
             const std::size_t g = grid.flatten(ix, iy, iz);
-            std::array<double, 3> grad = {0.0, 0.0, 0.0};
             if (ix > 0 && ix + 1 < n0) {
-              grad[0] = (orbitals[bi][grid.flatten(ix + 1, iy, iz)] -
+              grad_orbitals_3d[0][bi][g] = (orbitals[bi][grid.flatten(ix + 1, iy, iz)] -
                          orbitals[bi][grid.flatten(ix - 1, iy, iz)]) / (2.0 * grid_h);
             }
             if (iy > 0 && iy + 1 < n1) {
-              grad[1] = (orbitals[bi][grid.flatten(ix, iy + 1, iz)] -
+              grad_orbitals_3d[1][bi][g] = (orbitals[bi][grid.flatten(ix, iy + 1, iz)] -
                          orbitals[bi][grid.flatten(ix, iy - 1, iz)]) / (2.0 * grid_h);
             }
             if (iz > 0 && iz + 1 < n2) {
-              grad[2] = (orbitals[bi][grid.flatten(ix, iy, iz + 1)] -
+              grad_orbitals_3d[2][bi][g] = (orbitals[bi][grid.flatten(ix, iy, iz + 1)] -
                          orbitals[bi][grid.flatten(ix, iy, iz - 1)]) / (2.0 * grid_h);
             }
-            grad_orbitals[bi * n0 * n1 * n2 + g] = grad;
           }
         }
       }
@@ -471,9 +473,9 @@ class NaoDriver {
         double s_val = 0.0, t_val = 0.0;
         for (std::size_t g = 0; g < n0 * n1 * n2; ++g) {
           s_val += orbitals[bi][g] * orbitals[bj][g] * dv;
-          const auto& ga = grad_orbitals[bi * n0 * n1 * n2 + g];
-          const auto& gb = grad_orbitals[bj * n0 * n1 * n2 + g];
-          t_val += 0.5 * (ga[0] * gb[0] + ga[1] * gb[1] + ga[2] * gb[2]) * dv;
+          t_val += 0.5 * (grad_orbitals_3d[0][bi][g] * grad_orbitals_3d[0][bj][g] +
+                          grad_orbitals_3d[1][bi][g] * grad_orbitals_3d[1][bj][g] +
+                          grad_orbitals_3d[2][bi][g] * grad_orbitals_3d[2][bj][g]) * dv;
         }
         S[bi * n + bj] = s_val;
         S[bj * n + bi] = s_val;
@@ -669,10 +671,22 @@ class NaoDriver {
       for (std::size_t i = 0; i < n * n; ++i) cache.P2[i] = occ_factor * P[i];
 
       // --- Rho build: CPU GEMM path (uses density matrix P) ---
+      // For GGA functionals, also compute density gradient.
       // The GPU RhoBuildCuda kernel expects molecular orbitals + occupations,
       // not the density matrix formulation needed here. The CPU dgemm path
       // is already O(n²·N_grid) → O(n·N_grid) via BLAS.
-      cache.rho = grid::VmatBuilder::BuildRhoGemm(grid, orbitals, cache.P2);
+      const bool is_gga = (xc_spec.family == grid::xc::XcFamily::kGga);
+      std::vector<double> grad_rho_x, grad_rho_y, grad_rho_z;
+      if (is_gga) {
+        auto rho_grad = grid::VmatBuilder::BuildRhoWithGrad(
+            grid, orbitals, cache.P2, grad_orbitals_3d);
+        cache.rho = std::move(rho_grad.rho);
+        grad_rho_x = std::move(rho_grad.grad_x);
+        grad_rho_y = std::move(rho_grad.grad_y);
+        grad_rho_z = std::move(rho_grad.grad_z);
+      } else {
+        cache.rho = grid::VmatBuilder::BuildRhoGemm(grid, orbitals, cache.P2);
+      }
 
       // --- Poisson solve: CPU free-space for molecules, GPU for periodic ---
       // The GPU PoissonFftCuda only supports periodic boundary conditions.
@@ -704,18 +718,17 @@ class NaoDriver {
         cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, poisson_result);
       }
 
-      // --- GPU dispatch: XC evaluation ---
+      // --- XC evaluation via host API ---
+      // LDA: uses density only. GGA: uses density + gradient.
+      // The legacy XCEvalLdaCuda path is kept as a fast GPU dispatch for LDA.
       bool gpu_xc_ok = false;
-      if (grid::XCCudaAvailable()) {
+      if (!is_gga && grid::XCCudaAvailable()) {
         auto gpu_res = grid::XCEvalLdaCuda(grid, cache.rho, 0.0);
         if (gpu_res.ok()) {
-          // Use GPU XC results.
-          // --- GPU dispatch: vmat build for V_xc ---
           if (grid::VmatCudaAvailable()) {
             auto vmat_res = grid::VmatBuildCuda(grid, orbitals, gpu_res.value().vxc);
             if (vmat_res.ok()) {
               cache.V_xc = vmat_res.value().H;
-              // Store XC energy from GPU.
               cache.xc.vxc = gpu_res.value().vxc;
               cache.xc.eps_xc = gpu_res.value().eps_xc;
               cache.xc_energy_gpu = gpu_res.value().xc_energy;
@@ -732,32 +745,56 @@ class NaoDriver {
         }
       }
       if (!gpu_xc_ok) {
-        // Use fused Tier-0 XC engine (supports LDA-PW92 + PBE, GPU auto-dispatch).
+        // Host XC evaluation via XcEvalHost (supports LDA + GGA Tier-0 functionals).
+        const std::size_t np = n0 * n1 * n2;
         grid::xc::HostXcGridIn xc_in;
         xc_in.rho = cache.rho.data();
-        xc_in.np = n0 * n1 * n2;
+        xc_in.np = np;
         xc_in.grid_weight = dv;
-        std::vector<double> vxc_grid(n0 * n1 * n2, 0.0);
-        std::vector<double> eps_xc_grid(n0 * n1 * n2, 0.0);
+        if (is_gga) {
+          xc_in.grad_rho_x = grad_rho_x.data();
+          xc_in.grad_rho_y = grad_rho_y.data();
+          xc_in.grad_rho_z = grad_rho_z.data();
+        }
+        std::vector<double> vxc_grid(np, 0.0);
+        std::vector<double> eps_xc_grid(np, 0.0);
+        std::vector<double> vsigma_grid;
+        if (is_gga) vsigma_grid.assign(np, 0.0);
         grid::xc::HostXcGridOut xc_out;
         xc_out.vxc = vxc_grid.data();
+        xc_out.vsigma = is_gga ? vsigma_grid.data() : nullptr;
         xc_out.eps_xc = eps_xc_grid.data();
         xc_out.xc_energy = 0.0;
         xc_out.kernel_ms = 0.0;
         std::string xc_err;
-        grid::xc::HostXcSpec xc_spec{};
-        xc_spec.id = grid::xc::XcFunctionalId::kLdaPw92;
-        xc_spec.family = grid::xc::XcFamily::kLda;
         bool xc_ok = grid::xc::XcEvalHost(xc_spec, xc_in, xc_out, xc_err);
         if (xc_ok) {
           cache.xc.vxc = vxc_grid;
           cache.xc.eps_xc = eps_xc_grid;
           cache.xc_energy_gpu = xc_out.xc_energy;
+          if (is_gga) {
+            // Build GGA V_xc matrix: wv_rho = dv * vxc, wv_grad = dv * vsigma * 2 * grad_rho
+            // But XcEvalHost outputs unweighted vxc (v_rho) and vsigma (v_sigma).
+            // BuildGgaHmatGemm expects weighted potentials (already multiplied by dv).
+            std::vector<double> wv_rho(np), wv_gx(np), wv_gy(np), wv_gz(np);
+            for (std::size_t g = 0; g < np; ++g) {
+              wv_rho[g] = dv * vxc_grid[g];
+              wv_gx[g] = dv * vsigma_grid[g] * grad_rho_x[g];
+              wv_gy[g] = dv * vsigma_grid[g] * grad_rho_y[g];
+              wv_gz[g] = dv * vsigma_grid[g] * grad_rho_z[g];
+            }
+            cache.V_xc = grid::VmatBuilder::BuildGgaHmatGemm(
+                grid, orbitals, grad_orbitals_3d,
+                wv_rho, wv_gx, wv_gy, wv_gz,
+                grad_rho_x, grad_rho_y, grad_rho_z);
+          } else {
+            cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.xc.vxc);
+          }
         } else {
           // Fallback to CPU LDA evaluator.
           cache.xc = grid::XCGridEvaluator::EvaluateLDA(grid, cache.rho);
+          cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.xc.vxc);
         }
-        cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.xc.vxc);
       }
 
       // H = T + V_ext + V_H + V_xc (+ V_nl if pseudopotentials).
@@ -851,6 +888,7 @@ class NaoDriver {
       info += atom.element + "(" + std::to_string(n_per_atom) + "fns) ";
     }
     result.basis_info = info;
+    result.xc_functional = grid::xc::XcFunctionalName(xc_spec.id);
 
     auto t1 = std::chrono::steady_clock::now();
     result.wall_time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();

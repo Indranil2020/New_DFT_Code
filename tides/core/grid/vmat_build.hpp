@@ -246,6 +246,107 @@ class VmatBuilder {
     return H;
   }
 
+  // GGA adjoint: builds V_xc matrix from GGA XC outputs.
+  // V_ij = Σ_g [wv_rho(g) * φ_i(g) * φ_j(g)
+  //            + 2*wv_sigma(g) * (∇ρ·∇φ_i * φ_j + φ_i * ∇ρ·∇φ_j)]
+  // wv_rho and wv_grad already include quadrature weights (dv).
+  // grad_orbitals: [3][n_orb][N] — gradient of each orbital in x, y, z.
+  // grad_rho: [3][N] — density gradient components.
+  static std::vector<double> BuildGgaHmatGemm(
+      const UniformGrid3D& grid,
+      const std::vector<std::vector<double>>& orbitals,
+      const std::array<std::vector<std::vector<double>>, 3>& grad_orbitals,
+      const std::vector<double>& wv_rho,
+      const std::vector<double>& wv_grad_x,
+      const std::vector<double>& wv_grad_y,
+      const std::vector<double>& wv_grad_z,
+      const std::vector<double>& grad_rho_x,
+      const std::vector<double>& grad_rho_y,
+      const std::vector<double>& grad_rho_z) {
+    const std::size_t N = grid.total_points();
+    const std::size_t n_orb = orbitals.size();
+    if (n_orb == 0 || N == 0) return {};
+
+    std::vector<double> H(n_orb * n_orb, 0.0);
+
+    // LDA-like term: wv_rho * φ_i * φ_j (same as BuildHmat with wv_rho as v).
+    // Plus gradient term: 2*wv_sigma * (∇ρ·∇φ_i * φ_j + φ_i * ∇ρ·∇φ_j)
+    // = 2*wv_sigma * ∇ρ · (∇φ_i * φ_j + φ_i * ∇φ_j)
+    // We compute it as: for each component c:
+    //   2 * wv_grad_c * grad_rho_c contributes to:
+    //   H_ij += Σ_g 2*wv_grad_c(g)*grad_rho_c(g) * (∇φ_i,c * φ_j + φ_i * ∇φ_j,c)
+    // This is two dgemms per component plus the LDA dgemm.
+
+    // Term 1: LDA-like (wv_rho as potential)
+    auto H_rho = BuildHmatGemm(grid, orbitals, wv_rho);
+
+    // Term 2: gradient contributions.
+    // For component c, define: wgc(g) = 2 * wv_grad_c(g) * grad_rho_c(g)
+    // Then: H_grad_ij += Σ_g wgc(g) * [∇φ_i,c(g) * φ_j(g) + φ_i(g) * ∇φ_j,c(g)]
+    // = dgemm(GradPhi_w, Phi^T) + dgemm(Phi_w, GradPhi^T) where _w means scaled by wgc.
+    for (int c = 0; c < 3; ++c) {
+      const auto& gc = (c == 0) ? grad_rho_x : (c == 1) ? grad_rho_y : grad_rho_z;
+      const auto& wgc = (c == 0) ? wv_grad_x : (c == 1) ? wv_grad_y : wv_grad_z;
+
+      // wgc_scaled(g) = 2 * wv_grad_c(g) * grad_rho_c(g)
+      std::vector<double> wgc_scaled(N, 0.0);
+      for (std::size_t g = 0; g < N; ++g)
+        wgc_scaled[g] = 2.0 * wgc[g] * gc[g];
+
+      // Flatten grad_orbitals for this component and scale by wgc_scaled.
+      std::vector<double> GradPhi(n_orb * N, 0.0);
+      std::vector<double> GradPhiW(n_orb * N, 0.0);
+      std::vector<double> Phi(n_orb * N, 0.0);
+      std::vector<double> PhiW(n_orb * N, 0.0);
+      for (std::size_t i = 0; i < n_orb; ++i) {
+        for (std::size_t g = 0; g < N; ++g) {
+          Phi[i * N + g] = orbitals[i][g];
+          PhiW[i * N + g] = wgc_scaled[g] * orbitals[i][g];
+          GradPhi[i * N + g] = grad_orbitals[c][i][g];
+          GradPhiW[i * N + g] = wgc_scaled[g] * grad_orbitals[c][i][g];
+        }
+      }
+
+      // H_grad += GradPhiW @ Phi^T  (contribution from ∇φ_i * φ_j term)
+      std::vector<double> H_grad(n_orb * n_orb, 0.0);
+      {
+        int m = static_cast<int>(n_orb);
+        int n = static_cast<int>(n_orb);
+        int k = static_cast<int>(N);
+        double alpha = 1.0, beta = 0.0;
+        char transa = 'T', transb = 'N';
+        dgemm_(&transa, &transb, &n, &m, &k, &alpha,
+               Phi.data(), &k, GradPhiW.data(), &k,
+               &beta, H_grad.data(), &n);
+      }
+      // H_grad += PhiW @ GradPhi^T  (contribution from φ_i * ∇φ_j term)
+      {
+        int m = static_cast<int>(n_orb);
+        int n = static_cast<int>(n_orb);
+        int k = static_cast<int>(N);
+        double alpha = 1.0, beta = 1.0;
+        char transa = 'T', transb = 'N';
+        dgemm_(&transa, &transb, &n, &m, &k, &alpha,
+               GradPhi.data(), &k, PhiW.data(), &k,
+               &beta, H_grad.data(), &n);
+      }
+
+      for (std::size_t i = 0; i < n_orb * n_orb; ++i)
+        H[i] += H_grad[i];
+    }
+
+    // Add LDA-like term.
+    for (std::size_t i = 0; i < n_orb * n_orb; ++i)
+      H[i] += H_rho[i];
+
+    // Symmetrize.
+    for (std::size_t i = 0; i < n_orb; ++i)
+      for (std::size_t j = i + 1; j < n_orb; ++j)
+        H[j * n_orb + i] = H[i * n_orb + j];
+
+    return H;
+  }
+
   // Adjointness check: <A P, w> should equal <P, A^T w> for random P, w.
   // A is the forward operator (P -> rho), A^T is the adjoint (v -> H).
   // <A P, w> = integral (A P)(r) * w(r) d^3r = integral rho_P(r) * w(r) d^3r
