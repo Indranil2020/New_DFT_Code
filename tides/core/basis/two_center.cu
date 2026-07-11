@@ -169,6 +169,12 @@ __global__ void AssembleTwoCenterKernel(
       const int out_idx = row * n_basis + col;
       atomicAdd(&S_out[out_idx], s_radial * angular);
       atomicAdd(&T_out[out_idx], t_radial * angular);
+      // Mirror to (col, row) for cross-atom pairs to fill lower triangle.
+      if (p.basis_offset_a != p.basis_offset_b) {
+        const int mirror_idx = col * n_basis + row;
+        atomicAdd(&S_out[mirror_idx], s_radial * angular);
+        atomicAdd(&T_out[mirror_idx], t_radial * angular);
+      }
     }
   }
 }

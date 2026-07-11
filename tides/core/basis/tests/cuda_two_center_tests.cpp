@@ -59,6 +59,11 @@ void AssembleTwoCenterCpu(
               col < static_cast<int>(n_basis)) {
             S[row * n_basis + col] += s_radial * angular;
             T[row * n_basis + col] += t_radial * angular;
+            // Mirror to lower triangle for cross-atom pairs.
+            if (a != b) {
+              S[col * n_basis + row] += s_radial * angular;
+              T[col * n_basis + row] += t_radial * angular;
+            }
           }
         }
       }
@@ -132,10 +137,6 @@ int TestGpuVsCpu() {
   // GPU cubic spline evaluation matches CPU formula exactly, so we expect
   // machine-precision agreement (~1e-16).
   if (s_max_rel > 1e-7) {
-    if (s_max_rel > 0.5) {
-      std::cout << "SKIP: GPU two-center kernel wrong (S_max_rel=" << s_max_rel << ")" << std::endl;
-      return 77;
-    }
     std::cerr << "FAIL: S max_rel=" << s_max_rel << " > 1e-7\n";
     return 1;
   }
@@ -245,9 +246,7 @@ int main() {
     return 77;
   }
 
-  int r1 = TestGpuVsCpu();
-  if (r1 == 77) return 77;
-  int failures = r1;
+  int failures = TestGpuVsCpu();
   failures += TestThroughput();
   failures += TestLedger();
 
