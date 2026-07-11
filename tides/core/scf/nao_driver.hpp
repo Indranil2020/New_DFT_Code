@@ -36,6 +36,7 @@
 
 #include "basis/nao_generator.hpp"
 #include "basis/two_center_integrals.hpp"
+#include "basis/two_center_builder.hpp"
 #include "basis/pseudo/pseudopotential.hpp"
 #include "scf/scf_driver.hpp"
 #include "scf/energy_assembly.hpp"
@@ -469,21 +470,11 @@ class NaoDriver {
       }
     }
 
-    for (std::size_t bi = 0; bi < n; ++bi) {
-      for (std::size_t bj = bi; bj < n; ++bj) {
-        double s_val = 0.0, t_val = 0.0;
-        for (std::size_t g = 0; g < n0 * n1 * n2; ++g) {
-          s_val += orbitals[bi][g] * orbitals[bj][g] * dv;
-          t_val += 0.5 * (grad_orbitals_3d[0][bi][g] * grad_orbitals_3d[0][bj][g] +
-                          grad_orbitals_3d[1][bi][g] * grad_orbitals_3d[1][bj][g] +
-                          grad_orbitals_3d[2][bi][g] * grad_orbitals_3d[2][bj][g]) * dv;
-        }
-        S[bi * n + bj] = s_val;
-        S[bj * n + bi] = s_val;
-        T[bi * n + bj] = t_val;
-        T[bj * n + bi] = t_val;
-      }
-    }
+    // Analytic two-center overlap and kinetic via radial splines + Slater-Koster.
+    basis::NaoTwoCenterBuilder two_center_builder;
+    auto two_center = two_center_builder.Build(atoms, basis_map, positions, n);
+    S = std::move(two_center.S);
+    T = std::move(two_center.T);
     step("S/T assembly");
 
     // --- T-X1.6: Device-resident pipeline setup ---

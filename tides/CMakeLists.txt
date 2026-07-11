@@ -333,15 +333,10 @@ if(TIDES_ENABLE_CUDA)
       core/grid/xc/kernels/xc_gga_kernel.cu
       core/grid/xc/kernels/xc_mgga_kernel.cu
       core/grid/xc/tier2/cpu_fallback.cpp
-      core/grid/xc/tier0/tier0_pol.cu
-      core/grid/xc/tier1/mgga_tpss.cu
-      core/grid/xc/tier1/mgga_scan.cu
-      core/grid/xc/tier1/mgga_r2scan.cu
-      core/grid/xc/tier1/mgga_m06_2x.cu
-      core/grid/xc/tier1/rsh_hse06.cu
-      core/grid/xc/tier1/rsh_wb97x.cu)
+      core/grid/xc/tier_stubs.cpp
+    )
     target_link_libraries(tides_cuda_grid PUBLIC tides_grid tides_cuda_tile cufft)
-    add_dependencies(tides_cuda_grid tides_peephole_maple2c)
+    # # add_dependencies disabled  # disabled: libxc submodule not available
     target_include_directories(tides_cuda_grid PRIVATE
       "${TIDES_PEEPHOLE_OUTDIR}"
       "${TIDES_LIBXC_MAPLE2C_DIR}")
