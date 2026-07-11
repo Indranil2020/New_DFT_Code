@@ -842,3 +842,9 @@ if(LAPACK_FOUND)
   target_link_libraries(tides_broker_dispatch_tests PRIVATE ${LAPACK_LIBRARIES})
 endif()
 add_test(NAME broker_dispatch_r0_r1_r2 COMMAND tides_broker_dispatch_tests)
+
+# Tile substrate production GEMM test
+add_executable(tides_tile_production_tests
+  core/tile/tests/tile_production_tests.cpp)
+target_link_libraries(tides_tile_production_tests PRIVATE tides_core)
+add_test(NAME tile_production_gemm COMMAND tides_tile_production_tests)
