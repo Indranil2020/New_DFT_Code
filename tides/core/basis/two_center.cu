@@ -345,6 +345,18 @@ struct TwoCenterGpuResult {
   err = cudaMemcpy(result.T.data(), d_T, mat_bytes, cudaMemcpyDeviceToHost);
   if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpy T D2H"); }
 
+  // Symmetrize S and T matrices (GPU atomic adds from different thread orders).
+  for (std::size_t i = 0; i < n_basis; ++i) {
+    for (std::size_t j = i + 1; j < n_basis; ++j) {
+      std::size_t ij = i * n_basis + j;
+      std::size_t ji = j * n_basis + i;
+      double s_avg = 0.5 * (result.S[ij] + result.S[ji]);
+      double t_avg = 0.5 * (result.T[ij] + result.T[ji]);
+      result.S[ij] = s_avg; result.S[ji] = s_avg;
+      result.T[ij] = t_avg; result.T[ji] = t_avg;
+    }
+  }
+
   cleanup();
 
   tides::tile::PrecisionDescriptor desc;
