@@ -3,7 +3,9 @@
 #include "grid/xc/kernels/xc_gga_kernel.hpp"
 #include "grid/xc/tier2/cpu_fallback.hpp"
 
+#ifdef TIDES_HAVE_CUDA
 #include <cuda_runtime.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -14,6 +16,8 @@
 
 namespace tides::grid::xc {
 namespace {
+
+#ifdef TIDES_HAVE_CUDA
 
 constexpr std::size_t kDeviceAlignment = 256;
 constexpr std::size_t kPointPadding = 512;
@@ -82,8 +86,11 @@ constexpr std::size_t kPointPadding = 512;
 
 }  // namespace
 
+#endif  // TIDES_HAVE_CUDA
+
 Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
               cudaStream_t stream) {
+#ifdef TIDES_HAVE_CUDA
   if (!IsSupportedFp64(spec)) {
     if (spec.nspin == 1 && input.nsys == 1 &&
         spec.precision == PrecisionPolicy::kFloat64) {
@@ -131,6 +138,10 @@ Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
                       static_cast<std::size_t>(input.nsys) * sizeof(double), stream);
   if (error != cudaSuccess) return CudaStatus(error, "cudaMemsetAsync exc_per_system");
   return LaunchXcFunctional(spec, input, output, stream);
+#else
+  (void)spec; (void)input; (void)output; (void)stream;
+  return Status::Unimplemented("XcEval device-resident path requires CUDA");
+#endif
 }
 
 class XcArena::Impl {
@@ -161,6 +172,7 @@ XcArena::~XcArena() {
 
 Status XcArena::Reserve(std::size_t np, int nspin, bool need_grad, bool need_tau,
                         int nsys, cudaStream_t stream) {
+#ifdef TIDES_HAVE_CUDA
   if (np == 0 || nspin <= 0 || nsys <= 0) {
     return Status::InvalidArgument("XcArena requires positive shape dimensions");
   }
@@ -233,10 +245,15 @@ Status XcArena::Reserve(std::size_t np, int nspin, bool need_grad, bool need_tau
   impl_->has_grad = need_grad;
   impl_->has_tau = need_tau;
   return Status::Ok();
+#else
+  (void)np; (void)nspin; (void)need_grad; (void)need_tau; (void)nsys; (void)stream;
+  return Status::Unimplemented("XcArena requires CUDA");
+#endif
 }
 
 Status XcArena::Release(cudaStream_t stream) {
   if (impl_ == nullptr) return Status::Ok();
+#ifdef TIDES_HAVE_CUDA
   Status first_error = Status::Ok();
   const auto free_pointer = [&first_error, stream](auto*& pointer, const char* name) {
     if (pointer == nullptr) return;
@@ -257,6 +274,9 @@ Status XcArena::Release(cudaStream_t stream) {
   free_pointer(impl_->exc_per_system, "cudaFreeAsync xc energy");
   free_pointer(impl_->sys_offsets, "cudaFreeAsync xc system offsets");
   if (!first_error.ok()) return first_error;
+#else
+  (void)stream;
+#endif
   impl_->capacity = 0;
   impl_->nspin = 0;
   impl_->nsys = 0;
