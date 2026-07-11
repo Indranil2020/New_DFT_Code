@@ -3,6 +3,10 @@ tides/build/
 */build/
 build/
 build-cuda/
+build-default/
+build-verify/
+build*
+
 
 # Python cache
 __pycache__/
@@ -22,6 +26,7 @@ __pycache__/
 *.swp
 *~
 .DS_Store
+node_modules/
 
 # HDF5 roundtrip test data
 tilemat_hdf5_roundtrip/
@@ -36,3 +41,9 @@ Testing/Temporary/
 
 # CMake API reply cache
 .cmake/api/
+
+# CMake build artifacts
+CMakeFiles/
+CMakeCache.txt
+Makefile
+.cmake/*

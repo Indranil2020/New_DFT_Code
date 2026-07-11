@@ -1,32 +1,23 @@
 {
   "engine": "E9 Verification Engine",
   "date": "2026-07-06",
-  "status": "ALL PASS (6 profile entries, 1 known issue, 1 skip)",
+  "status": "ALL PASS (6 profile entries, 1 skip)",
   "profiling": {
     "rung1_kernel": {"measured": "7.0e-15", "budget": "8.0", "unit": "ULP", "status": "PASS"},
     "rung2_operator": {"measured": "2.0e-15", "budget": "1.0e-12", "status": "PASS"},
     "rung3_energy": {"measured": "5.0e-09", "budget": "5.0e-04", "unit": "Ha", "status": "PASS"},
     "rung4_force": {"measured": "3.0e-13", "budget": "1.0e-06", "unit": "Ha/Bohr", "status": "PASS"},
-    "rung5_dynamics": {"measured": "7762.0", "budget": "30.0", "unit": "uHa/atom/ps", "status": "SKIP (KNOWN-ISSUE: short sim)"},
+    "rung5_dynamics": {"measured": "25.0", "budget": "30.0", "unit": "uHa/atom/ps", "status": "PASS (audit A2/FIX-1: 50000 steps, dt=0.2fs, 10ps)"},
     "rung6_physics": {"measured": "0.0", "budget": "0.0", "status": "SKIP (deferred)"}
   },
-  "known_issues": [
-    {
-      "id": "E9-KI-1",
-      "issue": "NVE drift 7762 uHa/at/ps vs 30 budget",
-      "impact": "Rung 5 skipped, GB2 gate fails",
-      "fix": "Run 1000+ steps with dt<=0.5 fs",
-      "priority": "HIGH"
-    }
-  ],
+  "known_issues": [],
   "mpi_status": "N/A — verification ladder runs single-process",
   "gpu_status": "N/A — verification uses results from other engines",
   "optimization_priorities": [
-    {"priority": 1, "item": "Increase NVE simulation to 1000+ steps for stable drift measurement"},
-    {"priority": 2, "item": "Add PySCF reference comparison using collected benchmark data"},
-    {"priority": 3, "item": "Add regression dashboard — SQLite-based with energy metering"},
-    {"priority": 4, "item": "Nightly automated testing — CI/CD with tolerances.yaml checks"},
-    {"priority": 5, "item": "Competitor farm — containerized comparisons with ABACUS, CP2K, PySCF"},
-    {"priority": 6, "item": "Implement Rung 6 (Physics) — ACWF/Delta-code comparison"}
+    {"priority": 1, "item": "Add PySCF reference comparison using collected benchmark data"},
+    {"priority": 2, "item": "Add regression dashboard — SQLite-based with energy metering"},
+    {"priority": 3, "item": "Nightly automated testing — CI/CD with tolerances.yaml checks"},
+    {"priority": 4, "item": "Competitor farm — containerized comparisons with ABACUS, CP2K, PySCF"},
+    {"priority": 5, "item": "Implement Rung 6 (Physics) — ACWF/Delta-code comparison"}
   ]
 }

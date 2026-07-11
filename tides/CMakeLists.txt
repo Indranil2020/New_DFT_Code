@@ -110,13 +110,15 @@ if(TIDES_ENABLE_CUDA)
   check_language(CUDA)
   if(CMAKE_CUDA_COMPILER)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-      set(CMAKE_CUDA_ARCHITECTURES 75-virtual 90-virtual CACHE STRING
+      set(CMAKE_CUDA_ARCHITECTURES 75-virtual 86-virtual CACHE STRING
           "CUDA architectures; PTX targets keep builds runnable on newer GPUs")
     endif()
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     set(CMAKE_CUDA_EXTENSIONS OFF)
+    set(TIDES_HAVE_CUDA ON CACHE BOOL "CUDA is available")
+    add_compile_definitions(TIDES_HAVE_CUDA=1)
 
     add_library(tides_cuda_tile STATIC
       core/tile/gemm_grouped.cu
@@ -326,6 +328,7 @@ if(TIDES_ENABLE_CUDA)
       core/grid/poisson_fft.cu
       core/grid/vmat_build.cu
       core/grid/xc/xc_engine.cu
+      core/grid/xc/xc_engine_cpu.cpp
       core/grid/xc/kernels/xc_lda_kernel.cu
       core/grid/xc/kernels/xc_gga_kernel.cu
       core/grid/xc/kernels/xc_mgga_kernel.cu
@@ -345,7 +348,8 @@ if(TIDES_ENABLE_CUDA)
     target_compile_options(tides_cuda_grid PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
     set_target_properties(tides_cuda_grid PROPERTIES
-      CUDA_RUNTIME_LIBRARY Shared)
+      CUDA_RUNTIME_LIBRARY Shared
+      POSITION_INDEPENDENT_CODE TRUE)
 
     add_executable(tides_cuda_rho_build_tests
       core/grid/tests/cuda_rho_build_tests.cpp)
@@ -866,7 +870,8 @@ if(LAPACK_FOUND)
 endif()
 add_test(NAME physics_validation COMMAND tides_physics_tests)
 
-# --- P3.3: GPU regression tests ---
+# --- P3.3: GPU regression tests (requires CUDA) ---
+if(TIDES_HAVE_CUDA)
 add_executable(tides_gpu_regression_tests
   core/tests/gpu_regression_tests.cpp)
 target_link_libraries(tides_gpu_regression_tests PRIVATE
@@ -879,8 +884,10 @@ set_target_properties(tides_gpu_regression_tests PROPERTIES
 add_test(NAME gpu_regression COMMAND tides_gpu_regression_tests)
 set_tests_properties(gpu_regression PROPERTIES
   SKIP_RETURN_CODE 77)
+endif()
 
-# --- P4: Benchmark suite ---
+# --- P4: Benchmark suite (requires CUDA for GPU kernels) ---
+if(TIDES_HAVE_CUDA)
 add_executable(tides_benchmark
   core/tests/benchmark.cpp)
 target_link_libraries(tides_benchmark PRIVATE
@@ -890,6 +897,7 @@ if(LAPACK_FOUND)
 endif()
 set_target_properties(tides_benchmark PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
+endif()
 
 # T5.8: 10⁴-atom single-card benchmark
 add_executable(tides_10k_atom_benchmark
@@ -930,6 +938,9 @@ add_executable(tides_roofline_analysis
 add_test(NAME roofline_analysis COMMAND tides_roofline_analysis)
 
 # --- Per-Engine Test & Profile Suites (E1-E8) ---
+# E1-E4 profiles require CUDA libraries; guard them so CPU-only builds work.
+if(TIDES_HAVE_CUDA)
+
 add_executable(tides_e1_tile_profile
   tests/per_engine/e1_tile/e1_test_profile.cpp
   core/tile/reduce_f64e.cpp)
@@ -963,6 +974,8 @@ set_target_properties(tides_e4_solvers_profile PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME e4_solvers_profile COMMAND tides_e4_solvers_profile)
 
+endif() # TIDES_HAVE_CUDA for E1-E4 profiles
+
 add_executable(tides_e5_scf_profile
   tests/per_engine/e5_scf/e5_test_profile.cpp)
 target_link_libraries(tides_e5_scf_profile PRIVATE
@@ -980,6 +993,33 @@ set_target_properties(tides_molecule_driver_tests PROPERTIES
 add_test(NAME molecule_driver_end_to_end_scf
   COMMAND tides_molecule_driver_tests)
 
+add_executable(tides_nao_driver_tests
+  core/scf/tests/nao_driver_tests.cpp)
+target_link_libraries(tides_nao_driver_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_nao_driver_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME nao_driver_end_to_end_scf
+  COMMAND tides_nao_driver_tests)
+
+add_executable(tides_nao_benchmark_tests
+  core/scf/tests/nao_benchmark_tests.cpp)
+target_link_libraries(tides_nao_benchmark_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_nao_benchmark_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME nao_benchmark_vs_pyscf
+  COMMAND tides_nao_benchmark_tests)
+
+
+add_executable(tides_nao_pseudo_tests
+  core/scf/tests/nao_pseudo_tests.cpp)
+target_link_libraries(tides_nao_pseudo_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_nao_pseudo_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME nao_pseudo_scf_validation
+  COMMAND tides_nao_pseudo_tests)
 add_executable(tides_e6_dynamics_profile
   tests/per_engine/e6_dynamics/e6_test_profile.cpp)
 target_link_libraries(tides_e6_dynamics_profile PRIVATE
@@ -1023,6 +1063,19 @@ endif()
 if(LAPACK_FOUND)
   target_link_libraries(tides_scf INTERFACE ${LAPACK_LIBRARIES})
   target_compile_definitions(tides_scf INTERFACE TIDES_HAVE_LAPACK=1)
+endif()
+
+# P2: XC engine — compiled as CPU-only when CUDA is off, linked from
+# tides_cuda_grid when CUDA is on.
+if(TIDES_HAVE_CUDA)
+  target_link_libraries(tides_scf INTERFACE tides_cuda_grid)
+else()
+  add_library(tides_xc_engine_cpu STATIC
+    core/grid/xc/xc_engine_cpu.cpp
+    core/grid/cuda_stubs.cpp)
+  target_link_libraries(tides_xc_engine_cpu PUBLIC tides_grid)
+  set_target_properties(tides_xc_engine_cpu PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_link_libraries(tides_scf INTERFACE tides_xc_engine_cpu)
 endif()
 
 add_executable(tides_wp6_tests
@@ -1143,3 +1196,13 @@ if(BUILD_PYTHON_BINDINGS)
     message(WARNING "WP10: nanobind not found — Python bindings skipped. Install with: pip install nanobind")
   endif()
 endif()
+
+# Broker dispatch test: R0/R1/R2/R3 selection + ChFSI validation
+add_executable(tides_broker_dispatch_tests
+  core/solvers/tests/broker_dispatch_tests.cpp)
+target_link_libraries(tides_broker_dispatch_tests PRIVATE
+  tides_solvers tides_scf)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_broker_dispatch_tests PRIVATE ${LAPACK_LIBRARIES})
+endif()
+add_test(NAME broker_dispatch_r0_r1_r2 COMMAND tides_broker_dispatch_tests)

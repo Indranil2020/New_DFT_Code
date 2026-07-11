@@ -3,62 +3,140 @@
     "system": "He atom",
     "method": "PySCF RKS LDA",
     "basis": "ccpvdz",
-    "energy_Ha": -2.8267065541903005,
-    "time_ms": 1426.9553889753297,
+    "energy_Ha": -2.8267065539792355,
+    "time_ms": 641.9954933226109,
     "n_atoms": 1
   },
   {
     "system": "He atom",
-    "method": "TIDES TidesCalculator LDA (DZP)",
-    "basis": "DZP",
-    "energy_Ha": -2.280000000000001,
-    "time_ms": 0.24550198577344418,
+    "method": "PySCF RKS LDA",
+    "basis": "sto3g",
+    "energy_Ha": -2.7718860443054534,
+    "time_ms": 1313.0735433660448,
+    "n_atoms": 1
+  },
+  {
+    "system": "He atom",
+    "method": "TIDES MoleculeDriver LDA (STO-3G, GEMM+XC engine)",
+    "basis": "STO-3G",
+    "energy_Ha": -2.7714786719797413,
+    "time_ms": 70.60192199423909,
+    "wall_time_ms": 70.590693,
     "n_atoms": 1,
-    "n_iterations": 0,
-    "delta_vs_pyscf_Ha": 0.5467065541902993
+    "n_iterations": 5,
+    "converged": true,
+    "E_kin": 2.823526342536138,
+    "E_ne": -6.687023226667658,
+    "E_H": 2.1114258609399528,
+    "E_xc": -1.0194076487881738,
+    "E_ion": 0.0,
+    "pipeline_timings": {
+      "rho_build_ms": 9.921074,
+      "xc_eval_ms": 3.0155158,
+      "poisson_ms": 0.0,
+      "vmat_build_ms": 0.1318514,
+      "scf_total_ms": 65.583331,
+      "n_iterations": 5,
+      "used_gpu_xc": false,
+      "used_grid_hartree": false,
+      "xc_functional": "LDA-PW92"
+    },
+    "delta_vs_pyscf_Ha": 0.00040737232571208537
   },
   {
     "system": "Ne atom",
     "method": "PySCF RKS LDA",
     "basis": "ccpvdz",
-    "energy_Ha": -128.1561357577954,
-    "time_ms": 1716.2879389943555,
+    "energy_Ha": -128.15613575778144,
+    "time_ms": 3112.6419133506715,
     "n_atoms": 1
   },
   {
     "system": "Ne atom",
-    "method": "TIDES TidesCalculator LDA (DZP)",
-    "basis": "DZP",
-    "energy_Ha": -3.400000000000001,
-    "time_ms": 3.560708981240168,
+    "method": "PySCF RKS LDA",
+    "basis": "sto3g",
+    "energy_Ha": -126.15195775319174,
+    "time_ms": 1609.9042790010571,
+    "n_atoms": 1
+  },
+  {
+    "system": "Ne atom",
+    "method": "TIDES MoleculeDriver LDA (STO-3G, GEMM+XC engine)",
+    "basis": "STO-3G",
+    "energy_Ha": -191.97615168456704,
+    "time_ms": 53.26490802690387,
+    "wall_time_ms": 52.981148,
     "n_atoms": 1,
-    "n_iterations": 0,
-    "delta_vs_pyscf_Ha": 124.75613575779539
+    "n_iterations": 5,
+    "converged": true,
+    "E_kin": 155.72407055223036,
+    "E_ne": -392.46757641713737,
+    "E_H": 100.01036202378373,
+    "E_xc": -55.24300784344376,
+    "E_ion": 0.0,
+    "pipeline_timings": {
+      "rho_build_ms": 0.5323100000000001,
+      "xc_eval_ms": 2.3703224,
+      "poisson_ms": 0.0,
+      "vmat_build_ms": 0.5822638,
+      "scf_total_ms": 18.063118,
+      "n_iterations": 5,
+      "used_gpu_xc": false,
+      "used_grid_hartree": false,
+      "xc_functional": "LDA-PW92"
+    },
+    "delta_vs_pyscf_Ha": 65.8241939313753
   },
   {
     "system": "H2O molecule",
     "method": "PySCF RKS LDA",
     "basis": "ccpvdz",
-    "energy_Ha": -75.85470220347418,
+    "energy_Ha": -75.8547022034302,
     "forces_Ha_per_Bohr": [
       [
-        2.8089029521625306e-16,
-        1.4103424243063376e-15,
-        0.024198236653275806
+        6.360835910748469e-16,
+        -4.789414564466553e-15,
+        0.02419823664988341
       ],
       [
-        6.041927825567509e-17,
-        0.013009575381447647,
-        -0.012097591771923044
+        2.365144723693506e-16,
+        0.013009575374895999,
+        -0.012097591766263571
       ],
       [
-        1.2761384788146751e-17,
-        -0.013009575381447647,
-        -0.012097591771922822
+        -3.305293275555384e-16,
+        -0.013009575374894666,
+        -0.012097591766262239
       ]
     ],
-    "time_ms": 2451.6593730077147,
-    "force_time_ms": 346.9380119931884,
+    "time_ms": 3480.6035049259663,
+    "force_time_ms": 511.8983229622245,
+    "n_atoms": 3
+  },
+  {
+    "system": "H2O molecule",
+    "method": "PySCF RKS LDA",
+    "basis": "sto3g",
+    "energy_Ha": -74.73210501447704,
+    "forces_Ha_per_Bohr": [
+      [
+        -8.487557317366894e-17,
+        -2.7929047963226594e-15,
+        0.10971382134323404
+      ],
+      [
+        2.4305230519256066e-16,
+        0.049549278730741886,
+        -0.054856037435936145
+      ],
+      [
+        4.996790641606803e-17,
+        -0.049549278730739665,
+        -0.054856037435933924
+      ]
+    ],
+    "time_ms": 3124.9769600108266,
+    "force_time_ms": 462.16502925381064,
     "n_atoms": 3
   },
   {
@@ -66,28 +144,28 @@
     "points": [
       {
         "r_Ang": 0.5,
-        "energy_Ha": -1.0405930606975635,
-        "time_ms": 1607.4696819996461
+        "energy_Ha": -1.0405930606421683,
+        "time_ms": 2468.479497823864
       },
       {
         "r_Ang": 0.74,
-        "energy_Ha": -1.1314112857563137,
-        "time_ms": 2179.2081900057383
+        "energy_Ha": -1.1314112857101275,
+        "time_ms": 2909.3101220205426
       },
       {
         "r_Ang": 1.0,
-        "energy_Ha": -1.1138144608548388,
-        "time_ms": 1678.1231799977832
+        "energy_Ha": -1.1138144608299672,
+        "time_ms": 2565.95628708601
       },
       {
         "r_Ang": 2.0,
-        "energy_Ha": -0.9736244427214533,
-        "time_ms": 1645.312667998951
+        "energy_Ha": -0.9736244427089462,
+        "time_ms": 2903.439159039408
       },
       {
         "r_Ang": 3.0,
-        "energy_Ha": -0.9128923354468541,
-        "time_ms": 1582.3048920137808
+        "energy_Ha": -0.9128923354368454,
+        "time_ms": 2568.811426870525
       }
     ]
   }

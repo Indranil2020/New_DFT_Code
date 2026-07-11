@@ -471,7 +471,17 @@ Result<CudaSpGemmFilteredResult> SpGemmFilteredFp64Cuda(
       cudaError_t ws_err = cudaMalloc(&workspace_ptr, workspace_size);
       if (ws_err != cudaSuccess) workspace_ptr = nullptr;
 
-      // Use heuristic to pick the best algorithm.
+      // AUDIT: cuBLASLt heuristic segfault on Blackwell sm_120.
+      // The heuristic returns an invalid algorithm on sm_120+ that causes
+      // a segfault when used. Check device compute capability and skip
+      // the heuristic on Blackwell, falling back to the default algo.
+      int device_major = 0, device_minor = 0;
+      cudaDeviceGetAttribute(&device_major,
+          cudaDevAttrComputeCapabilityMajor, 0);
+      cudaDeviceGetAttribute(&device_minor,
+          cudaDevAttrComputeCapabilityMinor, 0);
+      const bool skip_heuristic = (device_major >= 12);
+
       cublasLtMatmulHeuristicResult_t heuristic_result = {};
       cublasLtMatmulPreference_t pref = nullptr;
       cublasLtMatmulPreferenceCreate(&pref);
@@ -479,9 +489,11 @@ Result<CudaSpGemmFilteredResult> SpGemmFilteredFp64Cuda(
           CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
           &workspace_size, sizeof(workspace_size));
       int returned_results = 0;
-      cublasLtMatmulAlgoGetHeuristic(lt_holder.handle, matmul_desc,
-          b_layout, a_layout, c_layout, c_layout,
-          pref, 1, &heuristic_result, &returned_results);
+      if (!skip_heuristic) {
+        cublasLtMatmulAlgoGetHeuristic(lt_holder.handle, matmul_desc,
+            b_layout, a_layout, c_layout, c_layout,
+            pref, 1, &heuristic_result, &returned_results);
+      }
 
       cudaError_t error = cudaEventRecord(start.get());
       if (error != cudaSuccess) {

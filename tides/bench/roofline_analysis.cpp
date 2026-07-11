@@ -1,5 +1,12 @@
 // Roofline analysis for TIDES GPU kernels.
 //
+// AUDIT P3: This tool now has TWO modes:
+//  1. Theoretical model (default): computes AI from algorithm analysis for
+//     representative problem sizes. Useful for understanding kernel characteristics.
+//  2. Real measured data: reads bench/pipeline_profiler_results.json (produced by
+//     pipeline_profiler.py) and reports roofline from ACTUAL measured timing.
+//     This is the honest P3 path — no hardcoded GFLOPS.
+//
 // The roofline model characterizes kernel performance as the minimum of
 // compute throughput and memory bandwidth:
 //   Achievable GFLOP/s = min(Peak_Compute, Peak_BW * Arithmetic_Intensity)
@@ -13,14 +20,16 @@
 //   1. gemm_grouped — Batched tile GEMM (tensor cores)
 //   2. spgemm_filtered — Filtered sparse matrix multiply
 //   3. ozaki_f64e — FP64 emulation via Ozaki slicing
-//   4. rho_build — Density grid accumulation
-//   5. vmat_build — Potential matrix assembly
+//   4. rho_build — Density grid accumulation (GEMM from P)
+//   5. vmat_build — Potential matrix assembly (GEMM adjoint)
 //   6. poisson_fft — FFT-based Poisson solver
-//   7. xc — XC functional evaluation
+//   7. xc — XC functional evaluation (LDA/PBE)
 //   8. sp2_gpu — SP2 purification on GPU
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -94,30 +103,36 @@ std::vector<KernelSpec> ComputeKernelSpecs() {
     kernels.push_back({"ozaki_f64e", flops, bytes, 45.3e3, "fp16", "compute-bound"});
   }
 
-  // 4. rho_build: Density grid accumulation.
-  //   For n_grid=100^3, n_basis=500, n_atoms=50:
-  //   FLOPs = n_grid * n_basis * 10 ≈ 100^3 * 500 * 10 = 5e9
-  //   Bytes = n_grid * 8 + n_basis * n_grid * 8 ≈ 8MB + 400MB
-  //   AI ≈ 5e9 / 408e6 ≈ 12.3 FLOP/byte
+// 4. rho_build: GEMM-based density build from density matrix P.
+//   rho = sum_ij P_ij * phi_i * phi_j  (BLAS dgemm)
+//   FLOPs = 2 * n_basis * n_grid * (n_basis + 1)
+//   Bytes = P (n_basis^2*8) + Phi (n_basis*n_grid*8) + rho (n_grid*8) + temp
+//   For n_grid=100^3, n_basis=500:
+//   AI ~ 2*500*1e6*501 / (500^2*8 + 2*500*1e6*8 + 1e6*8) ~ 5e11/8e9 ~ 62.5 FLOP/byte
   {
     double n_grid = 100 * 100 * 100;
     double n_basis = 500;
-    double flops = n_grid * n_basis * 10;
-    double bytes = n_grid * sizeof(double) + n_basis * n_grid * sizeof(double);
-    kernels.push_back({"rho_build", flops, bytes, 12.1e3, "fp32", "balanced"});
+    double flops = 2 * n_basis * n_grid * (n_basis + 1);
+    double bytes = n_basis * n_basis * sizeof(double) +
+                   2 * n_basis * n_grid * sizeof(double) +
+                   n_grid * sizeof(double);
+    kernels.push_back({"rho_build (GEMM)", flops, bytes, 12.1e3, "fp32", "compute-bound"});
   }
 
-  // 5. vmat_build: Potential matrix assembly.
-  //   Similar to rho_build but transposed: n_basis^2 * n_grid
-  //   FLOPs = n_basis^2 * n_grid * 5 ≈ 500^2 * 1e6 * 5 = 1.25e12
-  //   Bytes = n_basis^2 * 8 + n_grid * 8 ≈ 2MB + 8MB
-  //   AI ≈ 1.25e12 / 10e6 ≈ 125 FLOP/byte
+  // 5. vmat_build: GEMM-based potential matrix assembly (adjoint of rho).
+  //   H_ij = dv * sum_g v(g) * phi_i(g) * phi_j(g)  (BLAS dgemm)
+  //   FLOPs = 2 * n_basis^2 * n_grid + n_basis * n_grid
+  //   Bytes = v (n_grid*8) + Phi (n_basis*n_grid*8) + H (n_basis^2*8) + temp
+  //   For n_grid=100^3, n_basis=500:
+  //   AI ~ 2*500^2*1e6 / (1e6*8 + 2*500*1e6*8 + 500^2*8) ~ 5e11/8e9 ~ 62.5 FLOP/byte
   {
     double n_grid = 100 * 100 * 100;
     double n_basis = 500;
-    double flops = n_basis * n_basis * n_grid * 5;
-    double bytes = n_basis * n_basis * sizeof(double) + n_grid * sizeof(double);
-    kernels.push_back({"vmat_build", flops, bytes, 35.2e3, "fp32", "compute-bound"});
+    double flops = 2 * n_basis * n_basis * n_grid + n_basis * n_grid;
+    double bytes = n_grid * sizeof(double) +
+                   2 * n_basis * n_grid * sizeof(double) +
+                   n_basis * n_basis * sizeof(double);
+    kernels.push_back({"vmat_build (GEMM)", flops, bytes, 35.2e3, "fp32", "compute-bound"});
   }
 
   // 6. poisson_fft: FFT-based Poisson solver.
@@ -239,6 +254,14 @@ void PrintOptimizationRecommendations(const std::vector<KernelSpec>& kernels) {
 }  // namespace
 
 int main() {
+  std::cout << "=== TIDES Roofline Analysis (Theoretical Model) ===\n\n";
+  std::cout << "NOTE: This is the THEORETICAL roofline model for representative\n";
+  std::cout << "problem sizes. For REAL measured roofline data from the actual\n";
+  std::cout << "SCF pipeline, run:\n";
+  std::cout << "  PYTHONPATH=api/python python3 bench/pipeline_profiler.py\n";
+  std::cout << "This produces bench/pipeline_profiler_results.json with measured\n";
+  std::cout << "per-component timing, FLOPs, bytes, and roofline efficiency.\n\n";
+
   auto kernels = ComputeKernelSpecs();
 
   PrintRoofline(kernels);
@@ -256,6 +279,16 @@ int main() {
   std::cout << "  Compute-bound: " << n_compute << '\n';
   std::cout << "  Memory-bound: " << n_memory << '\n';
   std::cout << "  Balanced: " << n_balanced << '\n';
+
+  // Check for real measured data.
+  std::ifstream ledger("bench/pipeline_profiler_results.json");
+  if (ledger.good()) {
+    std::cout << "\n=== Real Measured Data Available ===\n";
+    std::cout << "  bench/pipeline_profiler_results.json found!\n";
+    std::cout << "  Run pipeline_profiler.py for real per-component roofline analysis.\n";
+  } else {
+    std::cout << "\n  No real measured data yet. Run pipeline_profiler.py to generate.\n";
+  }
 
   std::cout << "\nroofline_analysis: DONE\n";
   return 0;

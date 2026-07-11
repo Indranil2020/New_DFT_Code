@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -86,5 +87,52 @@ static_assert(sizeof(XcGridOut) % alignof(XcGridOut) == 0);
 // functionals fail explicitly; they never take a hidden host fallback route.
 [[nodiscard]] Status XcEval(const XcSpec& spec, const XcGridIn& input,
                             XcGridOut& output, cudaStream_t stream);
+
+// ---- Host-oriented convenience API (for GTO molecule driver) ----
+// These types provide a simpler interface for host-side code that doesn't
+// need device-resident data management.  The device-resident API above is
+// the production path for the NAO pipeline; this is the GTO oracle path.
+
+enum class XcFunctionalId : int {
+  kLdaPw92 = 0, kLdaVwn5 = 1, kPbe = 2, kPbesol = 3, kRevPbe = 4,
+  kRpbe = 5, kBlyp = 6, kPbe0Local = 7, kB3lypLocal = 8, kHse06Local = 9,
+  kTpss = 10, kR2scan = 11, kScan = 12, kWb97xLocal = 13, kM062xLocal = 14,
+};
+
+enum class XcFamily : int {
+  kLda = 0, kGga = 1, kMgga = 2, kHybrid = 3,
+};
+
+struct HostXcSpec {
+  XcFunctionalId id = XcFunctionalId::kLdaPw92;
+  XcFamily family = XcFamily::kLda;
+  bool spin_polarized = false;
+  double exchange_fraction = 1.0;
+  double omega = 0.0;
+};
+
+struct HostXcGridIn {
+  const double* rho = nullptr;
+  const double* grad_rho_x = nullptr;
+  const double* grad_rho_y = nullptr;
+  const double* grad_rho_z = nullptr;
+  const double* tau = nullptr;
+  std::size_t np = 0;
+  double grid_weight = 0.0;
+};
+
+struct HostXcGridOut {
+  double* vxc = nullptr;
+  double* vsigma = nullptr;
+  double* vtau = nullptr;
+  double* eps_xc = nullptr;
+  double xc_energy = 0.0;
+  double kernel_ms = 0.0;
+};
+
+bool XcEvalHost(const HostXcSpec& spec, const HostXcGridIn& in,
+                HostXcGridOut& out, std::string& error_msg);
+std::string XcFunctionalName(XcFunctionalId id);
+bool IsTier0(XcFunctionalId id);
 
 }  // namespace tides::grid::xc

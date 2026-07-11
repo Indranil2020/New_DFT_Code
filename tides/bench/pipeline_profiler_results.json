@@ -1,0 +1,314 @@
+[
+  {
+    "system": "He atom (STO-3G, LDA)",
+    "n_atoms": 1,
+    "n_basis": 1,
+    "n_electrons": 2,
+    "n_grid": 19683,
+    "grid_dims": [
+      27,
+      27,
+      27
+    ],
+    "grid_h": 0.3,
+    "xc_functional": "lda",
+    "use_grid_hartree": false,
+    "energy_ha": -2.77136369520466,
+    "converged": true,
+    "n_iterations": 5,
+    "wall_time_ms": 10.999429039657116,
+    "cpp_wall_time_ms": 10.991703,
+    "scf_total_ms": 8.501521,
+    "used_gpu_xc": false,
+    "per_component": {
+      "rho_build": {
+        "ms_per_iter": 0.0482686,
+        "flops": 78732,
+        "bytes": 472400
+      },
+      "xc_eval": {
+        "ms_per_iter": 1.5964475999999999,
+        "flops": 984150,
+        "bytes": 472392
+      },
+      "vmat_build": {
+        "ms_per_iter": 0.040724,
+        "flops": 59049,
+        "bytes": 472400
+      },
+      "eigensolve": {
+        "ms_per_iter": 0.0,
+        "flops": 10,
+        "bytes": 32
+      }
+    },
+    "energy_components": {
+      "E_kin": 2.823526342537046,
+      "E_ne": -6.687023226667658,
+      "E_H": 2.1114258609399528,
+      "E_xc": -1.0192926720140008,
+      "E_ion": 0.0,
+      "E_total": -2.77136369520466
+    }
+  },
+  {
+    "system": "He atom (STO-3G, PBE)",
+    "n_atoms": 1,
+    "n_basis": 1,
+    "n_electrons": 2,
+    "n_grid": 19683,
+    "grid_dims": [
+      27,
+      27,
+      27
+    ],
+    "grid_h": 0.3,
+    "xc_functional": "pbe",
+    "use_grid_hartree": false,
+    "energy_ha": -2.771363694579006,
+    "converged": true,
+    "n_iterations": 5,
+    "wall_time_ms": 20.35018475726247,
+    "cpp_wall_time_ms": 20.33953,
+    "scf_total_ms": 17.838036,
+    "used_gpu_xc": false,
+    "per_component": {
+      "rho_build": {
+        "ms_per_iter": 0.0516948,
+        "flops": 78732,
+        "bytes": 472400
+      },
+      "xc_eval": {
+        "ms_per_iter": 0.0,
+        "flops": 3936600,
+        "bytes": 1102248
+      },
+      "vmat_build": {
+        "ms_per_iter": 0.0425726,
+        "flops": 59049,
+        "bytes": 472400
+      },
+      "eigensolve": {
+        "ms_per_iter": 0.0,
+        "flops": 10,
+        "bytes": 32
+      }
+    },
+    "energy_components": {
+      "E_kin": 2.8235263431627002,
+      "E_ne": -6.687023226667658,
+      "E_H": 2.1114258609399528,
+      "E_xc": -1.019292672014001,
+      "E_ion": 0.0,
+      "E_total": -2.771363694579006
+    }
+  },
+  {
+    "system": "H2 molecule (STO-3G, LDA)",
+    "n_atoms": 2,
+    "n_basis": 2,
+    "n_electrons": 2,
+    "n_grid": 24057,
+    "grid_dims": [
+      27,
+      27,
+      33
+    ],
+    "grid_h": 0.3,
+    "xc_functional": "lda",
+    "use_grid_hartree": false,
+    "energy_ha": -1.33221795703022,
+    "converged": true,
+    "n_iterations": 5,
+    "wall_time_ms": 17.919244710355997,
+    "cpp_wall_time_ms": 17.908999,
+    "scf_total_ms": 11.675247,
+    "used_gpu_xc": false,
+    "per_component": {
+      "rho_build": {
+        "ms_per_iter": 0.1172398,
+        "flops": 288684,
+        "bytes": 962312
+      },
+      "xc_eval": {
+        "ms_per_iter": 2.0375926,
+        "flops": 1202850,
+        "bytes": 577368
+      },
+      "vmat_build": {
+        "ms_per_iter": 0.15056540000000002,
+        "flops": 240570,
+        "bytes": 962312
+      },
+      "eigensolve": {
+        "ms_per_iter": 0.0,
+        "flops": 80,
+        "bytes": 112
+      }
+    },
+    "energy_components": {
+      "E_kin": 0.08469481789363092,
+      "E_ne": -2.266522340947966,
+      "E_H": 0.4882373330436015,
+      "E_xc": -0.35291348130520045,
+      "E_ion": 0.7142857142857143,
+      "E_total": -1.33221795703022
+    }
+  },
+  {
+    "system": "H2O molecule (STO-3G, LDA)",
+    "n_atoms": 3,
+    "n_basis": 7,
+    "n_electrons": 10,
+    "n_grid": 25839,
+    "grid_dims": [
+      27,
+      33,
+      29
+    ],
+    "grid_h": 0.3,
+    "xc_functional": "lda",
+    "use_grid_hartree": false,
+    "energy_ha": -90.50850524782844,
+    "converged": true,
+    "n_iterations": 18,
+    "wall_time_ms": 95.91788379475474,
+    "cpp_wall_time_ms": 95.717467,
+    "scf_total_ms": 58.631748,
+    "used_gpu_xc": false,
+    "per_component": {
+      "rho_build": {
+        "ms_per_iter": 0.44990594444444443,
+        "flops": 2893968,
+        "bytes": 3101072
+      },
+      "xc_eval": {
+        "ms_per_iter": 2.1502919444444446,
+        "flops": 1291950,
+        "bytes": 620136
+      },
+      "vmat_build": {
+        "ms_per_iter": 0.5944237222222222,
+        "flops": 2713095,
+        "bytes": 3101072
+      },
+      "eigensolve": {
+        "ms_per_iter": 0.0,
+        "flops": 3430,
+        "bytes": 1232
+      }
+    },
+    "energy_components": {
+      "E_kin": 71.13368563601607,
+      "E_ne": -240.38568975974238,
+      "E_H": 67.31553764466648,
+      "E_xc": -7.885946682065425,
+      "E_ion": 19.313907913296802,
+      "E_total": -90.50850524782844
+    }
+  },
+  {
+    "system": "H2O molecule (STO-3G, LDA, grid Hartree)",
+    "n_atoms": 3,
+    "n_basis": 7,
+    "n_electrons": 10,
+    "n_grid": 25839,
+    "grid_dims": [
+      27,
+      33,
+      29
+    ],
+    "grid_h": 0.3,
+    "xc_functional": "lda",
+    "use_grid_hartree": true,
+    "energy_ha": -111.30944124531946,
+    "converged": true,
+    "n_iterations": 14,
+    "wall_time_ms": 204073.23308615014,
+    "cpp_wall_time_ms": 204073.066181,
+    "scf_total_ms": 204035.933747,
+    "used_gpu_xc": false,
+    "per_component": {
+      "rho_build": {
+        "ms_per_iter": 0.9325766428571428,
+        "flops": 2893968,
+        "bytes": 3101072
+      },
+      "xc_eval": {
+        "ms_per_iter": 2.3098905000000007,
+        "flops": 1291950,
+        "bytes": 620136
+      },
+      "vmat_build": {
+        "ms_per_iter": 2.161811071428571,
+        "flops": 2713095,
+        "bytes": 3101072
+      },
+      "eigensolve": {
+        "ms_per_iter": 0.0,
+        "flops": 3430,
+        "bytes": 1232
+      }
+    },
+    "energy_components": {
+      "E_kin": 73.64949694543904,
+      "E_ne": -234.86884992739502,
+      "E_H": 37.60050402318385,
+      "E_xc": -7.004500199844122,
+      "E_ion": 19.313907913296802,
+      "E_total": -111.30944124531946
+    }
+  },
+  {
+    "system": "Ne atom (STO-3G, LDA)",
+    "n_atoms": 1,
+    "n_basis": 5,
+    "n_electrons": 10,
+    "n_grid": 35937,
+    "grid_dims": [
+      33,
+      33,
+      33
+    ],
+    "grid_h": 0.25,
+    "xc_functional": "lda",
+    "use_grid_hartree": false,
+    "energy_ha": -191.97615168456704,
+    "converged": true,
+    "n_iterations": 5,
+    "wall_time_ms": 47.61146008968353,
+    "cpp_wall_time_ms": 47.41579,
+    "scf_total_ms": 17.257987,
+    "used_gpu_xc": false,
+    "per_component": {
+      "rho_build": {
+        "ms_per_iter": 0.5788293999999999,
+        "flops": 2156220,
+        "bytes": 3162656
+      },
+      "xc_eval": {
+        "ms_per_iter": 2.2640984,
+        "flops": 1796850,
+        "bytes": 862488
+      },
+      "vmat_build": {
+        "ms_per_iter": 0.5450652,
+        "flops": 1976535,
+        "bytes": 3162656
+      },
+      "eigensolve": {
+        "ms_per_iter": 0.0,
+        "flops": 1250,
+        "bytes": 640
+      }
+    },
+    "energy_components": {
+      "E_kin": 155.72407055223036,
+      "E_ne": -392.46757641713737,
+      "E_H": 100.01036202378373,
+      "E_xc": -55.24300784344376,
+      "E_ion": 0.0,
+      "E_total": -191.97615168456704
+    }
+  }
+]

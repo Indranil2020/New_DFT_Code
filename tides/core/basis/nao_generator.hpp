@@ -73,7 +73,7 @@ class NaoGenerator {
     // A practical form: V_conf = C * (r/rc)^n / (1 - (r/rc)^n) for r < rc
     // (diverges at rc, enforcing R(rc)=0). We approximate by a steep wall.
     const double wall_height = 1e6;  // large but finite
-    const double wall_power = 8.0;
+    const double wall_power = 32.0;
 
     for (const auto& ch : recipe.channels) {
       for (std::size_t z = 0; z < ch.rcuts.size(); ++z) {
@@ -123,7 +123,17 @@ class NaoGenerator {
         f.r_cut = rc;
         f.R = states[0].R;
         f.r = states[0].r_grid;
-        // Truncate at r_cut (enforce strictly zero beyond).
+        // Smooth cutoff: only apply in the last 10% of r_cut to enforce
+        // R(rc)=0 and R'(rc)=0 without distorting the orbital interior.
+        // f(y) = (1 - y^2)^2 with y = (x - 0.9) / 0.1, identically 1 for x<=0.9.
+        for (std::size_t i = 0; i < f.R.size() && f.r[i] <= rc; ++i) {
+          const double x = f.r[i] / rc;
+          if (x > 0.9) {
+            const double y = (x - 0.9) / 0.1;
+            const double cutoff = (1.0 - y * y) * (1.0 - y * y);
+            f.R[i] *= cutoff;
+          }
+        }
         for (std::size_t i = 0; i < f.R.size(); ++i)
           if (f.r[i] > rc) f.R[i] = 0.0;
         // Renormalize within [0, rc].
@@ -163,9 +173,10 @@ class NaoGenerator {
   static NaoRecipe DzpRecipe(int Z, const std::string& el) {
     NaoRecipe r;
     r.Z = Z; r.element = el;
-    // Confinement radii scale ~ 1/Z (tighter for heavier cores). DZP: a wide
-    // (valence) and a tight (polarization) radius per l.
-    const double base = 6.0 / std::sqrt(static_cast<double>(Z));
+    // Confinement radii scale ~ 1/Z (tighter for heavier cores), but must be
+    // large enough to retain the tail of the H atom. DZP: a wide (valence)
+    // and a tight (polarization) radius per l.
+    const double base = 10.0 / std::sqrt(static_cast<double>(Z));
     for (int l = 0; l <= 1; ++l) {
       NaoRecipe::Channel ch;
       ch.l = l;

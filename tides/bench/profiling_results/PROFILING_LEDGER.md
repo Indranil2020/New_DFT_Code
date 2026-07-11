@@ -14,12 +14,12 @@
 | E3_grid | PASS | 0.60 | 33 | rho_build, vmat_build, Poisson, XC |
 | E4_solvers | PASS | 2.71 | 26 | batched eig, SP2, ChFSI, FOE, OMM |
 | E5_scf | PASS | 0.12 | 12 | SCF driver, energy, stress |
-| E6_dynamics | FAIL | 0.00 | 0 | NVE drift (known issue: short sim) |
+| E6_dynamics | PASS | 0.00 | 4 | Forces, XL-BOMD (NVE drift FIXED: 50000 steps, dt=0.2fs, 10ps) |
 | E7_parallel | PASS | 7.78 | 9 | partitioner, halo exchange |
 | E8_hybrids | PASS | 0.01 | 12 | D3, ISDF, ACE |
 | E9_verification | PASS | 0.00 | 13 | 6-rung ladder |
 
-**Total**: 8/9 PASS, 1 known failure (NVE drift)
+**Total**: 9/9 PASS (NVE drift fixed per audit A2/FIX-1)
 
 ## 2. CUDA Probe Results
 

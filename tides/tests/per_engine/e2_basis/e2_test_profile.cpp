@@ -8,6 +8,15 @@
 //   5. Derivative streams — FD validation of dS/dR, dH0/dR
 //
 // All results logged to stdout in structured format.
+//
+// WAIVER (audit Section E / A7): Bars retightened to tolerances.yaml values
+// (spline 1e-5, symmetry 1e-12). The spline two-center integral achieves
+// 3.5e-5 (FAIL vs 1e-5 gate) and GPU symmetry is 3.8e-3 (FAIL vs 1e-12 gate).
+// These are open correctness defects, not noise. Tests intentionally FAIL
+// per audit P0.2: "red tests that tell the truth beat green tests that don't."
+// Root cause: spline tabulation resolution and GPU kernel angular coupling
+// precision. Fix requires higher-order spline interpolation and improved
+// Slater-Koster angular factors in the GPU kernel.
 
 #include "basis/atomgen/radial_solver.hpp"
 #include "basis/atomgen/numerov_solver.hpp"
@@ -158,9 +167,9 @@ int TestTwoCenter() {
 
   // Build a simple Gaussian overlap spline.
   // S(R) = exp(-0.2 * R^2) — a model overlap integral.
-  std::vector<double> R_tab(200), S_tab(200), T_tab(200);
-  for (std::size_t i = 0; i < 200; ++i) {
-    double R = 0.05 * static_cast<double>(i);
+  std::vector<double> R_tab(500), S_tab(500), T_tab(500);
+  for (std::size_t i = 0; i < 500; ++i) {
+    double R = 0.02 * static_cast<double>(i);
     R_tab[i] = R;
     S_tab[i] = std::exp(-0.2 * R * R);
     T_tab[i] = (3.0 - 0.4 * R * R) * std::exp(-0.2 * R * R);
@@ -171,17 +180,19 @@ int TestTwoCenter() {
 
   // Test spline accuracy at known points.
   double spline_err = 0.0;
-  for (std::size_t i = 0; i < 200; ++i) {
+  for (std::size_t i = 0; i < 500; ++i) {
     double R = R_tab[i] + 0.0123;  // off-grid
     double exact = std::exp(-0.2 * R * R);
     double interp = s_spline.Eval(R);
     spline_err = std::max(spline_err, std::abs(interp - exact));
   }
 
-  std::string spline_status = (spline_err < 1e-4) ? "PASS" : "FAIL";
-  if (spline_err >= 1e-4) failures++;
+  // AUDIT A7: tolerances.yaml spline_value = 1.0e-5 (not 1e-4).
+  // Previous bar was set to what the code achieves, not the gate.
+  std::string spline_status = (spline_err < 1e-5) ? "PASS" : "FAIL";
+  if (spline_err >= 1e-5) failures++;
   Log("TwoCenter", "spline",
-      "200pts", 0, spline_err, spline_status);
+      "500pts", 0, spline_err, spline_status);
 
   // GPU two-center assembly.
   if (TwoCenterCudaAvailable()) {
@@ -212,12 +223,15 @@ int TestTwoCenter() {
         failures++;
       } else {
         // S should be symmetric.
+        // AUDIT A7: tolerances.yaml rotation_invariance = 1e-12.
+        // Previous bar was 1e-1 — 10^11× looser than the gate.
+        // A 3.8e-3 symmetry violation is a correctness defect, not noise.
         for (std::size_t i = 0; i < n_basis; ++i)
           for (std::size_t j = 0; j < n_basis; ++j)
             err = std::max(err, std::abs(gpu.value().S[i * n_basis + j] -
                                          gpu.value().S[j * n_basis + i]));
-        std::string status = (err < 1e-1) ? "PASS" : "FAIL";
-        if (err >= 1e-1) failures++;
+        std::string status = (err < 1e-12) ? "PASS" : "FAIL";
+        if (err >= 1e-12) failures++;
         Log("TwoCenter", "GPU", "H2", gpu_ms, err, status);
       }
     }
@@ -284,12 +298,15 @@ int TestThreeCenter() {
       failures++;
     } else {
       // V_nl should be symmetric (for real KB projectors).
+      // AUDIT A7: tolerances.yaml rotation_invariance = 1e-12.
+      // Previous bar was 1e-2 — 10^10× looser than the gate.
+      // A 3.8e-3 symmetry violation is a correctness defect, not noise.
       for (std::size_t i = 0; i < n_basis; ++i)
         for (std::size_t j = 0; j < n_basis; ++j)
           err = std::max(err, std::abs(gpu.value().V_nl[i * n_basis + j] -
                                        gpu.value().V_nl[j * n_basis + i]));
-      std::string status = (err < 1e-2) ? "PASS" : "FAIL";
-      if (err >= 1e-2) failures++;
+      std::string status = (err < 1e-12) ? "PASS" : "FAIL";
+      if (err >= 1e-12) failures++;
       Log("ThreeCenter", "GPU", "2-atom", gpu_ms, err, status);
     }
   }
@@ -303,9 +320,9 @@ int TestDerivatives() {
   int failures = 0;
 
   // Test spline derivative accuracy.
-  std::vector<double> R_tab(200), S_tab(200);
-  for (std::size_t i = 0; i < 200; ++i) {
-    double R = 0.05 * static_cast<double>(i);
+  std::vector<double> R_tab(500), S_tab(500);
+  for (std::size_t i = 0; i < 500; ++i) {
+    double R = 0.02 * static_cast<double>(i);
     R_tab[i] = R;
     S_tab[i] = std::exp(-0.2 * R * R);
   }
@@ -320,10 +337,12 @@ int TestDerivatives() {
     max_deriv_err = std::max(max_deriv_err, std::abs(deriv - exact_deriv));
   }
 
+  // AUDIT A7: tolerances.yaml spline_derivative = 1.0e-3.
+  // Current bar 1e-4 is tighter than the gate — acceptable (tighter than required).
   std::string status = (max_deriv_err < 1e-4) ? "PASS" : "FAIL";
   if (max_deriv_err >= 1e-4) failures++;
   Log("Derivative", "spline-dS/dR",
-      "200pts", 0, max_deriv_err, status);
+      "500pts", 0, max_deriv_err, status);
 
   // 5-point FD check: d/dR of S(R) at R=2.0.
   double R0 = 2.0;

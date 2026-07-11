@@ -76,7 +76,10 @@ class LdaXC {
   static double EpsCFerromagnetic(double rs) {
     return tides::grid::xc::LdaPw92::EvalFerromagnetic(rs).eps;
   }
-  // Analytic PW92 derivatives shared with the Tier-0 device functor.
+  // Analytic PW92 derivatives shared with the Tier-0 device functor (T-X0.2).
+  // Delegates to LdaPw92::Eval which provides the exact analytic derivative
+  // — replaces central finite differences (audit B2) and shares one implementation
+  // between the atomgen CPU path and the device functor.
   static double DEpsCParamagneticDRs(double rs) {
     return tides::grid::xc::LdaPw92::EvalParamagnetic(rs).d_eps_d_rs;
   }

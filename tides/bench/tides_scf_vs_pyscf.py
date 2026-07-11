@@ -73,8 +73,8 @@ def tides_scf_benchmark(mol, xc="LDA"):
         H = h1e + vhf
         return H.flatten().tolist()
 
-    # Fast energy: band energy for convergence check (avoids XC grid integration)
-    def energy_fn(P_flat):
+    # AUDIT B5/B7: energy_fn now receives eigenvalues from SCFDriver.
+    def energy_fn(P_flat, eigenvalues):
         P = np.array(P_flat).reshape(n, n)
         vhf = mf.get_veff(mol, P)
         F = h1e + vhf
@@ -127,7 +127,8 @@ def tides_scf_loop_only_benchmark(mol, xc="LDA"):
     def build_H_static(P_flat):
         return F_flat
 
-    def energy_static(P_flat):
+    # AUDIT B5/B7: energy_fn now receives eigenvalues from SCFDriver.
+    def energy_static(P_flat, eigenvalues):
         P = np.array(P_flat).reshape(n, n)
         E_elec = np.trace(P @ (h1e + F_fixed)) * 0.5
         return float(E_elec + e_nuc)

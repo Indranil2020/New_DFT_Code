@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -274,5 +275,107 @@ double* XcArena::wv_grad() const { return impl_->wv_grad; }
 double* XcArena::wv_tau() const { return impl_->wv_tau; }
 double* XcArena::exc_per_system() const { return impl_->exc_per_system; }
 std::int64_t* XcArena::sys_offsets() const { return impl_->sys_offsets; }
+
+// ---- Host-oriented convenience API (for GTO molecule driver) ----
+
+std::string XcFunctionalName(XcFunctionalId id) {
+  switch (id) {
+    case XcFunctionalId::kLdaPw92:    return "LDA-PW92";
+    case XcFunctionalId::kLdaVwn5:    return "SVWN5";
+    case XcFunctionalId::kPbe:        return "PBE";
+    case XcFunctionalId::kPbesol:     return "PBEsol";
+    case XcFunctionalId::kRevPbe:     return "revPBE";
+    case XcFunctionalId::kRpbe:       return "RPBE";
+    case XcFunctionalId::kBlyp:       return "BLYP";
+    case XcFunctionalId::kPbe0Local:  return "PBE0(local)";
+    case XcFunctionalId::kB3lypLocal: return "B3LYP(local)";
+    case XcFunctionalId::kHse06Local: return "HSE06(local)";
+    case XcFunctionalId::kTpss:       return "TPSS";
+    case XcFunctionalId::kR2scan:     return "r2SCAN";
+    case XcFunctionalId::kScan:       return "SCAN";
+    case XcFunctionalId::kWb97xLocal: return "wB97X(local)";
+    case XcFunctionalId::kM062xLocal: return "M06-2X(local)";
+  }
+  return "unknown";
+}
+
+bool IsTier0(XcFunctionalId id) {
+  switch (id) {
+    case XcFunctionalId::kLdaPw92:
+    case XcFunctionalId::kPbe:
+    case XcFunctionalId::kPbesol:
+    case XcFunctionalId::kRevPbe:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool XcEvalHost(const HostXcSpec& spec, const HostXcGridIn& in,
+                HostXcGridOut& out, std::string& error_msg) {
+  if (in.np == 0) {
+    error_msg = "XcEvalHost: np = 0";
+    return false;
+  }
+  if (!in.rho || !out.vxc || !out.eps_xc) {
+    error_msg = "XcEvalHost: null pointers in input/output";
+    return false;
+  }
+  if (!IsTier0(spec.id)) {
+    error_msg = "XcEvalHost: functional " + XcFunctionalName(spec.id) +
+                " not yet implemented in Tier-0";
+    return false;
+  }
+
+  auto t0 = std::chrono::steady_clock::now();
+  double energy = 0.0;
+
+  if (spec.family == XcFamily::kLda) {
+    for (std::size_t i = 0; i < in.np; ++i) {
+      const double n = std::max(0.0, in.rho[i]);
+      if (n < 1e-14) {
+        out.vxc[i] = 0.0;
+        out.eps_xc[i] = 0.0;
+        continue;
+      }
+      const auto eval = LdaSlater::Eval(n) + LdaPw92::Eval(n);
+      out.vxc[i] = eval.vrho;
+      out.eps_xc[i] = eval.eps;
+      energy += in.grid_weight * eval.eps * n;
+    }
+  } else if (spec.family == XcFamily::kGga) {
+    if (!in.grad_rho_x || !in.grad_rho_y || !in.grad_rho_z) {
+      error_msg = "XcEvalHost: GGA requires grad_rho_x/y/z";
+      return false;
+    }
+    for (std::size_t i = 0; i < in.np; ++i) {
+      const double n = std::max(0.0, in.rho[i]);
+      if (n < 1e-14) {
+        out.vxc[i] = 0.0;
+        if (out.vsigma) out.vsigma[i] = 0.0;
+        out.eps_xc[i] = 0.0;
+        continue;
+      }
+      const double gx = in.grad_rho_x[i];
+      const double gy = in.grad_rho_y[i];
+      const double gz = in.grad_rho_z[i];
+      const double sigma = gx * gx + gy * gy + gz * gz;
+      const auto eval = GgaPbeStandard::Eval(n, sigma);
+      out.vxc[i] = eval.vrho;
+      if (out.vsigma) out.vsigma[i] = eval.vsigma;
+      out.eps_xc[i] = eval.eps;
+      energy += in.grid_weight * eval.eps * n;
+    }
+  } else {
+    error_msg = "XcEvalHost: family " + std::to_string(static_cast<int>(spec.family)) +
+                " not supported";
+    return false;
+  }
+
+  auto t1 = std::chrono::steady_clock::now();
+  out.kernel_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+  out.xc_energy = energy;
+  return true;
+}
 
 }  // namespace tides::grid::xc

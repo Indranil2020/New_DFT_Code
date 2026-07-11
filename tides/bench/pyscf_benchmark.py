@@ -83,52 +83,81 @@ def run_pyscf_h2_curve(basis='ccpvdz', xc='LDA,VWN'):
     return results
 
 def run_tides_atom(symbol, basis='DZP'):
-    """Run TIDES atomic LDA calculation via Python API."""
+    """Run TIDES atomic LDA calculation via Python API.
+
+    AUDIT C7/P1.5: Now uses real MoleculeDriver through nanobind when available.
+    Falls back to stub refusal when only the model Hamiltonian is available.
+    """
     try:
-        from tides.core import TidesCalculator, SCFResult
+        from tides.core import TidesCalculator
         from tides.config import TidesConfig, SystemConfig, BasisConfig, SCFConfig, GridConfig
+        from tides._native import MoleculeDriver
 
         Z_map = {'H': 1, 'He': 2, 'Li': 3, 'C': 6, 'N': 7, 'O': 8, 'Ne': 10}
         Z = Z_map.get(symbol, 1)
 
-        config = TidesConfig()
-        config.system = SystemConfig(
-            n_atoms=1,
+        # Use MoleculeDriver directly (real GTO-based SCF).
+        mol = MoleculeDriver.build_molecule(
             atomic_numbers=[Z],
-            positions=[[0.0, 0.0, 0.0]],
+            positions=[0.0, 0.0, 0.0],
         )
-        config.basis = BasisConfig(kind=basis)
-        config.scf = SCFConfig(max_iter=200, energy_tol=1e-10)
-        config.grid = GridConfig()
-
-        calc = TidesCalculator(config)
-        t0 = time.perf_counter()
-        result = calc.run_scf()
-        t1 = time.perf_counter()
-
-        if not result.is_ok:
+        if mol.n_basis == 0:
             return {
                 'system': f"{symbol} atom",
-                'method': f'TIDES TidesCalculator LDA ({basis})',
-                'error': result.status.message if hasattr(result, 'status') else 'SCF failed',
+                'method': f'TIDES (STO-3G unavailable for Z={Z})',
+                'error': f'STO-3G basis not available for {symbol}',
                 'energy_Ha': None,
                 'time_ms': None,
             }
 
-        scf = result.value
+        t0 = time.perf_counter()
+        result = MoleculeDriver.run(mol=mol, grid_h=0.25, grid_margin=4.0,
+                                     max_iter=200, tol=1e-8,
+                                     use_grid_hartree=False,
+                                     xc_functional='lda')
+        t1 = time.perf_counter()
+
+        t = result.timings
         return {
             'system': f"{symbol} atom",
-            'method': f'TIDES TidesCalculator LDA ({basis})',
-            'basis': basis,
-            'energy_Ha': scf.energy,
+            'method': f'TIDES MoleculeDriver LDA (STO-3G, GEMM+XC engine)',
+            'basis': 'STO-3G',
+            'energy_Ha': result.scf.energy,
             'time_ms': (t1 - t0) * 1000,
+            'wall_time_ms': result.wall_time_ms,
             'n_atoms': 1,
-            'n_iterations': len(scf.energy_history) - 1 if hasattr(scf, 'energy_history') else None,
+            'n_iterations': result.scf.n_iterations,
+            'converged': result.scf.converged,
+            'E_kin': result.energy.E_kin,
+            'E_ne': result.energy.E_ne,
+            'E_H': result.energy.E_H,
+            'E_xc': result.energy.E_xc,
+            'E_ion': result.energy.E_ion,
+            'pipeline_timings': {
+                'rho_build_ms': t.rho_build_ms,
+                'xc_eval_ms': t.xc_eval_ms,
+                'poisson_ms': t.poisson_ms,
+                'vmat_build_ms': t.vmat_build_ms,
+                'scf_total_ms': t.scf_total_ms,
+                'n_iterations': t.n_iterations,
+                'used_gpu_xc': t.used_gpu_xc,
+                'used_grid_hartree': t.used_grid_hartree,
+                'xc_functional': t.xc_functional,
+            },
+        }
+    except ImportError:
+        return {
+            'system': f"{symbol} atom",
+            'method': f'TIDES (STUB — model Hamiltonian, not real DFT)',
+            'error': 'MoleculeDriver not available in native backend. '
+                     'Build nanobind bindings first. Benchmark refused per audit A1.',
+            'energy_Ha': None,
+            'time_ms': None,
         }
     except Exception as e:
         return {
             'system': f"{symbol} atom",
-            'method': f'TIDES TidesCalculator LDA ({basis})',
+            'method': f'TIDES MoleculeDriver LDA (STO-3G)',
             'error': str(e),
             'energy_Ha': None,
             'time_ms': None,
@@ -136,7 +165,7 @@ def run_tides_atom(symbol, basis='DZP'):
 
 def main():
     print("=" * 72)
-    print("  TIDES vs PySCF Benchmark — CPU Comparison")
+    print("  TIDES vs PySCF Benchmark — Real Pipeline (GEMM + Fused XC Engine)")
     print("=" * 72)
 
     all_results = []
@@ -144,14 +173,19 @@ def main():
     # --- He atom ---
     print("\n--- He atom LDA ---")
     pyscf_he = run_pyscf_atom('He', basis='ccpvdz')
-    print(f"  PySCF:  E = {pyscf_he['energy_Ha']:.10f} Ha  ({pyscf_he['time_ms']:.1f} ms)")
+    print(f"  PySCF (cc-pVDZ):  E = {pyscf_he['energy_Ha']:.10f} Ha  ({pyscf_he['time_ms']:.1f} ms)")
     all_results.append(pyscf_he)
+
+    # Same-basis reference (STO-3G) for honest comparison with TIDES.
+    pyscf_he_sto3g = run_pyscf_atom('He', basis='sto3g')
+    print(f"  PySCF (STO-3G):   E = {pyscf_he_sto3g['energy_Ha']:.10f} Ha  ({pyscf_he_sto3g['time_ms']:.1f} ms)")
+    all_results.append(pyscf_he_sto3g)
 
     tides_he = run_tides_atom('He', basis='DZP')
     if tides_he.get('energy_Ha') is not None:
-        print(f"  TIDES:  E = {tides_he['energy_Ha']:.10f} Ha  ({tides_he['time_ms']:.1f} ms)")
-        delta = abs(pyscf_he['energy_Ha'] - tides_he['energy_Ha'])
-        print(f"  ΔE    = {delta:.2e} Ha  ({delta*27.2114:.4f} eV)")
+        print(f"  TIDES (STO-3G):   E = {tides_he['energy_Ha']:.10f} Ha  ({tides_he['time_ms']:.1f} ms)")
+        delta = abs(pyscf_he_sto3g['energy_Ha'] - tides_he['energy_Ha'])
+        print(f"  ΔE (same basis) = {delta:.2e} Ha  ({delta*27.2114:.4f} eV)")
         tides_he['delta_vs_pyscf_Ha'] = delta
     else:
         print(f"  TIDES:  ERROR: {tides_he.get('error', 'unknown')}")
@@ -160,14 +194,18 @@ def main():
     # --- Ne atom ---
     print("\n--- Ne atom LDA ---")
     pyscf_ne = run_pyscf_atom('Ne', basis='ccpvdz')
-    print(f"  PySCF:  E = {pyscf_ne['energy_Ha']:.10f} Ha  ({pyscf_ne['time_ms']:.1f} ms)")
+    print(f"  PySCF (cc-pVDZ):  E = {pyscf_ne['energy_Ha']:.10f} Ha  ({pyscf_ne['time_ms']:.1f} ms)")
     all_results.append(pyscf_ne)
+
+    pyscf_ne_sto3g = run_pyscf_atom('Ne', basis='sto3g')
+    print(f"  PySCF (STO-3G):   E = {pyscf_ne_sto3g['energy_Ha']:.10f} Ha  ({pyscf_ne_sto3g['time_ms']:.1f} ms)")
+    all_results.append(pyscf_ne_sto3g)
 
     tides_ne = run_tides_atom('Ne', basis='DZP')
     if tides_ne.get('energy_Ha') is not None:
-        print(f"  TIDES:  E = {tides_ne['energy_Ha']:.10f} Ha  ({tides_ne['time_ms']:.1f} ms)")
-        delta = abs(pyscf_ne['energy_Ha'] - tides_ne['energy_Ha'])
-        print(f"  ΔE    = {delta:.2e} Ha  ({delta*27.2114:.4f} eV)")
+        print(f"  TIDES (STO-3G):   E = {tides_ne['energy_Ha']:.10f} Ha  ({tides_ne['time_ms']:.1f} ms)")
+        delta = abs(pyscf_ne_sto3g['energy_Ha'] - tides_ne['energy_Ha'])
+        print(f"  ΔE (same basis) = {delta:.2e} Ha  ({delta*27.2114:.4f} eV)")
         tides_ne['delta_vs_pyscf_Ha'] = delta
     else:
         print(f"  TIDES:  ERROR: {tides_ne.get('error', 'unknown')}")
@@ -177,9 +215,14 @@ def main():
     print("\n--- H2O molecule LDA ---")
     h2o_geom = "O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587"
     pyscf_h2o = run_pyscf_molecule(h2o_geom, basis='ccpvdz')
-    print(f"  PySCF:  E = {pyscf_h2o['energy_Ha']:.10f} Ha  ({pyscf_h2o['time_ms']:.1f} ms)")
+    print(f"  PySCF (cc-pVDZ):  E = {pyscf_h2o['energy_Ha']:.10f} Ha  ({pyscf_h2o['time_ms']:.1f} ms)")
     print(f"          Forces time: {pyscf_h2o['force_time_ms']:.1f} ms")
     all_results.append(pyscf_h2o)
+
+    # Same-basis H2O reference (STO-3G) for honest comparison with TIDES.
+    pyscf_h2o_sto3g = run_pyscf_molecule(h2o_geom, basis='sto3g')
+    print(f"  PySCF (STO-3G):   E = {pyscf_h2o_sto3g['energy_Ha']:.10f} Ha  ({pyscf_h2o_sto3g['time_ms']:.1f} ms)")
+    all_results.append(pyscf_h2o_sto3g)
 
     # --- H2 dissociation curve ---
     print("\n--- H2 dissociation curve (PySCF reference) ---")
@@ -211,16 +254,25 @@ def main():
     print(f"\n  Results written to: {ledger_path}")
 
     # --- Delta summary ---
-    print("\n  Energy Deltas (TIDES vs PySCF):")
-    print("  NOTE: TIDES Python API uses a simplified model Hamiltonian (pure-Python")
-    print("        fallback). The C++ native backend (nanobind) is not yet wired.")
-    print("        Real DFT energies come from the C++ per-engine test suites (E1-E9).")
-    print("        PySCF reference data below is the benchmark target for TIDES.\n")
+    print("\n  Energy Deltas (TIDES vs PySCF, MATCHED STO-3G basis):")
+    print("  AUDIT C7: MoleculeDriver wired through nanobind.")
+    print("  P2 FIX: SCF loop uses GEMM rho/vmat + fused Tier-0 XC engine.")
+    print("  P3 FIX: Same-basis STO-3G comparison — honest delta, no basis mismatch.")
+    print("  Delta reflects grid-based V_H/V_xc vs analytic ERIs (audit A8 open defect).\n")
     for r in all_results:
         if 'delta_vs_pyscf_Ha' in r:
             d = r['delta_vs_pyscf_Ha']
-            status = "✅ PASS" if d < 1e-3 else "⚠️  CHECK (model vs real DFT)"
-            print(f"    {r['system']:<20} ΔE = {d:.2e} Ha ({d*27.2114:.4f} eV)  {status}")
+            print(f"    {r['system']:<20} \u0394E = {d:.2e} Ha ({d*27.2114:.4f} eV) [STO-3G vs STO-3G]")
+            if 'pipeline_timings' in r:
+                pt = r['pipeline_timings']
+                print(f"      Pipeline: rho={pt['rho_build_ms']:.2f}ms "
+                      f"xc={pt['xc_eval_ms']:.2f}ms "
+                      f"vmat={pt['vmat_build_ms']:.2f}ms "
+                      f"scf_total={pt['scf_total_ms']:.1f}ms "
+                      f"iters={pt['n_iterations']} "
+                      f"gpu_xc={pt['used_gpu_xc']}")
+        elif r.get('error'):
+            print(f"    {r['system']:<20} ERROR: {r['error'][:60]}")
 
     # --- PySCF reference data for TIDES validation ---
     print("\n  PySCF Reference Energies (target for TIDES C++ backend):")

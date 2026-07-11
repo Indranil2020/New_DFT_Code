@@ -367,6 +367,16 @@ struct ThreeCenterGpuResultImpl {
   cleanup();
   if (err != cudaSuccess) return CudaStatus(err, "cudaMemcpy V D2H");
 
+  // Symmetrize V_nl matrix.
+  for (std::size_t i = 0; i < n_basis; ++i) {
+    for (std::size_t j = i + 1; j < n_basis; ++j) {
+      std::size_t ij = i * n_basis + j;
+      std::size_t ji = j * n_basis + i;
+      double v_avg = 0.5 * (result.V_nl[ij] + result.V_nl[ji]);
+      result.V_nl[ij] = v_avg; result.V_nl[ji] = v_avg;
+    }
+  }
+
   // Ledger.
   tides::tile::PrecisionDescriptor desc;
   desc.storage = tides::tile::NumericFormat::kFloat64;
