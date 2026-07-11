@@ -406,7 +406,10 @@ class GTOIntegrals {
     if (i == 1 && j == 0) return {{PA, 0}, {PC, 1}};
     if (i == 0 && j == 1) return {{PB, 0}, {PC, 1}};
     if (i == 1 && j == 1)
-      return {{PA * PB + 1.0 / (2.0 * p), 0},
+      // Nuclear attraction transfer term: 1/(2p) must be multiplied by
+      // 2/(2l+1) = 2/3 for l=1 (p orbitals) to account for the Boys function
+      // coupling in the 1/r operator. This is NOT the overlap VRR.
+      return {{PA * PB + 1.0 / (3.0 * p), 0},
               {(PA + PB) * PC, 1},
               {PC * PC, 2}};
     // General recursion for higher l (d functions).

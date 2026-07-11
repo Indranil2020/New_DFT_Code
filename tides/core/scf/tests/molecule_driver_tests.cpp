@@ -190,7 +190,7 @@ int TestH2O() {
   // Tolerance: 1.0 Ha (grid-based V_H/V_xc introduces error vs all-analytic PySCF,
   // especially for 10-electron systems with d-functions).
   const double H2O_REF = -74.963;
-  const double H2O_TOL = 15.0;  // OS p-orbital bug: ~12.7 Ha error (audit A8)
+  const double H2O_TOL = 5.0;  // grid-XC vs analytic PySCF: ~3.8 Ha error
   double h2o_err = std::fabs(result.scf.energy - H2O_REF);
   if (h2o_err > H2O_TOL)
     return Fail("H2O energy " + std::to_string(result.scf.energy) +
