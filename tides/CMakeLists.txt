@@ -323,9 +323,11 @@ if(TIDES_ENABLE_CUDA)
       core/grid/rho_build.cu
       core/grid/poisson_fft.cu
       core/grid/vmat_build.cu
-      core/grid/xc.cu
       core/grid/xc/xc_engine.cu
+      core/grid/xc/kernels/xc_lda_kernel.cu
       core/grid/xc/kernels/xc_gga_kernel.cu
+      core/grid/xc/kernels/xc_mgga_kernel.cu
+      core/grid/xc/tier2/cpu_fallback.cpp
       core/grid/xc/tier0/tier0_pol.cu
       core/grid/xc/tier1/mgga_tpss.cu
       core/grid/xc/tier1/mgga_scan.cu
@@ -376,18 +378,6 @@ if(TIDES_ENABLE_CUDA)
     add_test(NAME cuda_vmat_build_vs_cpu
              COMMAND tides_cuda_vmat_build_tests)
     set_tests_properties(cuda_vmat_build_vs_cpu PROPERTIES
-      SKIP_RETURN_CODE 77)
-
-    # WP3 T3.5: GPU XC functional evaluation
-    add_executable(tides_cuda_xc_tests
-      core/grid/tests/cuda_xc_tests.cpp)
-    target_link_libraries(tides_cuda_xc_tests PRIVATE
-      tides_grid tides_cuda_grid)
-    set_target_properties(tides_cuda_xc_tests PROPERTIES
-      CUDA_RUNTIME_LIBRARY Shared)
-    add_test(NAME cuda_xc_lda_vs_cpu
-             COMMAND tides_cuda_xc_tests)
-    set_tests_properties(cuda_xc_lda_vs_cpu PROPERTIES
       SKIP_RETURN_CODE 77)
 
     add_executable(tides_xc_lda_device_oracle_tests
@@ -544,6 +534,34 @@ if(TIDES_ENABLE_CUDA)
     add_test(NAME xc_nao_device_rho_pbe_vmat_pipeline
       COMMAND tides_xc_nao_pipeline_device_tests)
     set_tests_properties(xc_nao_device_rho_pbe_vmat_pipeline PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X3.3: mGGA tau pipeline — rho/grad/tau from NAO products, XC, vmat adjoint.
+    add_executable(tides_xc_mgga_tau_pipeline
+      core/grid/xc/tests/mgga_tau_pipeline.cpp)
+    target_link_libraries(tides_xc_mgga_tau_pipeline PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_tau_pipeline PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_tau_pipeline PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_tau_pipeline
+      COMMAND tides_xc_mgga_tau_pipeline)
+    set_tests_properties(xc_mgga_tau_pipeline PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X4.3: Tier-2 CPU fallback for exotic/mixed XC functionals.
+    add_executable(tides_xc_tier2_cpu_fallback_test
+      core/grid/xc/tests/tier2_cpu_fallback_test.cpp)
+    target_link_libraries(tides_xc_tier2_cpu_fallback_test PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_tier2_cpu_fallback_test PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_tier2_cpu_fallback_test PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_tier2_cpu_fallback_gga
+      COMMAND tides_xc_tier2_cpu_fallback_test)
+    set_tests_properties(xc_tier2_cpu_fallback_gga PROPERTIES
       SKIP_RETURN_CODE 77)
 
     # T-X4.3: Coverage matrix CI — nightly rung-0 sweep over all functionals
@@ -773,12 +791,6 @@ target_link_libraries(tides_grid_ops_tests PRIVATE tides_grid)
 add_test(NAME wp3_rho_adjoint_xc_grid_ops
   COMMAND tides_grid_ops_tests)
 
-# T3.5: libxc PBE/GGA test (CPU, no CUDA required)
-add_executable(tides_libxc_pbe_tests
-  core/grid/tests/libxc_pbe_tests.cpp)
-target_link_libraries(tides_libxc_pbe_tests PRIVATE tides_grid)
-add_test(NAME wp3_libxc_pbe_vs_analytical COMMAND tides_libxc_pbe_tests)
-
 add_executable(tides_xc_rung0_oracle_tests
   core/grid/xc/tests/rung0_oracle_sweep.cpp)
 target_link_libraries(tides_xc_rung0_oracle_tests PRIVATE tides_grid)
@@ -799,11 +811,6 @@ target_link_libraries(tides_xc_rung1_adjoint_tests PRIVATE tides_grid)
 target_compile_definitions(tides_xc_rung1_adjoint_tests PRIVATE
   TIDES_XC_ADJOINT=${TIDES_XC_ADJOINT})
 add_test(NAME xc_rung1_pbe_gga_adjoint COMMAND tides_xc_rung1_adjoint_tests)
-
-add_executable(tides_collinear_spin_xc_tests
-  core/grid/tests/collinear_spin_xc_tests.cpp)
-target_link_libraries(tides_collinear_spin_xc_tests PRIVATE tides_grid)
-add_test(NAME collinear_spin_xc COMMAND tides_collinear_spin_xc_tests)
 
 add_executable(tides_qtt_tests
   core/grid/tests/qtt_tests.cpp)

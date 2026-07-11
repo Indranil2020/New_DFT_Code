@@ -97,6 +97,34 @@ __global__ void RhoGradientDeviceKernel(
   grad[2 * point_stride + point] = gradient_z;
 }
 
+// Device-native kinetic energy density build for mGGA.
+// tau = (1/2) sum_mn P_mn (grad phi_m . grad phi_n)
+__global__ void TauBuildDeviceKernel(
+    const double* density_matrix, const double* grad_phi,
+    double* tau, std::int64_t nbasis, std::int64_t np,
+    std::int64_t point_stride) {
+  const std::int64_t point = static_cast<std::int64_t>(blockIdx.x) * blockDim.x +
+      threadIdx.x;
+  if (point >= np) return;
+  double kinetic = 0.0;
+  const std::int64_t basis_plane = nbasis * point_stride;
+  for (std::int64_t mu = 0; mu < nbasis; ++mu) {
+    const double dphi_mu_x = grad_phi[mu * point_stride + point];
+    const double dphi_mu_y = grad_phi[basis_plane + mu * point_stride + point];
+    const double dphi_mu_z = grad_phi[2 * basis_plane + mu * point_stride + point];
+    for (std::int64_t nu = 0; nu < nbasis; ++nu) {
+      const double p_mu_nu = density_matrix[mu * nbasis + nu];
+      const double dphi_nu_x = grad_phi[nu * point_stride + point];
+      const double dphi_nu_y = grad_phi[basis_plane + nu * point_stride + point];
+      const double dphi_nu_z = grad_phi[2 * basis_plane + nu * point_stride + point];
+      kinetic += p_mu_nu * (dphi_mu_x * dphi_nu_x +
+                            dphi_mu_y * dphi_nu_y +
+                            dphi_mu_z * dphi_nu_z);
+    }
+  }
+  tau[point] = 0.5 * kinetic;
+}
+
 // Kernel: integrate density on the grid. Each thread accumulates a partial sum;
 // a final reduction on the host completes the integral.
 __global__ void RhoIntegralKernel(
@@ -339,6 +367,27 @@ Status BuildRhoGradientDevice(const RhoGradientDeviceIn& input, double* rho,
       input.density_matrix, input.phi, input.grad_phi, rho, grad, input.nbasis,
       input.np, input.point_stride);
   return CudaStatus(cudaGetLastError(), "RhoGradientDeviceKernel launch");
+}
+
+Status BuildTauDevice(const RhoGradientDeviceIn& input, double* tau,
+                       cudaStream_t stream) {
+  if (input.nbasis <= 0 || input.np < 0 || input.point_stride < input.np) {
+    return Status::InvalidArgument(
+        "tau device build requires nbasis > 0, np >= 0, and point_stride >= np");
+  }
+  if (input.np == 0) return Status::Ok();
+  if (input.density_matrix == nullptr || input.grad_phi == nullptr ||
+      tau == nullptr) {
+    return Status::InvalidArgument(
+        "tau device build requires non-null density_matrix, grad_phi, and tau");
+  }
+  constexpr int kThreads = 128;
+  const std::int64_t required_blocks = (input.np + kThreads - 1) / kThreads;
+  const int blocks = static_cast<int>(std::min<std::int64_t>(required_blocks, 65535));
+  TauBuildDeviceKernel<<<blocks, kThreads, 0, stream>>>(
+      input.density_matrix, input.grad_phi, tau, input.nbasis, input.np,
+      input.point_stride);
+  return CudaStatus(cudaGetLastError(), "TauBuildDeviceKernel launch");
 }
 
 }  // namespace tides::grid

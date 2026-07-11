@@ -1,6 +1,7 @@
 #include "grid/xc/xc_arena.hpp"
 #include "grid/xc/xc_engine.hpp"
 #include "grid/xc/kernels/xc_gga_kernel.hpp"
+#include "grid/xc/tier2/cpu_fallback.hpp"
 
 #include <cuda_runtime.h>
 
@@ -83,10 +84,15 @@ constexpr std::size_t kPointPadding = 512;
 Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
               cudaStream_t stream) {
   if (!IsSupportedFp64(spec)) {
+    if (spec.nspin == 1 && input.nsys == 1 &&
+        spec.precision == PrecisionPolicy::kFloat64) {
+      return tier2::LaunchCpuFallback(spec, input, output, stream);
+    }
     return Status::Unimplemented(
         "XC engine supports FP64 LDA/GGA (Tier-0) and mGGA/RSH (Tier-1) "
         "functionals with nspin=1 or nspin=2. Unsupported functionals require "
-        "Tier-2 CPU fallback (T-X4.3).");
+        "Tier-2 CPU fallback (T-X4.3), which is only available for nspin=1, "
+        "nsys=1, and FP64.");
   }
   if (input.np < 0 || input.point_stride < input.np || input.nsys < 1) {
     return Status::InvalidArgument(

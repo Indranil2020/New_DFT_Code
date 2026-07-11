@@ -51,4 +51,9 @@ struct RhoGradientDeviceIn {
                                              double* rho, double* grad,
                                              cudaStream_t stream);
 
+// tau_g = (1/2) sum_mn P_mn (grad phi_m,g . grad phi_n,g).
+// Output is [point_stride], ready for XcGridIn (mGGA).
+[[nodiscard]] Status BuildTauDevice(const RhoGradientDeviceIn& input,
+                                     double* tau, cudaStream_t stream);
+
 }  // namespace tides::grid

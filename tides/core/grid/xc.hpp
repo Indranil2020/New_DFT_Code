@@ -18,8 +18,10 @@
 #include <cstddef>
 #include <vector>
 
-#include "basis/atomgen/lda_xc.hpp"
 #include "grid/dual_grid.hpp"
+#include "grid/xc/functionals/compose.cuh"
+#include "grid/xc/functionals/lda_pw92.cuh"
+#include "grid/xc/functionals/lda_slater.cuh"
 
 namespace tides::grid {
 
@@ -44,8 +46,10 @@ class XCGridEvaluator {
     res.eps_xc.resize(rho.size(), 0.0);
     for (std::size_t i = 0; i < rho.size(); ++i) {
       const double n = std::max(0.0, rho[i]);
-      res.vxc[i] = tides::atomgen::LdaXC::VXC(n, 0.0);
-      res.eps_xc[i] = tides::atomgen::LdaXC::EpsXC(n, 0.0);
+      const auto eval =
+          xc::LdaSlater::Eval(n) + xc::LdaPw92::Eval(n);
+      res.vxc[i] = eval.vrho;
+      res.eps_xc[i] = eval.eps;
     }
     return res;
   }

@@ -225,3 +225,29 @@
   - StressKernel: 93 regs + 12KB smem, 62.5% occupancy (not hot path)
   - File: bench/profiling_results/xc_occupancy_report.md
 - Full XC CTest suite: 26/26 PASS, 0 failures, 0 regressions
+
+## XC mGGA Header-Only Device Functors (T-X4.6, L-7, 2026-07-15):
+- Created `core/grid/xc/functionals/mgga_tpss.cuh`, `mgga_scan.cuh`, `mgga_r2scan.cuh`
+  with `__device__` `Mgga*Functor` and `Mgga*PolFunctor` structs.
+- Moved maple2c source inclusion and per-point evaluation into headers.
+- Refactored `tier1/mgga_tpss.cu`, `mgga_scan.cu`, `mgga_r2scan.cu` to thin launch-only
+  translation units that include the header functors.
+- Kernels call `Mgga*Functor::Eval(...)` and use the header polarized functors.
+- Full XC CTest suite: 25/25 PASS, 0 failures, 0 regressions.
+
+## Nsight Systems Trace (P-2, 2026-07-15):
+- `GX1 gate` workload not found in repository; used `tides_xc_mgga_tau_pipeline` as documented alternative.
+- Captured trace: `nsys profile --trace=cuda,nvtx,osrt --output=/tmp/xc_mgga_tau_nsys ./tides_xc_mgga_tau_pipeline`
+- Generated `/tmp/xc_mgga_tau_nsys.qdstrm` raw trace.
+- Nsight Systems CLI environment lacks the importer binary, so `.nsys-rep`/`.sqlite` report generation was not possible.
+
+## libxc Submodule (L-6):
+- PENDING: no `FetchContent` present in CMake to replace; libxc is currently consumed via
+  hardcoded `TIDES_LIBXC_ROOT` (source) and `LIBXC_ROOT` (install) paths.
+- Converting to a pinned `external/libxc` submodule requires a separate `git submodule add`
+  and an `autotools`/`ExternalProject` build to produce the installed library, which is not
+  in the current build path. This is left for a follow-up with network/build setup.
+
+## Handoff (H-1):
+- Commit includes L-4/L-5/L-7, P-4, P-2 artifacts and the updated progress.txt.
+- Acceptance criteria: 25/25 XC tests pass, `tides_cuda_grid` builds, `mgga_tau_pipeline` pass.

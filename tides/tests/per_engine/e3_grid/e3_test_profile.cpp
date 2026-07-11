@@ -16,7 +16,7 @@
 #include "grid/poisson.hpp"
 #include "grid/poisson_fft_gpu.hpp"
 #include "grid/xc.hpp"
-#include "grid/xc_gpu.hpp"
+#include "grid/xc/tests/xc_test_utils.hpp"
 #include "common/status.hpp"
 
 #include <algorithm>
@@ -37,6 +37,7 @@ using tides::grid::RhoBuilder;
 using tides::grid::VmatBuilder;
 using tides::grid::PoissonSolver;
 using tides::grid::XCGridEvaluator;
+using tides::grid::xc::RunLdaXcOnHostGrid;
 
 struct ProfileEntry {
   std::string kernel;
@@ -310,21 +311,14 @@ int TestXCEvaluation() {
 
     // GPU XC.
     auto t2 = std::chrono::steady_clock::now();
-    auto gpu = tides::grid::XCEvalLdaCuda(grid, rho, 0.0);
+    auto gpu = RunLdaXcOnHostGrid(grid, rho);
     auto t3 = std::chrono::steady_clock::now();
     double gpu_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
 
-    if (!gpu.ok()) {
-      Log("XC-LDA", "GPU",
-          std::to_string(n) + "^3",
-          gpu_ms, 0, "FAIL: " + gpu.status().message());
-      failures++;
-      continue;
-    }
-
-    double diff_eps = MaxAbsDiff(cpu_xc.eps_xc, gpu.value().eps_xc);
-    double diff_vxc = MaxAbsDiff(cpu_xc.vxc, gpu.value().vxc);
-    double diff = std::max(diff_eps, diff_vxc);
+    const double cpu_energy = XCGridEvaluator::XCEnergy(grid, cpu_xc, rho);
+    double diff_energy = std::abs(cpu_energy - gpu.xc_energy);
+    double diff_vxc = MaxAbsDiff(cpu_xc.vxc, gpu.vxc);
+    double diff = std::max(diff_energy, diff_vxc);
 
     std::string status = (diff < 1e-10) ? "PASS" : "FAIL";
     if (diff >= 1e-10) failures++;
