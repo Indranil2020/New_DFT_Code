@@ -18,6 +18,8 @@
 #include <cmath>
 #include <cstddef>
 
+#include "grid/xc/functionals/lda_pw92.cuh"
+
 namespace tides::atomgen {
 
 class LdaXC {
@@ -69,47 +71,20 @@ class LdaXC {
   }
 
   static double EpsCParamagnetic(double rs) {
-    const double a = 0.0310907, a1 = 0.2137;
-    const double b1 = 7.5957, b2 = 3.5876, b3 = 1.6382, b4 = 0.49294;
-    const double sr = std::sqrt(rs);
-    const double Q = b1 * sr + b2 * rs + b3 * rs * sr + b4 * rs * rs;
-    return -2.0 * a * (1.0 + a1 * rs) * std::log(1.0 + 1.0 / (2.0 * a * Q));
+    return tides::grid::xc::LdaPw92::EvalParamagnetic(rs).eps;
   }
   static double EpsCFerromagnetic(double rs) {
-    const double a = 0.015545, a1 = 0.20548;
-    const double b1 = 14.1189, b2 = 6.1977, b3 = 3.3662, b4 = 0.62517;
-    const double sr = std::sqrt(rs);
-    const double Q = b1 * sr + b2 * rs + b3 * rs * sr + b4 * rs * rs;
-    return -2.0 * a * (1.0 + a1 * rs) * std::log(1.0 + 1.0 / (2.0 * a * Q));
+    return tides::grid::xc::LdaPw92::EvalFerromagnetic(rs).eps;
   }
-  // AUDIT B2: Analytic derivative of PW92 correlation energy w.r.t. rs.
-  // Replaces central finite differences (h=1e-6) that introduce ~1e-11 noise
-  // into V_xc and oracle comparisons (A5). Exact and ~3× cheaper.
-  //
-  // eps_c(rs) = -2a(1 + a1*rs) * ln(1 + 1/(2a*Q(rs)))
-  // Q = b1*sqrt(rs) + b2*rs + b3*rs*sqrt(rs) + b4*rs^2
-  // Q' = b1/(2*sqrt(rs)) + b2 + (3/2)*b3*sqrt(rs) + 2*b4*rs
-  // d(eps_c)/d(rs) = -2a*a1*ln(1 + 1/(2a*Q))
-  //                  + (-2a*(1+a1*rs)) * (-Q' / (2a*Q^2 + Q))
+  // Analytic PW92 derivatives shared with the Tier-0 device functor (T-X0.2).
+  // Delegates to LdaPw92::Eval which provides the exact analytic derivative
+  // — replaces central finite differences (audit B2) and shares one implementation
+  // between the atomgen CPU path and the device functor.
   static double DEpsCParamagneticDRs(double rs) {
-    const double a = 0.0310907, a1 = 0.2137;
-    const double b1 = 7.5957, b2 = 3.5876, b3 = 1.6382, b4 = 0.49294;
-    const double sr = std::sqrt(rs);
-    const double Q = b1 * sr + b2 * rs + b3 * rs * sr + b4 * rs * rs;
-    const double Qprime = b1 / (2.0 * sr) + b2 + 1.5 * b3 * sr + 2.0 * b4 * rs;
-    const double log_term = std::log(1.0 + 1.0 / (2.0 * a * Q));
-    const double dlog = -Qprime / (2.0 * a * Q * Q + Q);
-    return -2.0 * a * a1 * log_term + (-2.0 * a * (1.0 + a1 * rs)) * dlog;
+    return tides::grid::xc::LdaPw92::EvalParamagnetic(rs).d_eps_d_rs;
   }
   static double DEpsCFerromagneticDRs(double rs) {
-    const double a = 0.015545, a1 = 0.20548;
-    const double b1 = 14.1189, b2 = 6.1977, b3 = 3.3662, b4 = 0.62517;
-    const double sr = std::sqrt(rs);
-    const double Q = b1 * sr + b2 * rs + b3 * rs * sr + b4 * rs * rs;
-    const double Qprime = b1 / (2.0 * sr) + b2 + 1.5 * b3 * sr + 2.0 * b4 * rs;
-    const double log_term = std::log(1.0 + 1.0 / (2.0 * a * Q));
-    const double dlog = -Qprime / (2.0 * a * Q * Q + Q);
-    return -2.0 * a * a1 * log_term + (-2.0 * a * (1.0 + a1 * rs)) * dlog;
+    return tides::grid::xc::LdaPw92::EvalFerromagnetic(rs).d_eps_d_rs;
   }
 
   // V_c = d(n eps_c)/dn. Computed via the chain rule using d(eps_c)/dn.

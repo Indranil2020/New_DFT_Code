@@ -733,22 +733,22 @@ class NaoDriver {
       }
       if (!gpu_xc_ok) {
         // Use fused Tier-0 XC engine (supports LDA-PW92 + PBE, GPU auto-dispatch).
-        grid::xc::XcGridIn xc_in;
+        grid::xc::HostXcGridIn xc_in;
         xc_in.rho = cache.rho.data();
         xc_in.np = n0 * n1 * n2;
         xc_in.grid_weight = dv;
         std::vector<double> vxc_grid(n0 * n1 * n2, 0.0);
         std::vector<double> eps_xc_grid(n0 * n1 * n2, 0.0);
-        grid::xc::XcGridOut xc_out;
+        grid::xc::HostXcGridOut xc_out;
         xc_out.vxc = vxc_grid.data();
         xc_out.eps_xc = eps_xc_grid.data();
         xc_out.xc_energy = 0.0;
         xc_out.kernel_ms = 0.0;
         std::string xc_err;
-        grid::xc::XcSpec xc_spec{};
+        grid::xc::HostXcSpec xc_spec{};
         xc_spec.id = grid::xc::XcFunctionalId::kLdaPw92;
         xc_spec.family = grid::xc::XcFamily::kLda;
-        bool xc_ok = grid::xc::XcEval(xc_spec, xc_in, xc_out, xc_err);
+        bool xc_ok = grid::xc::XcEvalHost(xc_spec, xc_in, xc_out, xc_err);
         if (xc_ok) {
           cache.xc.vxc = vxc_grid;
           cache.xc.eps_xc = eps_xc_grid;

@@ -105,7 +105,7 @@ class MoleculeDriver {
       int max_iter = 100,
       double tol = 1e-8,
       bool use_grid_hartree = false,
-      grid::xc::XcSpec xc_spec = {},
+      grid::xc::HostXcSpec xc_spec = {},
       bool use_grid_vext = false) {
     MoleculeDriverResult result;
     result.n_basis = mol.n_basis;
@@ -308,7 +308,7 @@ class MoleculeDriver {
       // AUDIT C4/B1 FIX: Use xc::XcEval (fused Tier-0 engine) instead of
       // XCGridEvaluator::EvaluateLDA. Supports LDA-PW92 and PBE.
       // Auto-dispatches to CUDA when TIDES_HAVE_CUDA is defined.
-      grid::xc::XcGridIn xc_in;
+      grid::xc::HostXcGridIn xc_in;
       xc_in.rho = cache.rho.data();
       xc_in.np = N_grid;
       xc_in.grid_weight = dv;
@@ -316,14 +316,14 @@ class MoleculeDriver {
       cache.vxc_grid.assign(N_grid, 0.0);
       cache.eps_xc_grid.assign(N_grid, 0.0);
 
-      grid::xc::XcGridOut xc_out;
+      grid::xc::HostXcGridOut xc_out;
       xc_out.vxc = cache.vxc_grid.data();
       xc_out.eps_xc = cache.eps_xc_grid.data();
       xc_out.xc_energy = 0.0;
       xc_out.kernel_ms = 0.0;
 
       std::string xc_err;
-      bool xc_ok = grid::xc::XcEval(xc_spec, xc_in, xc_out, xc_err);
+      bool xc_ok = grid::xc::XcEvalHost(xc_spec, xc_in, xc_out, xc_err);
       if (!xc_ok) {
         // Fallback to CPU XCGridEvaluator if fused engine fails.
         auto xc_cpu = grid::XCGridEvaluator::EvaluateLDA(grid, cache.rho);

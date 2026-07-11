@@ -18,6 +18,27 @@ endif()
 
 enable_testing()
 
+# Tier-0 rung-0 tests receive their acceptance criterion from the YAML source
+# of truth at configure time. Do not duplicate this value in a test source.
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/verification/tolerances.yaml
+  TIDES_XC_RUNG0_TOLERANCE_LINE REGEX "^[ \t]*rung0_rel:")
+list(LENGTH TIDES_XC_RUNG0_TOLERANCE_LINE TIDES_XC_RUNG0_TOLERANCE_COUNT)
+if(NOT TIDES_XC_RUNG0_TOLERANCE_COUNT EQUAL 1)
+  message(FATAL_ERROR "Expected one xc_grid.rung0_rel tolerance")
+endif()
+list(GET TIDES_XC_RUNG0_TOLERANCE_LINE 0 TIDES_XC_RUNG0_TOLERANCE_LINE)
+string(REGEX REPLACE ".*:[ \t]*([^ \t#]+).*" "\\1" TIDES_XC_RUNG0_REL
+  "${TIDES_XC_RUNG0_TOLERANCE_LINE}")
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/verification/tolerances.yaml
+  TIDES_XC_ADJOINT_TOLERANCE_LINE REGEX "^[ \t]*adjoint:")
+list(LENGTH TIDES_XC_ADJOINT_TOLERANCE_LINE TIDES_XC_ADJOINT_TOLERANCE_COUNT)
+if(NOT TIDES_XC_ADJOINT_TOLERANCE_COUNT EQUAL 1)
+  message(FATAL_ERROR "Expected one xc_grid.adjoint tolerance")
+endif()
+list(GET TIDES_XC_ADJOINT_TOLERANCE_LINE 0 TIDES_XC_ADJOINT_TOLERANCE_LINE)
+string(REGEX REPLACE ".*:[ \t]*([^ \t#]+).*" "\\1" TIDES_XC_ADJOINT
+  "${TIDES_XC_ADJOINT_TOLERANCE_LINE}")
+
 add_executable(tides_tilemat_tests core/tile/tests/tilemat_tests.cpp)
 target_link_libraries(tides_tilemat_tests PRIVATE tides_core)
 add_test(NAME tilemat_analytical_invariants COMMAND tides_tilemat_tests)
@@ -235,13 +256,95 @@ if(TIDES_ENABLE_CUDA)
       SKIP_RETURN_CODE 77)
 
     # WP3 T3.2: GPU rho builder
+    # T-X4.1: libxc maple2c source path — defaults to the pinned submodule
+    # at external/libxc (tag 7.0.0).  Override with -DTIDES_LIBXC_ROOT for
+    # custom builds.
+    set(TIDES_LIBXC_ROOT "${CMAKE_SOURCE_DIR}/../external/libxc" CACHE PATH
+        "Root directory of libxc source tree (for maple2c device compilation)")
+    set(TIDES_LIBXC_MAPLE2C_DIR "${TIDES_LIBXC_ROOT}/src/maple2c")
+    if(NOT EXISTS "${TIDES_LIBXC_MAPLE2C_DIR}")
+      message(WARNING "TIDES_LIBXC_MAPLE2C_DIR=${TIDES_LIBXC_MAPLE2C_DIR} does not exist. "
+        "Tier-1 XC kernels will fail to compile. "
+        "Run: git submodule update --init external/libxc  "
+        "or set -DTIDES_LIBXC_ROOT=<path>.")
+    endif()
+
+    # T-X4.2: Peephole pow→cbrt optimization on maple2c sources.
+    # Generates optimized copies in the build tree; original sources are untouched.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    set(TIDES_PEEPHOLE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/core/grid/xc/tier1/peephole.py")
+    set(TIDES_PEEPHOLE_OUTDIR "${CMAKE_CURRENT_BINARY_DIR}/maple2c_optimized")
+    set(TIDES_PEEPHOLE_SOURCES
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_x_tpss.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_c_tpss.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_x_scan.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_c_scan.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_x_r2scan.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_c_r2scan.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/hyb_mgga_x_m05.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_c_m06l.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/gga_exc/gga_x_wpbeh.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/gga_exc/gga_c_pbe.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/gga_exc/hyb_gga_xc_wb97.c"
+    )
+    set(TIDES_PEEPHOLE_OUTPUTS "")
+    foreach(src ${TIDES_PEEPHOLE_SOURCES})
+      file(RELATIVE_PATH rel_src "${TIDES_LIBXC_MAPLE2C_DIR}" "${src}")
+      set(out "${TIDES_PEEPHOLE_OUTDIR}/${rel_src}")
+      list(APPEND TIDES_PEEPHOLE_OUTPUTS "${out}")
+    endforeach()
+
+    if(Python3_Interpreter_FOUND)
+      # Step 1: Copy each source to the output dir preserving subdirectory structure.
+      # Step 2: Run peephole --inplace on the copies.
+      set(TIDES_PEEPHOLE_COPY_CMDS "")
+      foreach(src ${TIDES_PEEPHOLE_SOURCES})
+        file(RELATIVE_PATH rel_src "${TIDES_LIBXC_MAPLE2C_DIR}" "${src}")
+        set(out "${TIDES_PEEPHOLE_OUTDIR}/${rel_src}")
+        get_filename_component(rel_dir "${rel_src}" DIRECTORY)
+        list(APPEND TIDES_PEEPHOLE_COPY_CMDS
+          COMMAND ${CMAKE_COMMAND} -E make_directory "${TIDES_PEEPHOLE_OUTDIR}/${rel_dir}"
+          COMMAND ${CMAKE_COMMAND} -E copy "${src}" "${out}")
+      endforeach()
+      add_custom_command(
+        OUTPUT ${TIDES_PEEPHOLE_OUTPUTS}
+        ${TIDES_PEEPHOLE_COPY_CMDS}
+        COMMAND ${Python3_EXECUTABLE} "${TIDES_PEEPHOLE_SCRIPT}" --inplace
+                ${TIDES_PEEPHOLE_OUTPUTS}
+        DEPENDS ${TIDES_PEEPHOLE_SOURCES} ${TIDES_PEEPHOLE_SCRIPT}
+        COMMENT "T-X4.2: Running peephole pow→cbrt optimization on maple2c sources"
+        VERBATIM)
+      add_custom_target(tides_peephole_maple2c DEPENDS ${TIDES_PEEPHOLE_OUTPUTS})
+    else()
+      # Fallback: copy sources as-is if Python is not available
+      add_custom_target(tides_peephole_maple2c
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${TIDES_LIBXC_MAPLE2C_DIR}" "${TIDES_PEEPHOLE_OUTDIR}"
+        COMMENT "T-X4.2: Python not found, copying maple2c sources without peephole")
+    endif()
+
     add_library(tides_cuda_grid STATIC
       core/grid/rho_build.cu
       core/grid/poisson_fft.cu
       core/grid/vmat_build.cu
-      core/grid/xc.cu
-      core/grid/xc/xc_engine.cu)
+      core/grid/xc/xc_engine.cu
+      core/grid/xc/xc_engine_cpu.cpp
+      core/grid/xc/kernels/xc_lda_kernel.cu
+      core/grid/xc/kernels/xc_gga_kernel.cu
+      core/grid/xc/kernels/xc_mgga_kernel.cu
+      core/grid/xc/tier2/cpu_fallback.cpp
+      core/grid/xc/tier0/tier0_pol.cu
+      core/grid/xc/tier1/mgga_tpss.cu
+      core/grid/xc/tier1/mgga_scan.cu
+      core/grid/xc/tier1/mgga_r2scan.cu
+      core/grid/xc/tier1/mgga_m06_2x.cu
+      core/grid/xc/tier1/rsh_hse06.cu
+      core/grid/xc/tier1/rsh_wb97x.cu)
     target_link_libraries(tides_cuda_grid PUBLIC tides_grid tides_cuda_tile cufft)
+    add_dependencies(tides_cuda_grid tides_peephole_maple2c)
+    target_include_directories(tides_cuda_grid PRIVATE
+      "${TIDES_PEEPHOLE_OUTDIR}"
+      "${TIDES_LIBXC_MAPLE2C_DIR}")
     target_compile_options(tides_cuda_grid PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
     set_target_properties(tides_cuda_grid PROPERTIES
@@ -283,16 +386,262 @@ if(TIDES_ENABLE_CUDA)
     set_tests_properties(cuda_vmat_build_vs_cpu PROPERTIES
       SKIP_RETURN_CODE 77)
 
-    # WP3 T3.5: GPU XC functional evaluation
-    add_executable(tides_cuda_xc_tests
-      core/grid/tests/cuda_xc_tests.cpp)
-    target_link_libraries(tides_cuda_xc_tests PRIVATE
+    add_executable(tides_xc_lda_device_oracle_tests
+      core/grid/xc/tests/lda_device_oracle.cpp)
+    target_link_libraries(tides_xc_lda_device_oracle_tests PRIVATE
       tides_grid tides_cuda_grid)
-    set_target_properties(tides_cuda_xc_tests PROPERTIES
+    target_compile_definitions(tides_xc_lda_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_lda_device_oracle_tests PROPERTIES
       CUDA_RUNTIME_LIBRARY Shared)
-    add_test(NAME cuda_xc_lda_vs_cpu
-             COMMAND tides_cuda_xc_tests)
-    set_tests_properties(cuda_xc_lda_vs_cpu PROPERTIES
+    add_test(NAME xc_rung0_lda_device_vs_libxc
+      COMMAND tides_xc_lda_device_oracle_tests)
+    set_tests_properties(xc_rung0_lda_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_pbe_device_oracle_tests
+      core/grid/xc/tests/pbe_device_oracle.cpp)
+    target_link_libraries(tides_xc_pbe_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_pbe_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_pbe_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rung0_pbe_device_vs_libxc
+      COMMAND tides_xc_pbe_device_oracle_tests)
+    set_tests_properties(xc_rung0_pbe_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_tpss_device_oracle_tests
+      core/grid/xc/tests/mgga_tpss_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_tpss_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_tpss_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_tpss_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_tpss_device_vs_libxc
+      COMMAND tides_xc_mgga_tpss_device_oracle_tests)
+    set_tests_properties(xc_mgga_tpss_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_scan_device_oracle_tests
+      core/grid/xc/tests/mgga_scan_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_scan_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_scan_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_scan_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_scan_device_vs_libxc
+      COMMAND tides_xc_mgga_scan_device_oracle_tests)
+    set_tests_properties(xc_mgga_scan_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_r2scan_device_oracle_tests
+      core/grid/xc/tests/mgga_r2scan_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_r2scan_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_r2scan_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_r2scan_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_r2scan_device_vs_libxc
+      COMMAND tides_xc_mgga_r2scan_device_oracle_tests)
+    set_tests_properties(xc_mgga_r2scan_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_m06_2x_device_oracle_tests
+      core/grid/xc/tests/mgga_m06_2x_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_m06_2x_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_m06_2x_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_m06_2x_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_m06_2x_device_vs_libxc
+      COMMAND tides_xc_mgga_m06_2x_device_oracle_tests)
+    set_tests_properties(xc_mgga_m06_2x_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_rsh_hse06_device_oracle_tests
+      core/grid/xc/tests/rsh_hse06_device_oracle.cpp)
+    target_link_libraries(tides_xc_rsh_hse06_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_rsh_hse06_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_rsh_hse06_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rsh_hse06_device_vs_libxc
+      COMMAND tides_xc_rsh_hse06_device_oracle_tests)
+    set_tests_properties(xc_rsh_hse06_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_rsh_wb97x_device_oracle_tests
+      core/grid/xc/tests/rsh_wb97x_device_oracle.cpp)
+    target_link_libraries(tides_xc_rsh_wb97x_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_rsh_wb97x_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_rsh_wb97x_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rsh_wb97x_device_vs_libxc
+      COMMAND tides_xc_rsh_wb97x_device_oracle_tests)
+    set_tests_properties(xc_rsh_wb97x_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_rsh_pol_device_oracle_tests
+      core/grid/xc/tests/rsh_pol_device_oracle.cpp)
+    target_link_libraries(tides_xc_rsh_pol_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_rsh_pol_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_rsh_pol_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rsh_pol_device_vs_libxc
+      COMMAND tides_xc_rsh_pol_device_oracle_tests)
+    set_tests_properties(xc_rsh_pol_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_mgga_pol_device_oracle_tests
+      core/grid/xc/tests/mgga_pol_device_oracle.cpp)
+    target_link_libraries(tides_xc_mgga_pol_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_pol_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_pol_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_pol_device_vs_libxc
+      COMMAND tides_xc_mgga_pol_device_oracle_tests)
+    set_tests_properties(xc_mgga_pol_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_tier0_pol_device_oracle_tests
+      core/grid/xc/tests/tier0_pol_device_oracle.cpp)
+    target_link_libraries(tides_xc_tier0_pol_device_oracle_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_tier0_pol_device_oracle_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_tier0_pol_device_oracle_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_tier0_pol_device_vs_libxc
+      COMMAND tides_xc_tier0_pol_device_oracle_tests)
+    set_tests_properties(xc_tier0_pol_device_vs_libxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    add_executable(tides_xc_nao_pipeline_device_tests
+      core/grid/xc/tests/nao_pipeline_device_oracle.cpp)
+    target_link_libraries(tides_xc_nao_pipeline_device_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_nao_pipeline_device_tests PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_nao_pipeline_device_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_nao_device_rho_pbe_vmat_pipeline
+      COMMAND tides_xc_nao_pipeline_device_tests)
+    set_tests_properties(xc_nao_device_rho_pbe_vmat_pipeline PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X3.3: mGGA tau pipeline — rho/grad/tau from NAO products, XC, vmat adjoint.
+    add_executable(tides_xc_mgga_tau_pipeline
+      core/grid/xc/tests/mgga_tau_pipeline.cpp)
+    target_link_libraries(tides_xc_mgga_tau_pipeline PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_mgga_tau_pipeline PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_mgga_tau_pipeline PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_mgga_tau_pipeline
+      COMMAND tides_xc_mgga_tau_pipeline)
+    set_tests_properties(xc_mgga_tau_pipeline PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X4.3: Tier-2 CPU fallback for exotic/mixed XC functionals.
+    add_executable(tides_xc_tier2_cpu_fallback_test
+      core/grid/xc/tests/tier2_cpu_fallback_test.cpp)
+    target_link_libraries(tides_xc_tier2_cpu_fallback_test PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_tier2_cpu_fallback_test PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_tier2_cpu_fallback_test PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_tier2_cpu_fallback_gga
+      COMMAND tides_xc_tier2_cpu_fallback_test)
+    set_tests_properties(xc_tier2_cpu_fallback_gga PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X4.3: Coverage matrix CI — nightly rung-0 sweep over all functionals
+    add_executable(tides_xc_coverage_matrix
+      core/grid/xc/tests/coverage_matrix.cpp)
+    target_link_libraries(tides_xc_coverage_matrix PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_coverage_matrix PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_coverage_matrix PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_coverage_matrix
+      COMMAND tides_xc_coverage_matrix)
+    set_tests_properties(xc_coverage_matrix PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X4.4: FP32 A/B precision path test
+    add_executable(tides_xc_fp32_ab_test
+      core/grid/xc/tests/fp32_ab_test.cpp)
+    target_link_libraries(tides_xc_fp32_ab_test PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_fp32_ab_test PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_fp32_ab_precision
+      COMMAND tides_xc_fp32_ab_test)
+    set_tests_properties(xc_fp32_ab_precision PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X4.5: Stress-tensor grid terms + f_xc (order 2) for hot set
+    add_executable(tides_xc_stress_fxc_test
+      core/grid/xc/tests/stress_fxc_test.cpp)
+    target_link_libraries(tides_xc_stress_fxc_test PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_stress_fxc_test PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_stress_fxc
+      COMMAND tides_xc_stress_fxc_test)
+    set_tests_properties(xc_stress_fxc PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X1.5: Roofline benchmark — Gpt/s vs HBM roofline for LDA/PBE
+    add_executable(tides_xc_bench_roofline
+      core/grid/xc/tests/bench_roofline.cpp)
+    target_link_libraries(tides_xc_bench_roofline PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_bench_roofline PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_bench_roofline
+      COMMAND tides_xc_bench_roofline)
+    set_tests_properties(xc_bench_roofline PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X1.6: Rung-1 molecule XC energies — He/Ne/H2O vs libxc CPU reference
+    add_executable(tides_xc_rung1_molecules
+      core/grid/xc/tests/rung1_molecules.cpp)
+    target_link_libraries(tides_xc_rung1_molecules PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_rung1_molecules PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rung1_molecules
+      COMMAND tides_xc_rung1_molecules)
+    set_tests_properties(xc_rung1_molecules PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X2.4: R0 batched layout + CUDA graph capture
+    add_executable(tides_xc_batched_graph
+      core/grid/xc/tests/batched_graph_test.cpp)
+    target_link_libraries(tides_xc_batched_graph PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_batched_graph PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_batched_graph
+      COMMAND tides_xc_batched_graph)
+    set_tests_properties(xc_batched_graph PROPERTIES
       SKIP_RETURN_CODE 77)
 
     # WP5 T5.3: GPU SP2 purification
@@ -415,7 +764,9 @@ target_include_directories(tides_grid INTERFACE ${FFTW3_INCLUDE_DIRS})
 target_link_libraries(tides_grid INTERFACE ${FFTW3_LIBRARIES})
 
 # --- libxc linking (T3.5) -----------------------------------------------------
-# libxc is installed at /home/niel/src/libxc-7.0.0-install/
+# libxc installed library (CPU oracle + Tier-2 fallback).  Built from the
+# external/libxc submodule (tag 7.0.0) via autotools:
+#   cd external/libxc && autoreconf -i && ./configure --prefix=$PWD/../install && make install
 set(LIBXC_ROOT "/home/niel/src/libxc-7.0.0-install" CACHE PATH "libxc install prefix")
 find_path(LIBXC_INCLUDE_DIR xc.h PATHS ${LIBXC_ROOT}/include REQUIRED)
 find_library(LIBXC_LIBRARY NAMES xc PATHS ${LIBXC_ROOT}/lib REQUIRED)
@@ -448,16 +799,26 @@ target_link_libraries(tides_grid_ops_tests PRIVATE tides_grid)
 add_test(NAME wp3_rho_adjoint_xc_grid_ops
   COMMAND tides_grid_ops_tests)
 
-# T3.5: libxc PBE/GGA test (CPU, no CUDA required)
-add_executable(tides_libxc_pbe_tests
-  core/grid/tests/libxc_pbe_tests.cpp)
-target_link_libraries(tides_libxc_pbe_tests PRIVATE tides_grid)
-add_test(NAME wp3_libxc_pbe_vs_analytical COMMAND tides_libxc_pbe_tests)
+add_executable(tides_xc_rung0_oracle_tests
+  core/grid/xc/tests/rung0_oracle_sweep.cpp)
+target_link_libraries(tides_xc_rung0_oracle_tests PRIVATE tides_grid)
+target_compile_definitions(tides_xc_rung0_oracle_tests PRIVATE
+  TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+add_test(NAME xc_rung0_lda_host_vs_libxc COMMAND tides_xc_rung0_oracle_tests)
 
-add_executable(tides_collinear_spin_xc_tests
-  core/grid/tests/collinear_spin_xc_tests.cpp)
-target_link_libraries(tides_collinear_spin_xc_tests PRIVATE tides_grid)
-add_test(NAME collinear_spin_xc COMMAND tides_collinear_spin_xc_tests)
+add_executable(tides_xc_pbe_functor_oracle_tests
+  core/grid/xc/tests/pbe_functor_oracle.cpp)
+target_link_libraries(tides_xc_pbe_functor_oracle_tests PRIVATE tides_grid)
+target_compile_definitions(tides_xc_pbe_functor_oracle_tests PRIVATE
+  TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+add_test(NAME xc_rung0_pbe_host_vs_libxc COMMAND tides_xc_pbe_functor_oracle_tests)
+
+add_executable(tides_xc_rung1_adjoint_tests
+  core/grid/xc/tests/rung1_adjoint_tests.cpp)
+target_link_libraries(tides_xc_rung1_adjoint_tests PRIVATE tides_grid)
+target_compile_definitions(tides_xc_rung1_adjoint_tests PRIVATE
+  TIDES_XC_ADJOINT=${TIDES_XC_ADJOINT})
+add_test(NAME xc_rung1_pbe_gga_adjoint COMMAND tides_xc_rung1_adjoint_tests)
 
 add_executable(tides_qtt_tests
   core/grid/tests/qtt_tests.cpp)
@@ -626,7 +987,7 @@ add_test(NAME e5_scf_profile COMMAND tides_e5_scf_profile)
 add_executable(tides_molecule_driver_tests
   core/scf/tests/molecule_driver_tests.cpp)
 target_link_libraries(tides_molecule_driver_tests PRIVATE
-  tides_scf tides_grid tides_solvers)
+  tides_scf tides_grid tides_cuda_grid tides_solvers)
 set_target_properties(tides_molecule_driver_tests PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME molecule_driver_end_to_end_scf
@@ -696,6 +1057,9 @@ add_test(NAME e9_verification_profile COMMAND tides_e9_verification_profile)
 add_library(tides_scf INTERFACE)
 target_include_directories(tides_scf INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(tides_scf INTERFACE tides_solvers tides_basis)
+if(TIDES_ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+  target_link_libraries(tides_scf INTERFACE tides_cuda_grid)
+endif()
 if(LAPACK_FOUND)
   target_link_libraries(tides_scf INTERFACE ${LAPACK_LIBRARIES})
   target_compile_definitions(tides_scf INTERFACE TIDES_HAVE_LAPACK=1)

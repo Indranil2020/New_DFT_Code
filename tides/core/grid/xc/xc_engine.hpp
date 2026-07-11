@@ -1,100 +1,138 @@
 #pragma once
 
-// AUDIT T-X0.3: XC Engine public contract.
-//
-// This is the single entry point for all XC evaluations in TIDES.
-// No code path may bypass xc_engine.hpp (audit standing rule #2).
-//
-// XcSpec:  describes which functional to evaluate (family + parameters).
-// XcGridIn:  device-resident density/gradient data (SoA layout).
-// XcGridOut: device-resident V_xc, eps_xc, and reduced E_xc.
-//
-// The host dispatch (xc_engine.cu) routes XcSpec to:
-//   Tier 0: header-only __device__ functors (this engine) — LDA + PBE
-//   Tier 1: pinned libxc maple2c sources compiled with nvcc (future)
-//   Tier 2: CPU fallback for exotics (future)
+// The only Tier-0 XC entry point. All pointers in the grid views are device
+// pointers in 256-byte-aligned structure-of-arrays storage.
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <vector>
+
+#include "common/status.hpp"
+#include "grid/xc/functionals/common.cuh"
+
+#if __has_include(<cuda_runtime_api.h>)
+#include <cuda_runtime_api.h>
+#else
+struct CUstream_st;
+using cudaStream_t = CUstream_st*;
+#endif
 
 namespace tides::grid::xc {
 
-// XC functional family.
-enum class XcFamily : int {
-  kLda = 0,   // Rung 1: LDA (density only)
-  kGga = 1,   // Rung 2: GGA (density + gradient)
-  kMgga = 2,  // Rung 3: meta-GGA (density + gradient + kinetic)
-  kHybrid = 3, // Rung 4: hybrid (local part only for Tier 0)
+enum class Functional : std::uint16_t {
+  kLdaPw92,
+  kSvwn5,
+  kPbe,
+  kPbeSol,
+  kRevPbe,
+  kRpbe,
+  kBlyp,
+  kB3lyp,
+  kPbe0,
+  kHse06,
+  kTpss,
+  kR2scan,
+  kScan,
+  kWb97x,
+  kM06_2x
+};
+enum class PrecisionPolicy : std::uint8_t { kFloat64, kFloat32MidScf };
+
+struct XcTerm {
+  Functional functional = Functional::kLdaPw92;
+  double coefficient = 1.0;
 };
 
-// Functional identifier — maps to the Top-15 table.
-enum class XcFunctionalId : int {
-  kLdaPw92 = 0,    // LDA_X + LDA_C_PW (Slater + Perdew-Wang)
-  kLdaVwn5 = 1,    // LDA_X + LDA_C_VWN
-  kPbe = 2,        // GGA_X_PBE + GGA_C_PBE
-  kPbesol = 3,     // GGA_X_PBE_SOL + GGA_C_PBE_SOL
-  kRevPbe = 4,     // GGA_X_PBE_R + GGA_C_PBE
-  kRpbe = 5,       // GGA_X_RPBE + GGA_C_PBE
-  kBlyp = 6,       // GGA_X_B88 + GGA_C_LYP
-  kPbe0Local = 7,  // PBE with a_x=0.25 scaling (local part)
-  kB3lypLocal = 8, // B3LYP local part
-  kHse06Local = 9, // SR-omegaPBE local part
-  kTpss = 10,      // mGGA
-  kR2scan = 11,    // mGGA
-  kScan = 12,      // mGGA (FP64-only)
-  kWb97xLocal = 13, // RSH-GGA local part
-  kM062xLocal = 14, // hyb-mGGA local part
-};
-
-// Specification of an XC functional for evaluation.
 struct XcSpec {
+  Family family = Family::kLda;
+  int nspin = 1;
+  std::vector<XcTerm> terms;
+  PrecisionPolicy precision = PrecisionPolicy::kFloat64;
+  bool deterministic = false;
+};
+
+struct XcGridIn {
+  // All SoA planes use point_stride, not np.  np is the logical count and
+  // point_stride is the padded physical stride owned by XcArena or the grid
+  // producer; this keeps producer/consumer plane offsets unambiguous.
+  const double* rho = nullptr;          // [nspin][point_stride]
+  const double* grad = nullptr;         // [nspin][3][point_stride], GGA+
+  const double* tau = nullptr;          // [nspin][point_stride], mGGA
+  const double* w = nullptr;            // [np]
+  std::int64_t np = 0;
+  std::int64_t point_stride = 0;
+  int nsys = 1;
+  const std::int64_t* sys_offsets = nullptr;  // [nsys + 1], optional for nsys=1
+};
+
+struct XcGridOut {
+  double* wv_rho = nullptr;             // [nspin][input.point_stride]
+  double* wv_grad = nullptr;             // [nspin][3][input.point_stride], GGA+
+  double* wv_tau = nullptr;             // [nspin][input.point_stride], mGGA
+  double* exc_per_system = nullptr;     // [nsys], FP64 device accumulators
+};
+
+static_assert(std::is_standard_layout_v<XcGridIn>);
+static_assert(std::is_standard_layout_v<XcGridOut>);
+static_assert(alignof(XcGridIn) >= alignof(const double*));
+static_assert(alignof(XcGridOut) >= alignof(double*));
+static_assert(offsetof(XcGridIn, rho) == 0);
+static_assert(offsetof(XcGridOut, wv_rho) == 0);
+static_assert(sizeof(XcGridIn) % alignof(XcGridIn) == 0);
+static_assert(sizeof(XcGridOut) % alignof(XcGridOut) == 0);
+
+// The call enqueues work only: it neither allocates nor synchronizes. Unsupported
+// functionals fail explicitly; they never take a hidden host fallback route.
+[[nodiscard]] Status XcEval(const XcSpec& spec, const XcGridIn& input,
+                            XcGridOut& output, cudaStream_t stream);
+
+// ---- Host-oriented convenience API (for GTO molecule driver) ----
+// These types provide a simpler interface for host-side code that doesn't
+// need device-resident data management.  The device-resident API above is
+// the production path for the NAO pipeline; this is the GTO oracle path.
+
+enum class XcFunctionalId : int {
+  kLdaPw92 = 0, kLdaVwn5 = 1, kPbe = 2, kPbesol = 3, kRevPbe = 4,
+  kRpbe = 5, kBlyp = 6, kPbe0Local = 7, kB3lypLocal = 8, kHse06Local = 9,
+  kTpss = 10, kR2scan = 11, kScan = 12, kWb97xLocal = 13, kM062xLocal = 14,
+};
+
+enum class XcFamily : int {
+  kLda = 0, kGga = 1, kMgga = 2, kHybrid = 3,
+};
+
+struct HostXcSpec {
   XcFunctionalId id = XcFunctionalId::kLdaPw92;
   XcFamily family = XcFamily::kLda;
   bool spin_polarized = false;
-  // Optional parameters for hybrids/RSH (local part scaling).
-  double exchange_fraction = 1.0;  // 1.0 for pure, 0.25 for PBE0, etc.
-  double omega = 0.0;              // range-separation parameter for HSE06
+  double exchange_fraction = 1.0;
+  double omega = 0.0;
 };
 
-// Input grid data (SoA layout for coalesced GPU access).
-// For LDA: only rho is used.
-// For GGA: rho + grad_rho_x/y/z → sigma = |grad_rho|^2.
-// For mGGA: rho + grad_rho + tau.
-struct XcGridIn {
-  const double* rho = nullptr;       // density (np elements)
-  const double* grad_rho_x = nullptr; // d(rho)/dx (np elements, GGA+)
+struct HostXcGridIn {
+  const double* rho = nullptr;
+  const double* grad_rho_x = nullptr;
   const double* grad_rho_y = nullptr;
   const double* grad_rho_z = nullptr;
-  const double* tau = nullptr;       // kinetic energy density (mGGA+)
-  std::size_t np = 0;                // number of grid points
-  double grid_weight = 0.0;          // integration weight (dv)
+  const double* tau = nullptr;
+  std::size_t np = 0;
+  double grid_weight = 0.0;
 };
 
-// Output grid data.
-struct XcGridOut {
-  double* vxc = nullptr;       // V_xc(rho) — d(E_xc)/d(rho) (np elements)
-  double* vsigma = nullptr;    // d(E_xc)/d(sigma) (np elements, GGA+)
-  double* vtau = nullptr;      // d(E_xc)/d(tau) (np elements, mGGA+)
-  double* eps_xc = nullptr;    // energy density per particle (np elements)
-  double xc_energy = 0.0;      // reduced total E_xc = sum(w * eps_xc * rho)
-  double kernel_ms = 0.0;      // kernel execution time
+struct HostXcGridOut {
+  double* vxc = nullptr;
+  double* vsigma = nullptr;
+  double* vtau = nullptr;
+  double* eps_xc = nullptr;
+  double xc_energy = 0.0;
+  double kernel_ms = 0.0;
 };
 
-// Host dispatch: evaluate XC functional on the grid.
-// Routes to Tier-0 (fused device kernels), Tier-1 (libxc device), or Tier-2 (CPU).
-//
-// For Tier-0 LDA: loads rho → eval functor → write w·v_ρ → in-kernel E_xc reduction.
-// For Tier-0 GGA: loads rho + ∇ρ → compute σ → eval functor → write w·v_ρ and 2w·v_σ∇ρ.
-//
-// Returns true on success, false on failure (with error_msg set).
-bool XcEval(const XcSpec& spec, const XcGridIn& in, XcGridOut& out,
-            std::string& error_msg);
-
-// Get the functional name as a string.
+bool XcEvalHost(const HostXcSpec& spec, const HostXcGridIn& in,
+                HostXcGridOut& out, std::string& error_msg);
 std::string XcFunctionalName(XcFunctionalId id);
-
-// Check if a functional is implemented in Tier-0.
 bool IsTier0(XcFunctionalId id);
 
 }  // namespace tides::grid::xc

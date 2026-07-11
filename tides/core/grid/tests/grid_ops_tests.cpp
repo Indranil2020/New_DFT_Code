@@ -4,6 +4,7 @@
 // T3.3 observable: adjointness |<A P, w> - <P, A^T w>| <= 1e-12 on 100 random pairs.
 // T3.5 observable: XC energy components validated against PySCF/libxc (LDA path).
 
+#include "basis/atomgen/lda_xc.hpp"
 #include "grid/rho_build.hpp"
 #include "grid/vmat_build.hpp"
 #include "grid/xc.hpp"

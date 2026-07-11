@@ -233,7 +233,7 @@ NB_MODULE(_native, m) {
                               bool use_grid_hartree,
                               const std::string& xc_functional) {
             // Map string to XcSpec.
-            grid::xc::XcSpec spec{};
+            grid::xc::HostXcSpec spec{};
             if (xc_functional == "pbe" || xc_functional == "PBE") {
                 spec.id = grid::xc::XcFunctionalId::kPbe;
                 spec.family = grid::xc::XcFamily::kGga;

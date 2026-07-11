@@ -1,43 +1,54 @@
-// AUDIT T-X1.2: Fused LDA XC kernel.
-// Loads rho → eval LDA Slater + PW92 functors → write w·v_ρ → in-kernel E_xc reduction.
-// Zero register spills target. Deterministic reduction mode available.
+// T-X4.1: LDA kernel launch file.
+//
+// Instantiates the generic FunctionalKernel for the unpolarized Tier-0 LDA
+// functors and exposes the per-family LaunchLda* functions.
 
-#include <cuda_runtime.h>
-#include <cmath>
-
-#include "grid/xc/functionals/lda_slater.cuh"
-#include "grid/xc/functionals/lda_pw92.cuh"
+#include "grid/xc/kernels/reduce.cuh"
+#include "grid/xc/functional_dispatch.hpp"
 
 namespace tides::grid::xc {
 
-// Fused LDA kernel: one thread per grid point.
-// Each thread computes eps_xc and v_xc for its point.
-// E_xc reduction via atomicAdd (fast mode) or ordered per-block (deterministic).
-__global__ void XcLdaKernel(
-    const double* __restrict__ rho,
-    double* __restrict__ vxc,
-    double* __restrict__ eps_xc,
-    double* __restrict__ xc_energy,
-    double grid_weight,
-    std::size_t np) {
-  const std::size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx >= np) return;
+using kernels::LaunchFunctionalKernel;
+using kernels::LaunchFunctionalKernelFp32;
+using kernels::LaunchStressKernel;
 
-  const double n = rho[idx];
-  const double eps_x = LdaSlater::Eps(n);
-  const double eps_c = LdaPw92::Eps(n);
-  const double v_x = LdaSlater::Vrho(n);
-  const double v_c = LdaPw92::Vrho(n);
+Status LaunchLdaFunctional(const XcSpec& spec, const XcGridIn& input,
+                           XcGridOut& output, cudaStream_t stream) {
+  switch (spec.terms[0].functional) {
+    case Functional::kLdaPw92:
+      return LaunchFunctionalKernel<LdaPw92Functor>(input, output, stream, spec.deterministic);
+    case Functional::kSvwn5:
+      return LaunchFunctionalKernel<Svwn5Functor>(input, output, stream, spec.deterministic);
+    default:
+      return Status::Unimplemented(
+          "LDA functional not implemented in xc_lda_kernel.cu");
+  }
+}
 
-  const double eps_xc_val = eps_x + eps_c;
-  const double vxc_val = v_x + v_c;
+Status LaunchLdaFunctionalFp32(const XcSpec& spec, const XcGridInFp32& input,
+                               XcGridOutFp32& output, cudaStream_t stream) {
+  switch (spec.terms[0].functional) {
+    case Functional::kLdaPw92:
+      return LaunchFunctionalKernelFp32<LdaPw92Functor>(input, output, stream, spec.deterministic);
+    case Functional::kSvwn5:
+      return LaunchFunctionalKernelFp32<Svwn5Functor>(input, output, stream, spec.deterministic);
+    default:
+      return Status::Unimplemented(
+          "FP32 LDA functional not implemented in xc_lda_kernel.cu");
+  }
+}
 
-  vxc[idx] = vxc_val;
-  eps_xc[idx] = eps_xc_val;
-
-  // In-kernel E_xc reduction: E_xc = sum(w * eps_xc * rho).
-  const double e_contrib = grid_weight * eps_xc_val * n;
-  atomicAdd(xc_energy, e_contrib);
+Status LaunchLdaStress(const XcSpec& spec, const XcGridIn& input,
+                       XcStressOut& stress_out, cudaStream_t stream) {
+  switch (spec.terms[0].functional) {
+    case Functional::kLdaPw92:
+      return LaunchStressKernel<LdaPw92Functor>(spec, input, stress_out, stream);
+    case Functional::kSvwn5:
+      return LaunchStressKernel<Svwn5Functor>(spec, input, stress_out, stream);
+    default:
+      return Status::Unimplemented(
+          "LDA stress tensor not implemented in xc_lda_kernel.cu");
+  }
 }
 
 }  // namespace tides::grid::xc

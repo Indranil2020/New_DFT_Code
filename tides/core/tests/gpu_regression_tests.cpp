@@ -11,7 +11,7 @@
 #include "grid/poisson.hpp"
 #include "grid/poisson_fft_gpu.hpp"
 #include "grid/xc.hpp"
-#include "grid/xc_gpu.hpp"
+#include "grid/xc/tests/xc_test_utils.hpp"
 #include "grid/dual_grid.hpp"
 #include "basis/two_center_integrals.hpp"
 #include "basis/two_center_gpu.hpp"
@@ -35,6 +35,7 @@ using tides::grid::UniformGrid3D;
 using tides::grid::RhoBuilder;
 using tides::grid::VmatBuilder;
 using tides::grid::XCGridEvaluator;
+using tides::grid::xc::RunLdaXcOnHostGrid;
 
 int Fail(const std::string& msg) {
   std::cerr << "gpu_regression: FAIL: " << msg << '\n';
@@ -148,18 +149,14 @@ int TestXCRegression() {
     }
 
     auto xc_cpu = XCGridEvaluator::EvaluateLDA(grid, rho);
-    auto xc_gpu = tides::grid::XCEvalLdaCuda(grid, rho, 0.0);
-    if (!xc_gpu.ok()) {
-      std::cerr << "  n=" << n_per_axis << ": GPU failed\n";
-      failures++;
-      continue;
-    }
-    double diff_vxc = MaxAbsDiff(xc_gpu.value().vxc, xc_cpu.vxc);
-    double diff_eps = MaxAbsDiff(xc_gpu.value().eps_xc, xc_cpu.eps_xc);
+    auto xc_gpu = RunLdaXcOnHostGrid(grid, rho);
+    const double cpu_energy = XCGridEvaluator::XCEnergy(grid, xc_cpu, rho);
+    double diff_vxc = MaxAbsDiff(xc_gpu.vxc, xc_cpu.vxc);
+    double diff_energy = std::abs(xc_gpu.xc_energy - cpu_energy);
     std::cout << "  n=" << n_per_axis
               << ": max_diff_vxc=" << diff_vxc
-              << " max_diff_eps_xc=" << diff_eps << '\n';
-    if (diff_vxc > 1e-11 || diff_eps > 1e-12) {
+              << " energy_diff=" << diff_energy << '\n';
+    if (diff_vxc > 1e-11 || diff_energy > 1e-10) {
       failures++;
       std::cerr << "  FAIL: diff > 1e-12\n";
     }

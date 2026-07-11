@@ -1,5 +1,13 @@
 #pragma once
 
+// Compatibility shim for the legacy GPU XC interface.
+// The production XC engine is in xc/xc_engine.hpp (device-resident XcEval).
+// This header preserves the old XCEvalLdaCuda/XCEvalPbeCuda signatures
+// used by nao_driver.hpp for the GPU dispatch fallback path.
+// When CUDA is enabled, the implementation in xc.cu provided these;
+// now xc.cu is deleted, so cuda_stubs.cpp provides stubs that return
+// Unimplemented, causing callers to fall through to the fused Tier-0 engine.
+
 #include <cstddef>
 #include <vector>
 

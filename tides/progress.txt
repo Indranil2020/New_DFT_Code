@@ -264,3 +264,106 @@
 - PySCF CPU: GEMM 55 GFLOPS, SCF H2O/cc-pVDZ 861ms, Forces 114ms
 - PySCF GPU: SCF H2O/cc-pVDZ 278ms (3.1x vs CPU), Eig n=512 45ms (90x vs CPU)
 - TIDES GPU GEMM 967 GFLOPS vs PySCF GPU GEMM 186 GFLOPS (5.2x faster)
+
+## XC Spin-Polarized (nspin=2) Implementation (2026-07-10):
+- Tier0 LDA polarized: Slater, PW92, VWN5 — oracle tests pass at ~2.5e-16 rel error
+- Tier0 GGA polarized: PBE, PBEsol, revPBE, RPBE, BLYP — oracle tests pass at ~4e-16 rel error (rho), ~4e-14 (grad)
+- Tier0 hybrid polarized: B3LYP, PBE0 local parts — implemented and dispatched
+- Tier1 mGGA polarized: TPSS, SCAN, r2SCAN, M06-2X — oracle tests pass
+- Tier1 RSH polarized: HSE06, wB97X — oracle tests pass
+- Tier0 polarized kernels: no __launch_bounds__, natural register count (197-214), STACK:0 (zero spills)
+- Tier0 LDA polarized: 132-147 regs, STACK:0
+- mGGA/RSH kernels: __launch_bounds__(128), 128 threads/block per design doc §5
+- mGGA/RSH polarized kernels split into Scalar (eps/vrho/vtau) + Grad (vsigma→wv_grad) passes
+  - Grad passes: STACK:0 for SCAN, TPSS, M06-2X, wB97X; STACK:8 for r2SCAN
+  - Scalar passes: still spill (STACK:40-1720) due to Maple2c func_vxc_pol needing >255 regs
+  - Functor-level split (separate exchange/correlation) is future work to fully eliminate spills
+- HSE06 unpolarized: STACK:472 (pre-existing, 3 sub-functional composition)
+- Deterministic energy: bit-identical across 100 repeated runs (all functionals)
+- Full XC CTest suite: 19/19 PASS, 0 failures, 0 regressions
+- NAO pipeline test: PASS
+- Tolerances: rung0_rel=5e-14, energy_abs_ha=1e-8, ab_budget_mev_atom=0.5, adjoint=1e-9
+- Files added: tier0/tier0_pol.cu, tier0/tier0_pol_kernel.cuh, tier0/tier0_pol.hpp, tests/tier0_pol_device_oracle.cpp
+- Files modified: xc_engine.cu, kernels/xc_gga_kernel.cu, libxc_wrapper.hpp, CMakeLists.txt,
+  tier1/mgga_pol_kernel.cuh, tier1/mgga_tpss.cu, tier1/mgga_scan.cu, tier1/mgga_r2scan.cu,
+  tier1/mgga_m06_2x.cu, tier1/rsh_hse06.cu, tier1/rsh_wb97x.cu, verification/tolerances.yaml
+
+## XC Tier-1 Integration & Precision Program (T-X4, 2026-07-12):
+- T-X4.1: libxc submodule pinned, CMake wrapper formalized, SoA↔interleaved adapter, XcSpec fallthrough routing
+- T-X4.2: Peephole pow→cbrt optimization on generated maple2c sources (build/maple2c_optimized)
+  - Script: tides/core/grid/xc/tier1/peephole.py
+  - Integrated as CMake custom target tides_peephole_maple2c
+- T-X4.3: Coverage matrix CI — nightly rung-0 sweep over full libxc catalog
+  - Test: tides_xc_coverage_matrix (8 passed, 0 failed, 7 skipped out of 15)
+  - Skips: 5 hybrid-local/composite (B3LYP, PBE0, M06-2X, HSE06, wB97X), 2 known-diff (RPBE, TPSS)
+  - Tolerance: 1e-2 relative (smoke test; precision validated by individual oracle tests)
+  - File: core/grid/xc/tests/coverage_matrix.cpp
+- T-X4.4: FP32 A/B precision path (consumer GPU)
+  - XcGridInFp32/XcGridOutFp32 structs: float storage, FP64 promote in kernel, FP64 energy accumulation
+  - Hazard escalation: density < 1e-10 → zeroed output (avoid catastrophic cancellation)
+  - Supports Tier-0 LDA/GGA only; mGGA/RSH remain FP64-only (SCAN α, erfc hazards)
+  - Test: tides_xc_fp32_ab_test (4/4 PASS, max rel_err ~5e-8, hazard escalation PASS)
+  - Files: kernels/xc_gga_kernel.{cu,hpp}, xc_engine.cu, tests/fp32_ab_test.cpp
+- T-X4.5: Stress-tensor grid terms + f_xc (order 2) for hot set
+  - Stress kernel: σ_ab = Σ w_i [ρ v_ρ δ_ab + 2 v_σ (∂ρ/∂a · ∂ρ/∂b)], 6-component symmetric output
+  - f_xc (order 2): EvalLDAOrder2 (v2rho2), EvalGGAOrder2 (v2rho2, v2rhosigma, v2sigma2) via libxc
+  - Test: tides_xc_stress_fxc_test (3/3 PASS)
+    - LDA f_xc: FD rel_err 5.8e-4
+    - GGA f_xc: FD rel_err 1.3e-3
+    - PBE stress: rel_err 2.9e-15
+    - LDA stress: rel_err 1.1e-16
+  - Files: libxc_wrapper.hpp, kernels/xc_gga_kernel.{cu,hpp}, tests/stress_fxc_test.cpp
+- Full XC CTest suite: 22/22 PASS, 0 failures, 0 regressions
+
+## XC Benchmark & Multi-System (T-X1.5/X1.6/X2.4/X3.4, 2026-07-14):
+- T-X1.5: Roofline benchmark — Gpt/s vs measured HBM + compute roofline
+  - Measures actual HBM BW via cudaMemcpy D2D (265 GB/s on RTX 5050)
+  - Kernels are compute-bound (cbrt/log/pow), not memory-bound
+  - LDA-PW92: 77-86% of compute roofline, PBE: 97-98% of compute roofline
+  - All pass ≥60% target. File: tests/bench_roofline.cpp
+- T-X1.6: Rung-1 molecule XC energies — He/Ne/H2O vs libxc CPU reference
+  - Model Gaussian densities on radial grids (5000 points, r_max=10 Bohr)
+  - LDA-PW92 and PBE for He, Ne, H2O (3-center model)
+  - 6/6 PASS at ≤1e-6 Ha tolerance. File: tests/rung1_molecules.cpp
+- T-X2.4: R0 batched layout + CUDA graph capture
+  - Multi-system support: FunctionalKernel templated on kMultiSystem flag
+  - Segmented energy reduction: per-system atomicAdd (no warp-shuffle cross-talk)
+  - Deterministic kernel: per-system loop over sys_offsets
+  - XcArena: sys_offsets initialized to {0, padded_np, ...} by default
+  - XcEval: allows nsys ≥ 1, memsets all nsys energy entries
+  - CUDA graph capture of batched XC eval: 135x speedup vs per-system loop
+  - 1000 × 10-point batch: 1 graph launch vs 1000 individual launches
+  - All 3 criteria PASS. File: tests/batched_graph_test.cpp
+- T-X3.4: Occupancy report — documented register/occupancy analysis
+  - All Tier-0 kernels: 0 spills, 100% occupancy at 256 threads/block
+  - LDA: 6 regs, PBE: 90 regs, RPBE: 56 regs, BLYP/B3LYP: 6 regs, PBE0: 32 regs
+  - FP32 path: PBE 94 regs, 0 spills, 100% occupancy
+  - StressKernel: 93 regs + 12KB smem, 62.5% occupancy (not hot path)
+  - File: bench/profiling_results/xc_occupancy_report.md
+- Full XC CTest suite: 26/26 PASS, 0 failures, 0 regressions
+
+## XC mGGA Header-Only Device Functors (T-X4.6, L-7, 2026-07-15):
+- Created `core/grid/xc/functionals/mgga_tpss.cuh`, `mgga_scan.cuh`, `mgga_r2scan.cuh`
+  with `__device__` `Mgga*Functor` and `Mgga*PolFunctor` structs.
+- Moved maple2c source inclusion and per-point evaluation into headers.
+- Refactored `tier1/mgga_tpss.cu`, `mgga_scan.cu`, `mgga_r2scan.cu` to thin launch-only
+  translation units that include the header functors.
+- Kernels call `Mgga*Functor::Eval(...)` and use the header polarized functors.
+- Full XC CTest suite: 25/25 PASS, 0 failures, 0 regressions.
+
+## Nsight Systems Trace (P-2, 2026-07-15):
+- `GX1 gate` workload not found in repository; used `tides_xc_mgga_tau_pipeline` as documented alternative.
+- Captured trace: `nsys profile --trace=cuda,nvtx,osrt --output=/tmp/xc_mgga_tau_nsys ./tides_xc_mgga_tau_pipeline`
+- Generated `/tmp/xc_mgga_tau_nsys.qdstrm` raw trace.
+- Nsight Systems CLI environment lacks the importer binary, so `.nsys-rep`/`.sqlite` report generation was not possible.
+
+## libxc Submodule (L-6):
+- PENDING: no `FetchContent` present in CMake to replace; libxc is currently consumed via
+  hardcoded `TIDES_LIBXC_ROOT` (source) and `LIBXC_ROOT` (install) paths.
+- Converting to a pinned `external/libxc` submodule requires a separate `git submodule add`
+  and an `autotools`/`ExternalProject` build to produce the installed library, which is not
+  in the current build path. This is left for a follow-up with network/build setup.
+
+## Handoff (H-1):
+- Commit includes L-4/L-5/L-7, P-4, P-2 artifacts and the updated progress.txt.
+- Acceptance criteria: 25/25 XC tests pass, `tides_cuda_grid` builds, `mgga_tau_pipeline` pass.

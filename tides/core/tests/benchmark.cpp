@@ -8,7 +8,7 @@
 #include "grid/vmat_build.hpp"
 #include "grid/vmat_build_gpu.hpp"
 #include "grid/xc.hpp"
-#include "grid/xc_gpu.hpp"
+#include "grid/xc/tests/xc_test_utils.hpp"
 #include "grid/dual_grid.hpp"
 #include "solvers/sp2_submatrix/sp2.hpp"
 #include "solvers/sp2_submatrix/sp2_gpu.hpp"
@@ -29,6 +29,7 @@ using tides::grid::UniformGrid3D;
 using tides::grid::RhoBuilder;
 using tides::grid::VmatBuilder;
 using tides::grid::XCGridEvaluator;
+using tides::grid::xc::RunLdaXcOnHostGrid;
 using tides::solvers::SP2Purification;
 using tides::solvers::BatchedDenseEig;
 
@@ -147,15 +148,9 @@ void BenchXC() {
     auto t1 = std::chrono::steady_clock::now();
     double cpu_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-    auto xc_gpu = tides::grid::XCEvalLdaCuda(grid, rho, 0.0);
-    double gpu_ms = xc_gpu.ok() ? 0.0 : -1.0;  // XC GPU doesn't report kernel_ms
-    // Time GPU ourselves.
-    auto tg0 = std::chrono::steady_clock::now();
-    xc_gpu = tides::grid::XCEvalLdaCuda(grid, rho, 0.0);
-    auto tg1 = std::chrono::steady_clock::now();
-    gpu_ms = xc_gpu.ok() ?
-        std::chrono::duration<double, std::milli>(tg1 - tg0).count() : -1.0;
-    double diff = xc_gpu.ok() ? MaxAbsDiff(xc_gpu.value().vxc, xc_cpu.vxc) : -1.0;
+    auto xc_gpu = RunLdaXcOnHostGrid(grid, rho);
+    double gpu_ms = xc_gpu.kernel_ms;
+    double diff = MaxAbsDiff(xc_gpu.vxc, xc_cpu.vxc);
 
     PrintRow(std::to_string(n_per_axis) + "^3", cpu_ms, gpu_ms, diff);
   }
