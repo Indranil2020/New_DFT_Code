@@ -608,6 +608,20 @@ if(TIDES_ENABLE_CUDA)
     set_tests_properties(xc_stress_fxc PROPERTIES
       SKIP_RETURN_CODE 77)
 
+    # T-X2.3: Hybrid-local oracle (B3LYP, PBE0 semilocal parts vs libxc components)
+    add_executable(tides_xc_hybrid_local_oracle
+      core/grid/xc/tests/hybrid_local_oracle.cpp)
+    target_link_libraries(tides_xc_hybrid_local_oracle PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_hybrid_local_oracle PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_hybrid_local_oracle PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_hybrid_local_oracle
+      COMMAND tides_xc_hybrid_local_oracle)
+    set_tests_properties(xc_hybrid_local_oracle PROPERTIES
+      SKIP_RETURN_CODE 77)
+
     # T-X1.5: Roofline benchmark — Gpt/s vs HBM roofline for LDA/PBE
     add_executable(tides_xc_bench_roofline
       core/grid/xc/tests/bench_roofline.cpp)
