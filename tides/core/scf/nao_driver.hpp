@@ -44,6 +44,7 @@
 #include "grid/poisson.hpp"
 #include "grid/vmat_build.hpp"
 #include "grid/xc/xc_engine.hpp"
+#include "grid/xc/xc_arena.hpp"
 #include "grid/vmat_build_gpu.hpp"
 #include "grid/rho_build_gpu.hpp"
 #include "grid/xc_gpu.hpp"
@@ -485,6 +486,108 @@ class NaoDriver {
     }
     step("S/T assembly");
 
+    // --- T-X1.6: Device-resident pipeline setup ---
+    // Upload phi and grad_phi to device once. Create XcArena for XC evaluation.
+    // These persist across SCF iterations; only P and V_xc are transferred per iter.
+    const std::size_t np_total = n0 * n1 * n2;
+    const bool is_gga = (xc_spec.family == grid::xc::XcFamily::kGga);
+#ifdef TIDES_HAVE_CUDA
+    bool device_pipeline_ready = false;
+    cudaStream_t dev_stream = nullptr;
+    grid::xc::XcArena* dev_arena = nullptr;
+    double* d_phi = nullptr;          // [n][stride]
+    double* d_grad_phi = nullptr;     // [3][n][stride]
+    double* d_P = nullptr;            // [n][n]
+    double* d_vmat = nullptr;         // [n][n]
+    std::size_t dev_stride = 0;
+    grid::xc::XcSpec dev_xc_spec;
+
+    // Map HostXcSpec to device XcSpec.
+    auto host_to_dev_functional = [](grid::xc::XcFunctionalId id) -> grid::xc::Functional {
+      switch (id) {
+        case grid::xc::XcFunctionalId::kLdaPw92: return grid::xc::Functional::kLdaPw92;
+        case grid::xc::XcFunctionalId::kLdaVwn5: return grid::xc::Functional::kSvwn5;
+        case grid::xc::XcFunctionalId::kPbe: return grid::xc::Functional::kPbe;
+        case grid::xc::XcFunctionalId::kPbesol: return grid::xc::Functional::kPbeSol;
+        case grid::xc::XcFunctionalId::kRevPbe: return grid::xc::Functional::kRevPbe;
+        case grid::xc::XcFunctionalId::kRpbe: return grid::xc::Functional::kRpbe;
+        case grid::xc::XcFunctionalId::kBlyp: return grid::xc::Functional::kBlyp;
+        case grid::xc::XcFunctionalId::kB3lypLocal: return grid::xc::Functional::kB3lyp;
+        case grid::xc::XcFunctionalId::kPbe0Local: return grid::xc::Functional::kPbe0;
+        case grid::xc::XcFunctionalId::kHse06Local: return grid::xc::Functional::kHse06;
+        case grid::xc::XcFunctionalId::kTpss: return grid::xc::Functional::kTpss;
+        case grid::xc::XcFunctionalId::kR2scan: return grid::xc::Functional::kR2scan;
+        case grid::xc::XcFunctionalId::kScan: return grid::xc::Functional::kScan;
+        case grid::xc::XcFunctionalId::kWb97xLocal: return grid::xc::Functional::kWb97x;
+        case grid::xc::XcFunctionalId::kM062xLocal: return grid::xc::Functional::kM06_2x;
+        default: return grid::xc::Functional::kLdaPw92;
+      }
+    };
+
+    // Only use device pipeline for Tier-0 functionals with CUDA available.
+    const bool is_tier0 = grid::xc::IsTier0(xc_spec.id);
+    if (is_tier0 && grid::XCCudaAvailable()) {
+      cudaStreamCreate(&dev_stream);
+      dev_arena = new grid::xc::XcArena();
+      auto arena_status = dev_arena->Reserve(np_total, 1, is_gga, false, 1, dev_stream);
+      if (arena_status.ok()) {
+        dev_stride = dev_arena->capacity();
+
+        // Upload weights (uniform grid: all dv).
+        std::vector<double> weights(np_total, dv);
+        cudaMemcpyAsync(dev_arena->weights(), weights.data(),
+                        np_total * sizeof(double), cudaMemcpyHostToDevice, dev_stream);
+
+        // Flatten and upload phi: [n][stride].
+        std::vector<double> phi_flat(n * dev_stride, 0.0);
+        for (std::size_t bi = 0; bi < n; ++bi)
+          for (std::size_t g = 0; g < np_total; ++g)
+            phi_flat[bi * dev_stride + g] = orbitals[bi][g];
+        cudaMalloc(reinterpret_cast<void**>(&d_phi), n * dev_stride * sizeof(double));
+        cudaMemcpyAsync(d_phi, phi_flat.data(), n * dev_stride * sizeof(double),
+                        cudaMemcpyHostToDevice, dev_stream);
+
+        // Flatten and upload grad_phi: [3][n][stride].
+        if (is_gga) {
+          std::vector<double> grad_flat(3 * n * dev_stride, 0.0);
+          for (int c = 0; c < 3; ++c)
+            for (std::size_t bi = 0; bi < n; ++bi)
+              for (std::size_t g = 0; g < np_total; ++g)
+                grad_flat[c * n * dev_stride + bi * dev_stride + g] =
+                    grad_orbitals_3d[c][bi][g];
+          cudaMalloc(reinterpret_cast<void**>(&d_grad_phi), 3 * n * dev_stride * sizeof(double));
+          cudaMemcpyAsync(d_grad_phi, grad_flat.data(),
+                          3 * n * dev_stride * sizeof(double),
+                          cudaMemcpyHostToDevice, dev_stream);
+        }
+
+        // Allocate device buffers for P and V_xc.
+        cudaMalloc(reinterpret_cast<void**>(&d_P), n * n * sizeof(double));
+        cudaMalloc(reinterpret_cast<void**>(&d_vmat), n * n * sizeof(double));
+
+        // Build device XcSpec.
+        dev_xc_spec.family = (is_gga) ? grid::xc::Family::kGga : grid::xc::Family::kLda;
+        dev_xc_spec.nspin = 1;
+        dev_xc_spec.terms = {{host_to_dev_functional(xc_spec.id), xc_spec.exchange_fraction}};
+        dev_xc_spec.precision = grid::xc::PrecisionPolicy::kFloat64;
+        dev_xc_spec.deterministic = true;
+
+        cudaStreamSynchronize(dev_stream);
+        device_pipeline_ready = true;
+        std::cout << "[NaoDriver] Device pipeline ready (stride=" << dev_stride
+                  << ", functional=" << grid::xc::XcFunctionalName(xc_spec.id) << ")"
+                  << std::endl;
+      } else {
+        std::cout << "[NaoDriver] Device pipeline disabled: arena reserve failed ("
+                  << arena_status.message() << ")" << std::endl;
+        delete dev_arena;
+        dev_arena = nullptr;
+        cudaStreamDestroy(dev_stream);
+        dev_stream = nullptr;
+      }
+    }
+#endif
+
     // --- Gap 3: Convert S to TileMat for tile substrate integration ---
     // NAO basis functions have compact support (zero beyond r_cut), so the
     // overlap and Hamiltonian matrices are block-sparse. TileMat captures
@@ -670,13 +773,162 @@ class NaoDriver {
       cache.P2.assign(n * n, 0.0);
       for (std::size_t i = 0; i < n * n; ++i) cache.P2[i] = occ_factor * P[i];
 
-      // --- Rho build: CPU GEMM path (uses density matrix P) ---
-      // For GGA functionals, also compute density gradient.
-      // The GPU RhoBuildCuda kernel expects molecular orbitals + occupations,
-      // not the density matrix formulation needed here. The CPU dgemm path
-      // is already O(n²·N_grid) → O(n·N_grid) via BLAS.
       const bool is_gga = (xc_spec.family == grid::xc::XcFamily::kGga);
       std::vector<double> grad_rho_x, grad_rho_y, grad_rho_z;
+
+#ifdef TIDES_HAVE_CUDA
+      if (device_pipeline_ready) {
+        // --- T-X1.6: Device-resident pipeline ---
+        // Flow: upload P → BuildRhoGradientDevice → download rho for Poisson
+        //       → Poisson (CPU) → XcEval → BuildGgaVmatDevice → download V_xc
+
+        // Upload density matrix to device.
+        cudaMemcpyAsync(d_P, cache.P2.data(), n * n * sizeof(double),
+                        cudaMemcpyHostToDevice, dev_stream);
+
+        // Build rho (and grad_rho if GGA) on device into arena.
+        grid::RhoGradientDeviceIn rho_in;
+        rho_in.density_matrix = d_P;
+        rho_in.phi = d_phi;
+        rho_in.grad_phi = d_grad_phi;
+        rho_in.nbasis = static_cast<std::int64_t>(n);
+        rho_in.np = static_cast<std::int64_t>(np_total);
+        rho_in.point_stride = static_cast<std::int64_t>(dev_stride);
+
+        auto rho_status = grid::BuildRhoGradientDevice(
+            rho_in, dev_arena->rho(), dev_arena->grad(), dev_stream);
+        if (rho_status.ok()) {
+          // Download rho for Poisson (unavoidable for molecular free-space BC).
+          cache.rho.resize(np_total);
+          cudaMemcpyAsync(cache.rho.data(), dev_arena->rho(),
+                          np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                          dev_stream);
+          cudaStreamSynchronize(dev_stream);
+
+          // --- Poisson solve (CPU for molecules) ---
+          bool is_periodic = (grid.bc[0] == grid::BoundaryCondition::kPeriodic &&
+                              grid.bc[1] == grid::BoundaryCondition::kPeriodic &&
+                              grid.bc[2] == grid::BoundaryCondition::kPeriodic);
+          bool gpu_poisson_ok = false;
+          if (is_periodic && grid::PoissonFftCudaAvailable()) {
+            auto gpu_res = grid::PoissonFftCuda(grid, cache.rho);
+            if (gpu_res.ok()) {
+              cache.V_H = grid::VmatBuilder::BuildHmatGemm(
+                  grid, orbitals, gpu_res.value().V);
+              gpu_poisson_ok = true;
+            }
+          }
+          if (!gpu_poisson_ok) {
+            auto poisson_result = grid::PoissonSolver::Solve(grid, cache.rho);
+            cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, poisson_result);
+          }
+
+          // --- XC evaluation on device ---
+          grid::xc::XcGridIn xc_in;
+          xc_in.rho = dev_arena->rho();
+          xc_in.grad = is_gga ? dev_arena->grad() : nullptr;
+          xc_in.tau = nullptr;
+          xc_in.w = dev_arena->weights();
+          xc_in.np = static_cast<std::int64_t>(np_total);
+          xc_in.point_stride = static_cast<std::int64_t>(dev_stride);
+          xc_in.nsys = 1;
+          xc_in.sys_offsets = dev_arena->sys_offsets();
+
+          grid::xc::XcGridOut xc_out;
+          xc_out.wv_rho = dev_arena->wv_rho();
+          xc_out.wv_grad = is_gga ? dev_arena->wv_grad() : nullptr;
+          xc_out.wv_tau = nullptr;
+          xc_out.exc_per_system = dev_arena->exc_per_system();
+
+          auto xc_status = grid::xc::XcEval(dev_xc_spec, xc_in, xc_out, dev_stream);
+          if (xc_status.ok()) {
+            // Build V_xc matrix on device.
+            if (is_gga) {
+              grid::GgaVmatDeviceIn vmat_in;
+              vmat_in.phi = d_phi;
+              vmat_in.grad_phi = d_grad_phi;
+              vmat_in.wv_rho = dev_arena->wv_rho();
+              vmat_in.wv_grad = dev_arena->wv_grad();
+              vmat_in.nbasis = static_cast<std::int64_t>(n);
+              vmat_in.np = static_cast<std::int64_t>(np_total);
+              vmat_in.point_stride = static_cast<std::int64_t>(dev_stride);
+
+              auto vmat_status = grid::BuildGgaVmatDevice(
+                  vmat_in, d_vmat, dev_stream);
+              if (!vmat_status.ok()) {
+                // Vmat build failed — fall through to CPU path.
+                device_pipeline_ready = false;
+              }
+            } else {
+              // LDA: use BuildHmatGemm with downloaded wv_rho.
+              // The device vmat builder for LDA-only (no grad) is not available;
+              // download wv_rho and use CPU BuildHmatGemm.
+              std::vector<double> wv_rho(np_total, 0.0);
+              cudaMemcpyAsync(wv_rho.data(), dev_arena->wv_rho(),
+                              np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                              dev_stream);
+              cudaStreamSynchronize(dev_stream);
+              // wv_rho already includes weights (dv * vxc), so pass directly.
+              // But BuildHmatGemm expects v(r) and multiplies by dv internally.
+              // XcEval outputs wv_rho = w * v_rho, so we need to divide by dv
+              // to get v_rho for BuildHmatGemm, OR use a direct integration.
+              // Simpler: just download and use BuildHmatGemm with v = wv_rho / dv.
+              for (std::size_t g = 0; g < np_total; ++g)
+                wv_rho[g] /= dv;
+              cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, wv_rho);
+            }
+
+            if (device_pipeline_ready) {
+              if (is_gga) {
+                cache.V_xc.resize(n * n);
+                cudaMemcpyAsync(cache.V_xc.data(), d_vmat,
+                                n * n * sizeof(double), cudaMemcpyDeviceToHost,
+                                dev_stream);
+              }
+              // Download XC energy.
+              double exc = 0.0;
+              cudaMemcpyAsync(&exc, dev_arena->exc_per_system(),
+                              sizeof(double), cudaMemcpyDeviceToHost, dev_stream);
+              cudaStreamSynchronize(dev_stream);
+              cache.xc_energy_gpu = exc;
+
+              // Download vxc grid for energy assembly (eps_xc per point).
+              // The device pipeline doesn't compute per-point eps_xc;
+              // compute it on host from rho for energy reporting.
+              cache.xc.vxc.assign(np_total, 0.0);
+              cache.xc.eps_xc.assign(np_total, 0.0);
+              std::vector<double> wv_rho_host(np_total, 0.0);
+              cudaMemcpyAsync(wv_rho_host.data(), dev_arena->wv_rho(),
+                              np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                              dev_stream);
+              cudaStreamSynchronize(dev_stream);
+              for (std::size_t g = 0; g < np_total; ++g) {
+                const double n_rho = std::max(cache.rho[g], 0.0);
+                cache.xc.vxc[g] = (n_rho > 1e-30) ? wv_rho_host[g] / (dv * n_rho) : 0.0;
+                cache.xc.eps_xc[g] = (n_rho > 1e-30) ? exc / np_total : 0.0;
+              }
+
+              // H = T + V_ext + V_H + V_xc (+ V_nl if pseudopotentials).
+              cache.H.assign(n * n, 0.0);
+              for (std::size_t i = 0; i < n * n; ++i) {
+                cache.H[i] = T[i] + V_ext[i] + cache.V_H[i] + cache.V_xc[i];
+                if (!V_nl.empty()) cache.H[i] += V_nl[i];
+              }
+              return cache.H;
+            }
+          } else {
+            // XcEval failed — fall through to CPU path.
+            device_pipeline_ready = false;
+          }
+        } else {
+          // Rho build failed — fall through to CPU path.
+          device_pipeline_ready = false;
+        }
+      }
+#endif
+
+      // --- CPU fallback path ---
+      // Rho build via CPU GEMM.
       if (is_gga) {
         auto rho_grad = grid::VmatBuilder::BuildRhoWithGrad(
             grid, orbitals, cache.P2, grad_orbitals_3d);
@@ -688,11 +940,7 @@ class NaoDriver {
         cache.rho = grid::VmatBuilder::BuildRhoGemm(grid, orbitals, cache.P2);
       }
 
-      // --- Poisson solve: CPU free-space for molecules, GPU for periodic ---
-      // The GPU PoissonFftCuda only supports periodic boundary conditions.
-      // Molecular systems need free-space (isolated) boundary conditions,
-      // so we use the CPU SolveFree path. For periodic systems (solids),
-      // the GPU path would be used.
+      // Poisson solve: CPU free-space for molecules, GPU for periodic.
       bool is_periodic = (grid.bc[0] == grid::BoundaryCondition::kPeriodic &&
                           grid.bc[1] == grid::BoundaryCondition::kPeriodic &&
                           grid.bc[2] == grid::BoundaryCondition::kPeriodic);
@@ -718,9 +966,7 @@ class NaoDriver {
         cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, poisson_result);
       }
 
-      // --- XC evaluation via host API ---
-      // LDA: uses density only. GGA: uses density + gradient.
-      // The legacy XCEvalLdaCuda path is kept as a fast GPU dispatch for LDA.
+      // XC evaluation via host API.
       bool gpu_xc_ok = false;
       if (!is_gga && grid::XCCudaAvailable()) {
         auto gpu_res = grid::XCEvalLdaCuda(grid, cache.rho, 0.0);
@@ -745,7 +991,6 @@ class NaoDriver {
         }
       }
       if (!gpu_xc_ok) {
-        // Host XC evaluation via XcEvalHost (supports LDA + GGA Tier-0 functionals).
         const std::size_t np = n0 * n1 * n2;
         grid::xc::HostXcGridIn xc_in;
         xc_in.rho = cache.rho.data();
@@ -773,9 +1018,6 @@ class NaoDriver {
           cache.xc.eps_xc = eps_xc_grid;
           cache.xc_energy_gpu = xc_out.xc_energy;
           if (is_gga) {
-            // Build GGA V_xc matrix: wv_rho = dv * vxc, wv_grad = dv * vsigma * 2 * grad_rho
-            // But XcEvalHost outputs unweighted vxc (v_rho) and vsigma (v_sigma).
-            // BuildGgaHmatGemm expects weighted potentials (already multiplied by dv).
             std::vector<double> wv_rho(np), wv_gx(np), wv_gy(np), wv_gz(np);
             for (std::size_t g = 0; g < np; ++g) {
               wv_rho[g] = dv * vxc_grid[g];
@@ -791,7 +1033,6 @@ class NaoDriver {
             cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.xc.vxc);
           }
         } else {
-          // Fallback to CPU LDA evaluator.
           cache.xc = grid::XCGridEvaluator::EvaluateLDA(grid, cache.rho);
           cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.xc.vxc);
         }
@@ -889,6 +1130,20 @@ class NaoDriver {
     }
     result.basis_info = info;
     result.xc_functional = grid::xc::XcFunctionalName(xc_spec.id);
+
+#ifdef TIDES_HAVE_CUDA
+    if (device_pipeline_ready) {
+      if (d_phi) cudaFree(d_phi);
+      if (d_grad_phi) cudaFree(d_grad_phi);
+      if (d_P) cudaFree(d_P);
+      if (d_vmat) cudaFree(d_vmat);
+      if (dev_arena) {
+        (void)dev_arena->Release(dev_stream);
+        delete dev_arena;
+      }
+      if (dev_stream) cudaStreamDestroy(dev_stream);
+    }
+#endif
 
     auto t1 = std::chrono::steady_clock::now();
     result.wall_time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
