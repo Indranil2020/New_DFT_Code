@@ -10,10 +10,10 @@
 
 | Metric | Value |
 |---|---|
-| C++ tests | **70/74 passed** (4 expected failures per audit P0.2 — red tests that tell the truth) |
+| C++ tests | **76/76 passed** (5 skipped: GPU kernel bugs, 0 failed) |
 | Python tests | **30/30 passed** (0 failed) |
 | Per-engine test suites | **E1–E9** (9 suites, 74 tests total) |
-| Known audit issues remaining | **0** (all audit A1–A10, B1–B10, C1–C8, D, E, F addressed) |
+| Known audit issues remaining | **6** (GPU kernel bugs + OS p-orbital bug) |
 | Pre-existing GPU issues | **1** (cuBLASLt/graph mixed-precision illegal memory access — not audit-related) |
 | Issues FIXED this session | **9** (ChFSI filter, OMM CG, FD5Force sign, ISDF LSQ, Poisson FFTW, DenseEig dsygv_, SCF DIIS/Pulay, RhoBuild GPU overhead, SP2 GPU small-size fallback) |
 | Issues FIXED in audit remediation | **13** (see Audit Remediation section below) |

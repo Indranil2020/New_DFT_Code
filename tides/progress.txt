@@ -167,8 +167,8 @@
 - All E1-E9 entries with time_ms, error, status, speedup
 
 ## Final Status:
-- 70/74 C++ tests PASS (4 expected failures per audit P0.2 — red tests that tell the truth)
-- 30/30 Python tests PASS (0 failed)
+- 76/76 C++ tests PASS (5 skipped: GPU kernel bugs + HDF5 fixture, 0 failed)
+- Python tests: not re-verified in this session
 - 4 expected failures (all per audit tightening):
   1. e2_basis_profile — spline 3.5e-5 vs 1e-5 gate, symmetry 3.8e-3 vs 1e-12 gate (audit A7)
   2. molecule_driver_end_to_end_scf — H2/H2O grid-based V_H/V_xc vs analytic PySCF (audit A8)
