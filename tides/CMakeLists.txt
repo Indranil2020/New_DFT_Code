@@ -832,3 +832,13 @@ if(BUILD_PYTHON_BINDINGS)
     message(WARNING "WP10: nanobind not found — Python bindings skipped. Install with: pip install nanobind")
   endif()
 endif()
+
+# Broker dispatch test: R0/R1/R2/R3 selection + ChFSI validation
+add_executable(tides_broker_dispatch_tests
+  core/solvers/tests/broker_dispatch_tests.cpp)
+target_link_libraries(tides_broker_dispatch_tests PRIVATE
+  tides_solvers tides_scf)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_broker_dispatch_tests PRIVATE ${LAPACK_LIBRARIES})
+endif()
+add_test(NAME broker_dispatch_r0_r1_r2 COMMAND tides_broker_dispatch_tests)
