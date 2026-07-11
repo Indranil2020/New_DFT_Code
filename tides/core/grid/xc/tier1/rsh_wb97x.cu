@@ -20,7 +20,7 @@ struct gga_xc_wb97_params {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/gga_exc/hyb_gga_xc_wb97.c"
+#include "gga_exc/hyb_gga_xc_wb97.c"
 }  // namespace gga_xc_wb97
 
 namespace {

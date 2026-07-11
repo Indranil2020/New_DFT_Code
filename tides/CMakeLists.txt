@@ -254,6 +254,71 @@ if(TIDES_ENABLE_CUDA)
       SKIP_RETURN_CODE 77)
 
     # WP3 T3.2: GPU rho builder
+    # T-X4.1: Configurable libxc maple2c source path.
+    # Defaults to /home/niel/src/libxc-7.0.0 for local dev; override with
+    # -DTIDES_LIBXC_ROOT=/path/to/libxc when building elsewhere.
+    set(TIDES_LIBXC_ROOT "/home/niel/src/libxc-7.0.0" CACHE PATH
+        "Root directory of libxc source tree (for maple2c device compilation)")
+    set(TIDES_LIBXC_MAPLE2C_DIR "${TIDES_LIBXC_ROOT}/src/maple2c")
+    if(NOT EXISTS "${TIDES_LIBXC_MAPLE2C_DIR}")
+      message(WARNING "TIDES_LIBXC_MAPLE2C_DIR=${TIDES_LIBXC_MAPLE2C_DIR} does not exist. "
+        "Tier-1 XC kernels will fail to compile. Set -DTIDES_LIBXC_ROOT=<path>.")
+    endif()
+
+    # T-X4.2: Peephole pow→cbrt optimization on maple2c sources.
+    # Generates optimized copies in the build tree; original sources are untouched.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    set(TIDES_PEEPHOLE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/core/grid/xc/tier1/peephole.py")
+    set(TIDES_PEEPHOLE_OUTDIR "${CMAKE_CURRENT_BINARY_DIR}/maple2c_optimized")
+    set(TIDES_PEEPHOLE_SOURCES
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_x_tpss.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_c_tpss.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_x_scan.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_c_scan.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_x_r2scan.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_c_r2scan.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/hyb_mgga_x_m05.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/mgga_exc/mgga_c_m06l.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/gga_exc/gga_x_wpbeh.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/gga_exc/gga_c_pbe.c"
+      "${TIDES_LIBXC_MAPLE2C_DIR}/gga_exc/hyb_gga_xc_wb97.c"
+    )
+    set(TIDES_PEEPHOLE_OUTPUTS "")
+    foreach(src ${TIDES_PEEPHOLE_SOURCES})
+      file(RELATIVE_PATH rel_src "${TIDES_LIBXC_MAPLE2C_DIR}" "${src}")
+      set(out "${TIDES_PEEPHOLE_OUTDIR}/${rel_src}")
+      list(APPEND TIDES_PEEPHOLE_OUTPUTS "${out}")
+    endforeach()
+
+    if(Python3_Interpreter_FOUND)
+      # Step 1: Copy each source to the output dir preserving subdirectory structure.
+      # Step 2: Run peephole --inplace on the copies.
+      set(TIDES_PEEPHOLE_COPY_CMDS "")
+      foreach(src ${TIDES_PEEPHOLE_SOURCES})
+        file(RELATIVE_PATH rel_src "${TIDES_LIBXC_MAPLE2C_DIR}" "${src}")
+        set(out "${TIDES_PEEPHOLE_OUTDIR}/${rel_src}")
+        get_filename_component(rel_dir "${rel_src}" DIRECTORY)
+        list(APPEND TIDES_PEEPHOLE_COPY_CMDS
+          COMMAND ${CMAKE_COMMAND} -E make_directory "${TIDES_PEEPHOLE_OUTDIR}/${rel_dir}"
+          COMMAND ${CMAKE_COMMAND} -E copy "${src}" "${out}")
+      endforeach()
+      add_custom_command(
+        OUTPUT ${TIDES_PEEPHOLE_OUTPUTS}
+        ${TIDES_PEEPHOLE_COPY_CMDS}
+        COMMAND ${Python3_EXECUTABLE} "${TIDES_PEEPHOLE_SCRIPT}" --inplace
+                ${TIDES_PEEPHOLE_OUTPUTS}
+        DEPENDS ${TIDES_PEEPHOLE_SOURCES} ${TIDES_PEEPHOLE_SCRIPT}
+        COMMENT "T-X4.2: Running peephole pow→cbrt optimization on maple2c sources"
+        VERBATIM)
+      add_custom_target(tides_peephole_maple2c DEPENDS ${TIDES_PEEPHOLE_OUTPUTS})
+    else()
+      # Fallback: copy sources as-is if Python is not available
+      add_custom_target(tides_peephole_maple2c
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${TIDES_LIBXC_MAPLE2C_DIR}" "${TIDES_PEEPHOLE_OUTDIR}"
+        COMMENT "T-X4.2: Python not found, copying maple2c sources without peephole")
+    endif()
+
     add_library(tides_cuda_grid STATIC
       core/grid/rho_build.cu
       core/grid/poisson_fft.cu
@@ -269,6 +334,10 @@ if(TIDES_ENABLE_CUDA)
       core/grid/xc/tier1/rsh_hse06.cu
       core/grid/xc/tier1/rsh_wb97x.cu)
     target_link_libraries(tides_cuda_grid PUBLIC tides_grid tides_cuda_tile cufft)
+    add_dependencies(tides_cuda_grid tides_peephole_maple2c)
+    target_include_directories(tides_cuda_grid PRIVATE
+      "${TIDES_PEEPHOLE_OUTDIR}"
+      "${TIDES_LIBXC_MAPLE2C_DIR}")
     target_compile_options(tides_cuda_grid PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
     set_target_properties(tides_cuda_grid PROPERTIES
@@ -475,6 +544,44 @@ if(TIDES_ENABLE_CUDA)
     add_test(NAME xc_nao_device_rho_pbe_vmat_pipeline
       COMMAND tides_xc_nao_pipeline_device_tests)
     set_tests_properties(xc_nao_device_rho_pbe_vmat_pipeline PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X4.3: Coverage matrix CI — nightly rung-0 sweep over all functionals
+    add_executable(tides_xc_coverage_matrix
+      core/grid/xc/tests/coverage_matrix.cpp)
+    target_link_libraries(tides_xc_coverage_matrix PRIVATE
+      tides_grid tides_cuda_grid)
+    target_compile_definitions(tides_xc_coverage_matrix PRIVATE
+      TIDES_XC_RUNG0_REL=${TIDES_XC_RUNG0_REL})
+    set_target_properties(tides_xc_coverage_matrix PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_coverage_matrix
+      COMMAND tides_xc_coverage_matrix)
+    set_tests_properties(xc_coverage_matrix PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X4.4: FP32 A/B precision path test
+    add_executable(tides_xc_fp32_ab_test
+      core/grid/xc/tests/fp32_ab_test.cpp)
+    target_link_libraries(tides_xc_fp32_ab_test PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_fp32_ab_test PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_fp32_ab_precision
+      COMMAND tides_xc_fp32_ab_test)
+    set_tests_properties(xc_fp32_ab_precision PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X4.5: Stress-tensor grid terms + f_xc (order 2) for hot set
+    add_executable(tides_xc_stress_fxc_test
+      core/grid/xc/tests/stress_fxc_test.cpp)
+    target_link_libraries(tides_xc_stress_fxc_test PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_stress_fxc_test PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_stress_fxc
+      COMMAND tides_xc_stress_fxc_test)
+    set_tests_properties(xc_stress_fxc PROPERTIES
       SKIP_RETURN_CODE 77)
 
     # WP5 T5.3: GPU SP2 purification

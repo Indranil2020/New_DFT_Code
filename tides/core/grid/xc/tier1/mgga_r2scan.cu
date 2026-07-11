@@ -19,7 +19,7 @@ struct mgga_x_r2scan_params {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/mgga_exc/mgga_x_r2scan.c"
+#include "mgga_exc/mgga_x_r2scan.c"
 }  // namespace mgga_x_r2scan
 
 namespace mgga_c_r2scan {
@@ -30,7 +30,7 @@ struct mgga_c_r2scan_params {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/mgga_exc/mgga_c_r2scan.c"
+#include "mgga_exc/mgga_c_r2scan.c"
 }  // namespace mgga_c_r2scan
 
 namespace {

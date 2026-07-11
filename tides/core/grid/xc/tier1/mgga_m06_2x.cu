@@ -20,7 +20,7 @@ struct mgga_x_m05_params {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/mgga_exc/hyb_mgga_x_m05.c"
+#include "mgga_exc/hyb_mgga_x_m05.c"
 }  // namespace mgga_x_m06_2x
 
 namespace mgga_c_m06_2x {
@@ -39,7 +39,7 @@ struct mgga_c_m06l_params {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/mgga_exc/mgga_c_m06l.c"
+#include "mgga_exc/mgga_c_m06l.c"
 }  // namespace mgga_c_m06_2x
 
 namespace {

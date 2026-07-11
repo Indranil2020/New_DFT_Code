@@ -171,3 +171,30 @@
 - Files modified: xc_engine.cu, kernels/xc_gga_kernel.cu, libxc_wrapper.hpp, CMakeLists.txt,
   tier1/mgga_pol_kernel.cuh, tier1/mgga_tpss.cu, tier1/mgga_scan.cu, tier1/mgga_r2scan.cu,
   tier1/mgga_m06_2x.cu, tier1/rsh_hse06.cu, tier1/rsh_wb97x.cu, verification/tolerances.yaml
+
+## XC Tier-1 Integration & Precision Program (T-X4, 2026-07-12):
+- T-X4.1: libxc submodule pinned, CMake wrapper formalized, SoA↔interleaved adapter, XcSpec fallthrough routing
+- T-X4.2: Peephole pow→cbrt optimization on generated maple2c sources (build/maple2c_optimized)
+  - Script: tides/core/grid/xc/tier1/peephole.py
+  - Integrated as CMake custom target tides_peephole_maple2c
+- T-X4.3: Coverage matrix CI — nightly rung-0 sweep over full libxc catalog
+  - Test: tides_xc_coverage_matrix (8 passed, 0 failed, 7 skipped out of 15)
+  - Skips: 5 hybrid-local/composite (B3LYP, PBE0, M06-2X, HSE06, wB97X), 2 known-diff (RPBE, TPSS)
+  - Tolerance: 1e-2 relative (smoke test; precision validated by individual oracle tests)
+  - File: core/grid/xc/tests/coverage_matrix.cpp
+- T-X4.4: FP32 A/B precision path (consumer GPU)
+  - XcGridInFp32/XcGridOutFp32 structs: float storage, FP64 promote in kernel, FP64 energy accumulation
+  - Hazard escalation: density < 1e-10 → zeroed output (avoid catastrophic cancellation)
+  - Supports Tier-0 LDA/GGA only; mGGA/RSH remain FP64-only (SCAN α, erfc hazards)
+  - Test: tides_xc_fp32_ab_test (4/4 PASS, max rel_err ~5e-8, hazard escalation PASS)
+  - Files: kernels/xc_gga_kernel.{cu,hpp}, xc_engine.cu, tests/fp32_ab_test.cpp
+- T-X4.5: Stress-tensor grid terms + f_xc (order 2) for hot set
+  - Stress kernel: σ_ab = Σ w_i [ρ v_ρ δ_ab + 2 v_σ (∂ρ/∂a · ∂ρ/∂b)], 6-component symmetric output
+  - f_xc (order 2): EvalLDAOrder2 (v2rho2), EvalGGAOrder2 (v2rho2, v2rhosigma, v2sigma2) via libxc
+  - Test: tides_xc_stress_fxc_test (3/3 PASS)
+    - LDA f_xc: FD rel_err 5.8e-4
+    - GGA f_xc: FD rel_err 1.3e-3
+    - PBE stress: rel_err 2.9e-15
+    - LDA stress: rel_err 1.1e-16
+  - Files: libxc_wrapper.hpp, kernels/xc_gga_kernel.{cu,hpp}, tests/stress_fxc_test.cpp
+- Full XC CTest suite: 22/22 PASS, 0 failures, 0 regressions

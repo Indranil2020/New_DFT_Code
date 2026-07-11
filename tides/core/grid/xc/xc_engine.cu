@@ -24,60 +24,55 @@ constexpr std::size_t kPointPadding = 512;
   return reinterpret_cast<std::uintptr_t>(pointer) % kDeviceAlignment == 0;
 }
 
-[[nodiscard]] bool IsSupportedFp64(const XcSpec& spec) {
-  if (spec.precision != PrecisionPolicy::kFloat64 ||
-      spec.terms.size() != 1 || spec.terms[0].coefficient != 1.0) {
+[[nodiscard]] bool IsTier0Functional(const XcSpec& spec) {
+  if (spec.terms.size() != 1 || spec.terms[0].coefficient != 1.0) {
     return false;
   }
-  if (spec.nspin == 1) {
-    switch (spec.terms[0].functional) {
-      case Functional::kLdaPw92:
-      case Functional::kSvwn5:
-        return spec.family == Family::kLda;
-      case Functional::kPbe:
-      case Functional::kPbeSol:
-      case Functional::kRevPbe:
-      case Functional::kRpbe:
-      case Functional::kBlyp:
-      case Functional::kB3lyp:
-      case Functional::kPbe0:
-        return spec.family == Family::kGga;
-      case Functional::kTpss:
-      case Functional::kScan:
-      case Functional::kR2scan:
-      case Functional::kM06_2x:
-        return spec.family == Family::kMgga;
-      case Functional::kHse06:
-      case Functional::kWb97x:
-        return spec.family == Family::kRsh;
-      default:
-        return false;
-    }
+  switch (spec.terms[0].functional) {
+    case Functional::kLdaPw92:
+    case Functional::kSvwn5:
+      return spec.family == Family::kLda;
+    case Functional::kPbe:
+    case Functional::kPbeSol:
+    case Functional::kRevPbe:
+    case Functional::kRpbe:
+    case Functional::kBlyp:
+    case Functional::kB3lyp:
+    case Functional::kPbe0:
+      return spec.family == Family::kGga;
+    default:
+      return false;
   }
-  if (spec.nspin == 2) {
-    switch (spec.terms[0].functional) {
-      case Functional::kLdaPw92:
-      case Functional::kSvwn5:
-        return spec.family == Family::kLda;
-      case Functional::kPbe:
-      case Functional::kPbeSol:
-      case Functional::kRevPbe:
-      case Functional::kRpbe:
-      case Functional::kBlyp:
-      case Functional::kB3lyp:
-      case Functional::kPbe0:
-        return spec.family == Family::kGga;
-      case Functional::kHse06:
-      case Functional::kWb97x:
-        return spec.family == Family::kRsh;
-      case Functional::kTpss:
-      case Functional::kScan:
-      case Functional::kR2scan:
-      case Functional::kM06_2x:
-        return spec.family == Family::kMgga;
-      default:
-        return false;
-    }
+}
+
+[[nodiscard]] bool IsTier1Functional(const XcSpec& spec) {
+  if (spec.terms.size() != 1 || spec.terms[0].coefficient != 1.0) {
+    return false;
+  }
+  switch (spec.terms[0].functional) {
+    case Functional::kTpss:
+    case Functional::kScan:
+    case Functional::kR2scan:
+    case Functional::kM06_2x:
+      return spec.family == Family::kMgga;
+    case Functional::kHse06:
+    case Functional::kWb97x:
+      return spec.family == Family::kRsh;
+    default:
+      return false;
+  }
+}
+
+[[nodiscard]] bool IsSupportedFp64(const XcSpec& spec) {
+  if (spec.precision == PrecisionPolicy::kFloat64) {
+    if (spec.nspin != 1 && spec.nspin != 2) return false;
+    return IsTier0Functional(spec) || IsTier1Functional(spec);
+  }
+  // T-X4.4: FP32 mid-SCF path supports Tier-0 LDA/GGA only.
+  // mGGA/RSH remain FP64-only due to α/erfc hazard complexity.
+  if (spec.precision == PrecisionPolicy::kFloat32MidScf) {
+    if (spec.nspin != 1) return false;  // FP32 path is unpolarized only for now
+    return IsTier0Functional(spec);
   }
   return false;
 }
@@ -88,8 +83,9 @@ Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
               cudaStream_t stream) {
   if (!IsSupportedFp64(spec)) {
     return Status::Unimplemented(
-        "Tier-0 supports only FP64 LDA/GGA/mGGA/RSH functionals with nspin=1 or "
-        "nspin=2 in this build");
+        "XC engine supports FP64 LDA/GGA (Tier-0) and mGGA/RSH (Tier-1) "
+        "functionals with nspin=1 or nspin=2. Unsupported functionals require "
+        "Tier-2 CPU fallback (T-X4.3).");
   }
   if (input.np < 0 || input.point_stride < input.np || input.nsys != 1) {
     return Status::InvalidArgument(

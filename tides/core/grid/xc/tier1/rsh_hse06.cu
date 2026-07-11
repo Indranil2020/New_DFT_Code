@@ -15,7 +15,7 @@ namespace gga_x_wpbeh {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/gga_exc/gga_x_wpbeh.c"
+#include "gga_exc/gga_x_wpbeh.c"
 }  // namespace gga_x_wpbeh
 
 namespace gga_c_pbe {
@@ -26,7 +26,7 @@ struct gga_c_pbe_params {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/gga_exc/gga_c_pbe.c"
+#include "gga_exc/gga_c_pbe.c"
 }  // namespace gga_c_pbe
 
 namespace {

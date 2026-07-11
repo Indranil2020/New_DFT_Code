@@ -124,6 +124,23 @@ class LibxcFunctional {
     return res;
   }
 
+  // T-X4.5: Evaluate LDA second derivatives (f_xc, order 2) for TDDFT/Hessian.
+  // Returns v2rho2 = d^2(eps*rho)/d rho^2 (the kernel of the XC Hessian).
+  struct LdaOrder2Result {
+    std::vector<double> v2rho2;  // d^2E/d rho^2
+  };
+
+  LdaOrder2Result EvalLDAOrder2(const std::vector<double>& rho,
+                                 std::size_t np) const {
+    LdaOrder2Result res;
+    const int nspin = (func_ != nullptr) ? func_->nspin : 1;
+    res.v2rho2.resize(static_cast<std::size_t>(nspin) * np, 0.0);
+    if (func_ == nullptr) return res;
+    // xc_lda_fxc computes the second derivative of the energy.
+    xc_lda_fxc(func_, np, rho.data(), res.v2rho2.data());
+    return res;
+  }
+
   // Evaluate GGA functional: eps_xc and V_xc from density and sigma.
   // rho: density array (size np for unpol, 2*np for pol)
   // sigma: |grad rho|^2 array (size np for unpol, 3*np for pol)
@@ -146,6 +163,29 @@ class LibxcFunctional {
     if (func_ == nullptr) return res;
     xc_gga_exc_vxc(func_, np, rho.data(), sigma.data(),
                    res.eps_xc.data(), res.vrho.data(), res.vsigma.data());
+    return res;
+  }
+
+  // T-X4.5: Evaluate GGA second derivatives (f_xc, order 2) for TDDFT/Hessian.
+  // Returns v2rho2, v2rhosigma, v2sigma2 — the kernel of the XC Hessian for GGA.
+  struct GgaOrder2Result {
+    std::vector<double> v2rho2;       // d^2E/d rho^2
+    std::vector<double> v2rhosigma;   // d^2E/d rho d sigma
+    std::vector<double> v2sigma2;     // d^2E/d sigma^2
+  };
+
+  GgaOrder2Result EvalGGAOrder2(const std::vector<double>& rho,
+                                 const std::vector<double>& sigma,
+                                 std::size_t np) const {
+    GgaOrder2Result res;
+    const int nspin = (func_ != nullptr) ? func_->nspin : 1;
+    const int nsigma = (nspin == 2) ? 3 : 1;
+    res.v2rho2.resize(static_cast<std::size_t>(nspin) * np, 0.0);
+    res.v2rhosigma.resize(static_cast<std::size_t>(nspin * nsigma) * np, 0.0);
+    res.v2sigma2.resize(static_cast<std::size_t>(nsigma * nsigma) * np, 0.0);
+    if (func_ == nullptr) return res;
+    xc_gga_fxc(func_, np, rho.data(), sigma.data(),
+               res.v2rho2.data(), res.v2rhosigma.data(), res.v2sigma2.data());
     return res;
   }
 
