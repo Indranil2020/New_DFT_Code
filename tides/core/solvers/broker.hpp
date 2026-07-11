@@ -46,7 +46,7 @@ struct CalibEntry {
 // per-device table. Fallback chain: R2 -> R3 (raise Te) -> R1 (if memory).
 class SolverBroker {
  public:
-  // Dispatch: returns the recommended regime + logs the decision.
+    // Dispatch: returns the recommended regime + logs the decision.
   static SolverRegime Dispatch(const BrokerInput& input,
                                 const std::vector<CalibEntry>& calib,
                                 std::string& reason) {
@@ -59,24 +59,32 @@ class SolverBroker {
     // Metal (gap < 0.1 eV or finite Te): R3 FOE/SQ for large N.
     const bool metallic = (input.gap_estimate < 0.1) ||
                           (input.electronic_temp > 1.0);
-    // Small (molecular): R0 batched.
-    if (input.n_atoms <= 200 && !metallic) {
-      reason = "small molecular system; R0 batched dense";
+
+    // Small molecular: R0 batched dense (n_basis < ~200, ~20 atoms with DZP).
+    // For Phase A molecular systems, R0 is always the fastest and most accurate.
+    if (input.n_basis <= 200 && !metallic) {
+      reason = "small molecular system (n_basis=" +
+              std::to_string(input.n_basis) + "); R0 batched dense";
       return SolverRegime::kR0_BatchDense;
     }
+
     // Metallic large: R3.
-    if (metallic && input.n_atoms > 200) {
-      reason = "metallic/finite-Te; R3 FOE/SQ";
+    if (metallic && input.n_basis > 200) {
+      reason = "metallic/finite-Te large system; R3 FOE/SQ";
       return SolverRegime::kR3_FOE_SQ;
     }
-    // Gapped mid-range (200-2000): R1 ChFSI.
-    if (input.n_atoms <= 2000) {
-      reason = "mid-range gapped; R1 ChFSI";
+
+    // Gapped mid-range (n_basis 200-2000): R1 ChFSI.
+    if (input.n_basis <= 2000) {
+      reason = "mid-range gapped (n_basis=" +
+              std::to_string(input.n_basis) + "); R1 ChFSI";
       return SolverRegime::kR1_ChFSI;
     }
-    // Gapped large (2000+): R2 SP2.
+
+    // Gapped large (n_basis 2000+): R2 SP2.
     if (!metallic) {
-      reason = "gapped large system; R2 SP2-submatrix";
+      reason = "gapped large system (n_basis=" +
+              std::to_string(input.n_basis) + "); R2 SP2-submatrix";
       return SolverRegime::kR2_SP2;
     }
 

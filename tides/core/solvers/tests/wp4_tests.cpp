@@ -223,6 +223,7 @@ int TestBroker() {
   {
     BrokerInput inp;
     inp.n_atoms = 50;
+    inp.n_basis = 100;  // small molecular
     inp.gap_estimate = 5.0;
     std::string reason;
     auto regime = SolverBroker::Dispatch(inp, calib, reason);
@@ -235,6 +236,7 @@ int TestBroker() {
   {
     BrokerInput inp;
     inp.n_atoms = 500;
+    inp.n_basis = 500;  // mid-range
     inp.gap_estimate = 2.0;
     std::string reason;
     auto regime = SolverBroker::Dispatch(inp, calib, reason);
@@ -247,6 +249,7 @@ int TestBroker() {
   {
     BrokerInput inp;
     inp.n_atoms = 1000;
+    inp.n_basis = 1000;  // metallic large
     inp.gap_estimate = 0.01;  // metallic
     inp.electronic_temp = 3000;
     std::string reason;
@@ -260,6 +263,7 @@ int TestBroker() {
   {
     BrokerInput inp;
     inp.n_atoms = 5000;
+    inp.n_basis = 5000;
     inp.gap_estimate = 1.5;
     std::string reason;
     auto regime = SolverBroker::Dispatch(inp, calib, reason);

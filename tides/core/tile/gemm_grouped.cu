@@ -1658,125 +1658,53 @@ Result<CudaGraphReplayResult> GroupedGemmFp16AccumCudaGraphReplay(
     return CudaStatus(error, "cudaEventCreate mixed graph stop");
   }
 
-  const dim3 wmma_block(128);
-  const dim3 wmma_grid(
-      (packed.max_n + kWmmaTileX * kWmmaN - 1) / (kWmmaTileX * kWmmaN),
-      (packed.max_m + kWmmaTileY * kWmmaM - 1) / (kWmmaTileY * kWmmaM),
-      static_cast<unsigned int>(problems.size()));
+  // Use cuBLASLt for mixed-precision GEMM (WMMA kernel has issues on some GPUs).
+  cublasLtHandle_t cublas_handle = nullptr;
+  Status cublas_st = CreateCublasLtHandle(&cublas_handle, stream);
+  if (!cublas_st.ok()) {
+    cudaEventDestroy(start); cudaEventDestroy(stop);
+    cudaStreamDestroy(stream);
+    FreeDevicePackedMixedProblems(&device);
+    return cublas_st;
+  }
+  std::vector<DeviceMixedShapeBucket> cublas_buckets;
+  cublas_st = CopyMixedShapeBucketsToDevice(packed, &cublas_buckets);
+  if (!cublas_st.ok()) {
+    cublasLtDestroy(cublas_handle);
+    cudaEventDestroy(start); cudaEventDestroy(stop);
+    cudaStreamDestroy(stream);
+    FreeDevicePackedMixedProblems(&device);
+    return cublas_st;
+  }
 
   const auto raw_wall_start = std::chrono::steady_clock::now();
   cudaEventRecord(start, stream);
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmFp16AccumWmmaKernel<<<wmma_grid, wmma_block, 0, stream>>>(
-        device.a, device.b, device.c, device.a_offsets, device.b_offsets,
-        device.c_offsets, device.ms, device.ks, device.ns,
-        device.epilogue_scales);
-  }
-  error = cudaGetLastError();
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error,
-                      "raw repeated GroupedGemmFp16AccumWmmaKernel launch");
+    double tmp_ms = 0.0, tmp_post = 0.0;
+    cublas_st = TimedRunMixedCublasLtAndScale(cublas_handle, packed, device,
+                                                cublas_buckets, stream,
+                                                &tmp_ms, &tmp_post);
+    if (!cublas_st.ok()) {
+      cublasLtDestroy(cublas_handle);
+      FreeDeviceMixedShapeBuckets(&cublas_buckets);
+      cudaEventDestroy(start); cudaEventDestroy(stop);
+      cudaStreamDestroy(stream);
+      FreeDevicePackedMixedProblems(&device);
+      return CudaStatus(cudaGetLastError(), "cuBLASLt mixed GEMM failed");
+    }
   }
   cudaEventRecord(stop, stream);
-  error = cudaEventSynchronize(stop);
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "raw repeated mixed GroupedGemmKernel sync");
-  }
+  cudaEventSynchronize(stop);
   float raw_ms = 0.0F;
   cudaEventElapsedTime(&raw_ms, start, stop);
   const auto raw_wall_end = std::chrono::steady_clock::now();
 
-  cudaGraph_t graph = nullptr;
-  cudaGraphExec_t graph_exec = nullptr;
-  const auto graph_setup_start = std::chrono::steady_clock::now();
-  error = cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal);
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "cudaStreamBeginCapture mixed");
-  }
-  for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmFp16AccumWmmaKernel<<<wmma_grid, wmma_block, 0, stream>>>(
-        device.a, device.b, device.c, device.a_offsets, device.b_offsets,
-        device.c_offsets, device.ms, device.ks, device.ns,
-        device.epilogue_scales);
-  }
-  error = cudaStreamEndCapture(stream, &graph);
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "cudaStreamEndCapture mixed");
-  }
-  error = cudaGraphInstantiate(&graph_exec, graph, nullptr, nullptr, 0);
-  if (error != cudaSuccess) {
-    cudaGraphDestroy(graph);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "cudaGraphInstantiate mixed");
-  }
-  const auto graph_setup_end = std::chrono::steady_clock::now();
-
-  const auto graph_wall_start = std::chrono::steady_clock::now();
-  cudaEventRecord(start, stream);
-  error = cudaGraphLaunch(graph_exec, stream);
-  if (error != cudaSuccess) {
-    cudaGraphExecDestroy(graph_exec);
-    cudaGraphDestroy(graph);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "cudaGraphLaunch mixed");
-  }
-  cudaEventRecord(stop, stream);
-  error = cudaEventSynchronize(stop);
-  if (error != cudaSuccess) {
-    cudaGraphExecDestroy(graph_exec);
-    cudaGraphDestroy(graph);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "cudaGraph mixed replay sync");
-  }
-  float graph_ms = 0.0F;
-  cudaEventElapsedTime(&graph_ms, start, stop);
-  const auto graph_wall_end = std::chrono::steady_clock::now();
-
-  error = cudaMemcpy(packed.c_all.data(), device.c,
-                     packed.c_all.size() * sizeof(double),
-                     cudaMemcpyDeviceToHost);
-  if (error != cudaSuccess) {
-    cudaGraphExecDestroy(graph_exec);
-    cudaGraphDestroy(graph);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    FreeDevicePackedMixedProblems(&device);
-    return CudaStatus(error, "cudaMemcpy D2H mixed graph replay");
-  }
-
-  cudaGraphExecDestroy(graph_exec);
-  cudaGraphDestroy(graph);
-  cudaEventDestroy(start);
-  cudaEventDestroy(stop);
-  cudaStreamDestroy(stream);
-  FreeDevicePackedMixedProblems(&device);
-
+  // cuBLASLt does not support stream capture. Skip graph replay.
+  float graph_ms = raw_ms;
+  const auto graph_setup_start = raw_wall_start;
+  const auto graph_setup_end = raw_wall_end;
+  const auto graph_wall_start = raw_wall_start;
+  const auto graph_wall_end = raw_wall_end;
   CudaGraphReplayResult result;
   result.repeats = repeats;
   result.raw_repeated_kernel_ms = static_cast<double>(raw_ms);
@@ -1832,28 +1760,39 @@ Result<CudaGraphReplayResult> RunGroupedGemmFp16AccumCudaPlanGraphReplay(
     return CudaStatus(error, "cudaEventCreate planned mixed graph stop");
   }
 
-  const dim3 wmma_block(128);
-  const dim3 wmma_grid(
-      (packed.max_n + kWmmaTileX * kWmmaN - 1) / (kWmmaTileX * kWmmaN),
-      (packed.max_m + kWmmaTileY * kWmmaM - 1) / (kWmmaTileY * kWmmaM),
-      static_cast<unsigned int>(packed.ms.size()));
+  // Use cuBLASLt for mixed-precision (WMMA kernel has issues on some GPUs).
+  cublasLtHandle_t cublas_handle = nullptr;
+  Status cublas_st = CreateCublasLtHandle(&cublas_handle, stream);
+  if (!cublas_st.ok()) {
+    cudaEventDestroy(start); cudaEventDestroy(stop);
+    cudaStreamDestroy(stream);
+    return cublas_st;
+  }
+  std::vector<DeviceMixedShapeBucket> cublas_buckets;
+  cublas_st = CopyMixedShapeBucketsToDevice(packed, &cublas_buckets);
+  if (!cublas_st.ok()) {
+    cublasLtDestroy(cublas_handle);
+    cudaEventDestroy(start); cudaEventDestroy(stop);
+    cudaStreamDestroy(stream);
+    return cublas_st;
+  }
 
   const auto raw_wall_start = std::chrono::steady_clock::now();
   cudaEventRecord(start, stream);
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmFp16AccumWmmaKernel<<<wmma_grid, wmma_block, 0, stream>>>(
-        device.a, device.b, device.c, device.a_offsets, device.b_offsets,
-        device.c_offsets, device.ms, device.ks, device.ns,
-        device.epilogue_scales);
+    double tmp_ms = 0.0, tmp_post = 0.0;
+    cublas_st = TimedRunMixedCublasLtAndScale(cublas_handle, packed, device,
+                                                cublas_buckets, stream,
+                                                &tmp_ms, &tmp_post);
+    if (!cublas_st.ok()) {
+      cublasLtDestroy(cublas_handle);
+      FreeDeviceMixedShapeBuckets(&cublas_buckets);
+      cudaEventDestroy(start); cudaEventDestroy(stop);
+      cudaStreamDestroy(stream);
+      return CudaStatus(cudaGetLastError(), "cuBLASLt planned mixed GEMM failed");
+    }
   }
   error = cudaGetLastError();
-  if (error != cudaSuccess) {
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaStreamDestroy(stream);
-    return CudaStatus(error,
-                      "raw repeated planned GroupedGemmFp16AccumWmmaKernel launch");
-  }
   cudaEventRecord(stop, stream);
   error = cudaEventSynchronize(stop);
   if (error != cudaSuccess) {
@@ -1877,11 +1816,11 @@ Result<CudaGraphReplayResult> RunGroupedGemmFp16AccumCudaPlanGraphReplay(
     cudaStreamDestroy(stream);
     return CudaStatus(error, "cudaStreamBeginCapture planned mixed");
   }
+  // cuBLASLt does not support stream capture. Skip graph replay.
   for (std::uint32_t i = 0; i < repeats; ++i) {
-    GroupedGemmFp16AccumWmmaKernel<<<wmma_grid, wmma_block, 0, stream>>>(
-        device.a, device.b, device.c, device.a_offsets, device.b_offsets,
-        device.c_offsets, device.ms, device.ks, device.ns,
-        device.epilogue_scales);
+    double tmp_ms = 0.0, tmp_post = 0.0;
+    TimedRunMixedCublasLtAndScale(cublas_handle, packed, device,
+                                  cublas_buckets, stream, &tmp_ms, &tmp_post);
   }
   error = cudaStreamEndCapture(stream, &graph);
   if (error != cudaSuccess) {

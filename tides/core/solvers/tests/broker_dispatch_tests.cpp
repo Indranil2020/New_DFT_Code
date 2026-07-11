@@ -66,34 +66,52 @@ int TestBrokerDispatch() {
       return Fail("Expected R0 for small system");
   }
 
-  // Test R1 (medium system with gap)
+  // Test R1 (medium system with gap, n_basis > 200)
   {
     BrokerInput input;
-    input.n_atoms = 20;
-    input.n_basis = 128;
+    input.n_atoms = 50;
+    input.n_basis = 256;  // > 200 triggers R1
     input.gap_estimate = 3.0;
     input.electronic_temp = 0.0;
     auto calib = SolverBroker::GenerateCalibTable();
     std::string reason;
     auto regime = SolverBroker::Dispatch(input, calib, reason);
-    std::cout << "  Medium system (n=128): regime=" << static_cast<int>(regime)
+    std::cout << "  Medium system (n_basis=256): regime=" << static_cast<int>(regime)
               << " reason=" << reason << "\n";
-    // Broker should select R1 or R0 depending on calibration
+    if (regime != SolverRegime::kR1_ChFSI)
+      return Fail("Expected R1 for medium system (n_basis=256)");
   }
 
-  // Test R2 (large system)
+  // Test R2 (large system, n_basis > 2000)
   {
     BrokerInput input;
-    input.n_atoms = 100;
-    input.n_basis = 1024;
+    input.n_atoms = 500;
+    input.n_basis = 3000;  // > 2000 triggers R2
     input.gap_estimate = 2.0;
     input.electronic_temp = 0.0;
     auto calib = SolverBroker::GenerateCalibTable();
     std::string reason;
     auto regime = SolverBroker::Dispatch(input, calib, reason);
-    std::cout << "  Large system (n=1024): regime=" << static_cast<int>(regime)
+    std::cout << "  Large system (n_basis=3000): regime=" << static_cast<int>(regime)
               << " reason=" << reason << "\n";
-    // Broker should select R2 or R3 for large systems
+    if (regime != SolverRegime::kR2_SP2)
+      return Fail("Expected R2 for large system (n_basis=3000)");
+  }
+
+  // Test R3 (metallic large system)
+  {
+    BrokerInput input;
+    input.n_atoms = 500;
+    input.n_basis = 1000;
+    input.gap_estimate = 0.01;  // metallic (gap < 0.1 eV)
+    input.electronic_temp = 0.0;
+    auto calib = SolverBroker::GenerateCalibTable();
+    std::string reason;
+    auto regime = SolverBroker::Dispatch(input, calib, reason);
+    std::cout << "  Metallic system (n_basis=1000, gap=0.01): regime=" << static_cast<int>(regime)
+              << " reason=" << reason << "\n";
+    if (regime != SolverRegime::kR3_FOE_SQ)
+      return Fail("Expected R3 for metallic large system");
   }
 
   // Verify ChFSI produces correct eigenvalues for a medium system
