@@ -781,9 +781,9 @@ target_link_libraries(tides_grid INTERFACE ${FFTW3_LIBRARIES})
 # libxc installed library (CPU oracle + Tier-2 fallback).  Built from the
 # external/libxc submodule (tag 7.0.0) via autotools:
 #   cd external/libxc && autoreconf -i && ./configure --prefix=$PWD/../install && make install
-set(LIBXC_ROOT "/home/niel/src/libxc-7.0.0-install" CACHE PATH "libxc install prefix")
-find_path(LIBXC_INCLUDE_DIR xc.h PATHS ${LIBXC_ROOT}/include REQUIRED)
-find_library(LIBXC_LIBRARY NAMES xc PATHS ${LIBXC_ROOT}/lib REQUIRED)
+set(LIBXC_ROOT "${CMAKE_SOURCE_DIR}/../external/install" CACHE PATH "libxc install prefix")
+find_path(LIBXC_INCLUDE_DIR xc.h HINTS ${LIBXC_ROOT}/include REQUIRED)
+find_library(LIBXC_LIBRARY NAMES xc HINTS ${LIBXC_ROOT}/lib REQUIRED)
 message(STATUS "libxc found: ${LIBXC_LIBRARY} (headers: ${LIBXC_INCLUDE_DIR})")
 target_include_directories(tides_grid INTERFACE ${LIBXC_INCLUDE_DIR})
 target_link_libraries(tides_grid INTERFACE ${LIBXC_LIBRARY})

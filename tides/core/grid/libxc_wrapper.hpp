@@ -9,7 +9,8 @@
 // - GGA evaluation: eps_xc, V_xc from density rho and reduced gradient sigma
 // - Spin-unpolarized (nspin=1) and spin-polarized (nspin=2) modes
 //
-// libxc is installed at /home/niel/src/libxc-7.0.0-install/
+// libxc is built from the external/libxc submodule (tag 7.0.0) via autotools:
+//   cd external/libxc && autoreconf -i && ./configure --prefix=$PWD/../install && make install
 // Headers: xc.h, xc_funcs.h
 // Library: libxc.so, libxc.a
 

@@ -21,7 +21,7 @@ typedef struct { double alpha; } lda_x_params;
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/lda_exc/lda_x.c"
+#include "lda_exc/lda_x.c"
 }  // namespace lda_x
 
 namespace lda_c_pw {
@@ -34,7 +34,7 @@ typedef struct {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/lda_exc/lda_c_pw.c"
+#include "lda_exc/lda_c_pw.c"
 }  // namespace lda_c_pw
 
 namespace lda_c_vwn {
@@ -42,7 +42,7 @@ namespace lda_c_vwn {
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/lda_exc/lda_c_vwn.c"
+#include "lda_exc/lda_c_vwn.c"
 }  // namespace lda_c_vwn
 
 // ===========================================================================
@@ -55,7 +55,7 @@ typedef struct { double kappa, mu, lambda; } gga_x_pbe_params;
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/gga_exc/gga_x_pbe.c"
+#include "gga_exc/gga_x_pbe.c"
 }  // namespace gga_x_pbe
 
 namespace gga_c_pbe {
@@ -64,7 +64,7 @@ typedef struct { double beta, gamma, BB; } gga_c_pbe_params;
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/gga_exc/gga_c_pbe.c"
+#include "gga_exc/gga_c_pbe.c"
 }  // namespace gga_c_pbe
 
 namespace gga_x_rpbe {
@@ -73,7 +73,7 @@ typedef struct { double rpbe_kappa, rpbe_mu; } gga_x_rpbe_params;
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/gga_exc/gga_x_rpbe.c"
+#include "gga_exc/gga_x_rpbe.c"
 }  // namespace gga_x_rpbe
 
 namespace gga_x_b88 {
@@ -82,7 +82,7 @@ typedef struct { double beta, gamma; } gga_x_b88_params;
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/gga_exc/gga_x_b88.c"
+#include "gga_exc/gga_x_b88.c"
 }  // namespace gga_x_b88
 
 namespace gga_c_lyp {
@@ -91,7 +91,7 @@ typedef struct { double a, b, c, d; } gga_c_lyp_params;
 #define XC_DONT_COMPILE_FXC
 #define XC_DONT_COMPILE_KXC
 #define XC_DONT_COMPILE_LXC
-#include "/home/niel/src/libxc-7.0.0/src/maple2c/gga_exc/gga_c_lyp.c"
+#include "gga_exc/gga_c_lyp.c"
 }  // namespace gga_c_lyp
 
 // ===========================================================================
