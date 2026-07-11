@@ -650,6 +650,15 @@ set_target_properties(tides_nao_benchmark_tests PROPERTIES
 add_test(NAME nao_benchmark_vs_pyscf
   COMMAND tides_nao_benchmark_tests)
 
+
+add_executable(tides_nao_pseudo_tests
+  core/scf/tests/nao_pseudo_tests.cpp)
+target_link_libraries(tides_nao_pseudo_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_nao_pseudo_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME nao_pseudo_scf_validation
+  COMMAND tides_nao_pseudo_tests)
 add_executable(tides_e6_dynamics_profile
   tests/per_engine/e6_dynamics/e6_test_profile.cpp)
 target_link_libraries(tides_e6_dynamics_profile PRIVATE
