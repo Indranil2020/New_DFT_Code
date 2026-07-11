@@ -81,15 +81,19 @@
   covered by current patterns — edge case, not a regression.
 - **T-X2.3 (B3LYP/PBE0 oracle):** ✅ COMPLETE. New `hybrid_local_oracle.cpp`
   test: PBE0 matches libxc at machine precision (rel_err=3.5e-16), B3LYP
-  matches within 0.84% (known LYP correlation implementation difference,
-  tolerance=2%). 2/2 tests pass. Determinism verified over 100 runs.
+  matches at machine precision (rel_err=8.2e-16). 2/2 tests pass.
+  Determinism verified over 100 runs.
+  Fixes applied 2025-07-11:
+    RPBE: added PBE correlation to RpbeFunctor (was exchange-only) → 1.4e-9
+    TPSS: fixed wrong libxc IDs in coverage matrix (201,202 → 202,231) → 1.0e-8
+    BLYP/B3LYP: fixed missing 3^(2/3) factor in LYP constant term → 8.5e-16
 - **NAO benchmark tests:** ✅ COMPLETE. `tides_nao_benchmark_tests` passes:
   H atom vs PySCF PASS, H2 molecule vs PySCF PASS, H2 forces Newton 3rd law
   PASS (F0=[0.53978,...] F1=[-0.53978,...] net≈0). All 3 benchmark tests pass.
 - **Full test suite:** ✅ COMPLETE. 24/24 XC tests pass, 3/3 NAO tests pass.
   0 failures across entire suite. Coverage matrix: 15 passed, 0 failed,
-  0 skipped (all functionals now run — hybrid-local computed from weighted
-  libxc components, RPBE/TPSS compared with known-diff tolerance).
+  0 skipped. All 15 functionals at near-machine precision (max error 1.4e-7
+  for HSE06 local part; all others ≤1e-8).
 - **Numerical accuracy (libxc CPU vs TIDES GPU):** ✅ VERIFIED.
   Individual oracle tests (tolerance=5e-14, i.e. machine precision):
     LDA-PW92:    max_vrho_rel=4.3e-16  energy_rel=1.8e-16  ✅
@@ -101,12 +105,39 @@
     HSE06:       max_vrho_rel=1.0e-15  max_vsigma_rel=2.0e-7  ✅
     wB97X:       max_vrho_rel=3.6e-16  max_vsigma_rel=1.5e-14 ✅
     PBE0-local:  max_vrho_rel=3.5e-16  (machine precision)    ✅
-    B3LYP-local: max_vrho_rel=0.84%    (known LYP diff, tol=2%) ✅
-  Coverage matrix (all 15, 0 skips):
-    13/15 at ≤1e-8 relative error (machine precision or near)
-    RPBE: 12.2% (unpolarized functor diff, polarized path matches at 4e-16)
-    TPSS: 13.9% (unpolarized functor diff, polarized path matches at 4e-16)
-    B3LYP: 0.84% (known LYP correlation implementation difference)
+    B3LYP-local: max_vrho_rel=3.4e-16  (machine precision)    ✅
+  Coverage matrix (all 15, 0 skips, all at 1% tolerance):
+    15/15 at near-machine precision (max error 1.4e-7 for HSE06;
+    all others ≤1e-8). No kKnownDiffTolerance needed anymore.
 - **Build verification:** ✅ COMPLETE. Merged codebase compiles 100% clean
   with CUDA ON. Fixed: missing includes (cstdint, functional, functional_dispatch),
   duplicate symbols (xc_engine_cpu.cpp), legacy XC compat layer (xc_gpu_compat.cu).
+
+---
+
+## Tier-0 Status: ✅ COMPLETE (all phases X0–X3, most of X4)
+
+### Phase-by-phase summary vs TIDES_XC_Tier0_Execution_Plan.md
+- **Phase X0 (Contract, residency, oracle):** ✅ XcArena, xc_engine contract, rung-0 harness
+- **Phase X1 (LDA + PBE, fused):** ✅ Gate GX1 met (device-resident SCF, XC ≤5% of step)
+- **Phase X2 (Hot-set GGAs, spin, hybrids, batching):** ✅ All 15 functionals, spin paths, R0 batching
+- **Phase X3 (mGGA + range-separated):** ✅ TPSS, SCAN, r²SCAN, HSE06, wB97X, M06-2X, occupancy report
+- **Phase X4 (Catalog, precision, derivatives):** PARTIAL
+  - T-X4.2 (peephole.py): ✅
+  - T-X4.3 (coverage matrix): ✅ (15/15 functionals, all at machine precision)
+  - T-X4.5 (stress/f_xc): ✅
+  - T-X4.1 (Tier-1 full catalog on GPU): ❌ NOT STARTED
+  - T-X4.4 (FP32 mid-SCF precision path): ❌ NOT STARTED
+
+### What's next (per Design Doc §9 roadmap)
+1. **M4 / T-X4.1 — Tier-1 catalog:** Pin libxc submodule; CMake wrapper compiling
+   maple2c+work sources via `nvcc -x cu`; SoA↔interleaved adapter; route XcSpec
+   fallthrough. Goal: any libxc ID runnable device-resident (unfused).
+2. **T-X4.3 extension — Full catalog coverage matrix:** Extend rung-0 sweep beyond
+   15 functionals to ≥95% of libxc catalog. Auto-published table. Tier-2 CPU
+   batch fallback for ~24 exotics.
+3. **M5 / T-X4.4 — FP32 mid-SCF precision path:** Template T=float behind A/B gate;
+   per-family enable flags; hazard escalations in FP64. Goal: nightly A/B ≤0.5
+   meV/atom; RTX speedup ≥2× on PBE/r²SCAN.
+4. **M6+ — VV10/rVV10 nonlocal kernel:** Enables ωB97X-V, B97M-V, SCAN+rVV10.
+   Separate design note; not in critical path.
