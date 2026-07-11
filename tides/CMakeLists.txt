@@ -328,7 +328,7 @@ if(TIDES_ENABLE_CUDA)
       core/grid/poisson_fft.cu
       core/grid/vmat_build.cu
       core/grid/xc/xc_engine.cu
-      core/grid/xc/xc_engine_cpu.cpp
+      core/grid/xc_gpu_compat.cu
       core/grid/xc/kernels/xc_lda_kernel.cu
       core/grid/xc/kernels/xc_gga_kernel.cu
       core/grid/xc/kernels/xc_mgga_kernel.cu

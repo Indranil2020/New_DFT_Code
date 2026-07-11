@@ -1,5 +1,6 @@
 #include "grid/xc/xc_arena.hpp"
 #include "grid/xc/xc_engine.hpp"
+#include "grid/xc/functional_dispatch.hpp"
 #include "grid/xc/kernels/xc_gga_kernel.hpp"
 #include "grid/xc/tier2/cpu_fallback.hpp"
 
