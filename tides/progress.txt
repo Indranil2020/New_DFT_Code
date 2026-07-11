@@ -198,3 +198,30 @@
     - LDA stress: rel_err 1.1e-16
   - Files: libxc_wrapper.hpp, kernels/xc_gga_kernel.{cu,hpp}, tests/stress_fxc_test.cpp
 - Full XC CTest suite: 22/22 PASS, 0 failures, 0 regressions
+
+## XC Benchmark & Multi-System (T-X1.5/X1.6/X2.4/X3.4, 2026-07-14):
+- T-X1.5: Roofline benchmark — Gpt/s vs measured HBM + compute roofline
+  - Measures actual HBM BW via cudaMemcpy D2D (265 GB/s on RTX 5050)
+  - Kernels are compute-bound (cbrt/log/pow), not memory-bound
+  - LDA-PW92: 77-86% of compute roofline, PBE: 97-98% of compute roofline
+  - All pass ≥60% target. File: tests/bench_roofline.cpp
+- T-X1.6: Rung-1 molecule XC energies — He/Ne/H2O vs libxc CPU reference
+  - Model Gaussian densities on radial grids (5000 points, r_max=10 Bohr)
+  - LDA-PW92 and PBE for He, Ne, H2O (3-center model)
+  - 6/6 PASS at ≤1e-6 Ha tolerance. File: tests/rung1_molecules.cpp
+- T-X2.4: R0 batched layout + CUDA graph capture
+  - Multi-system support: FunctionalKernel templated on kMultiSystem flag
+  - Segmented energy reduction: per-system atomicAdd (no warp-shuffle cross-talk)
+  - Deterministic kernel: per-system loop over sys_offsets
+  - XcArena: sys_offsets initialized to {0, padded_np, ...} by default
+  - XcEval: allows nsys ≥ 1, memsets all nsys energy entries
+  - CUDA graph capture of batched XC eval: 135x speedup vs per-system loop
+  - 1000 × 10-point batch: 1 graph launch vs 1000 individual launches
+  - All 3 criteria PASS. File: tests/batched_graph_test.cpp
+- T-X3.4: Occupancy report — documented register/occupancy analysis
+  - All Tier-0 kernels: 0 spills, 100% occupancy at 256 threads/block
+  - LDA: 6 regs, PBE: 90 regs, RPBE: 56 regs, BLYP/B3LYP: 6 regs, PBE0: 32 regs
+  - FP32 path: PBE 94 regs, 0 spills, 100% occupancy
+  - StressKernel: 93 regs + 12KB smem, 62.5% occupancy (not hot path)
+  - File: bench/profiling_results/xc_occupancy_report.md
+- Full XC CTest suite: 26/26 PASS, 0 failures, 0 regressions

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace tides::grid::xc {
 namespace {
@@ -87,15 +88,16 @@ Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
         "functionals with nspin=1 or nspin=2. Unsupported functionals require "
         "Tier-2 CPU fallback (T-X4.3).");
   }
-  if (input.np < 0 || input.point_stride < input.np || input.nsys != 1) {
+  if (input.np < 0 || input.point_stride < input.np || input.nsys < 1) {
     return Status::InvalidArgument(
-        "Tier-0 requires one system, np >= 0, and point_stride >= np");
+        "Tier-0 requires nsys >= 1, np >= 0, and point_stride >= np");
   }
   if (output.exc_per_system == nullptr || !IsAligned(output.exc_per_system)) {
     return Status::InvalidArgument("exc_per_system must be a 256-byte-aligned device pointer");
   }
   if (input.np == 0) {
-    return CudaStatus(cudaMemsetAsync(output.exc_per_system, 0, sizeof(double), stream),
+    return CudaStatus(cudaMemsetAsync(output.exc_per_system, 0,
+                      static_cast<std::size_t>(input.nsys) * sizeof(double), stream),
                       "cudaMemsetAsync exc_per_system");
   }
   if (input.rho == nullptr || input.w == nullptr || output.wv_rho == nullptr ||
@@ -118,7 +120,8 @@ Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
         "mGGA functionals require 256-byte-aligned tau and wv_tau device pointers");
   }
 
-  cudaError_t error = cudaMemsetAsync(output.exc_per_system, 0, sizeof(double), stream);
+  cudaError_t error = cudaMemsetAsync(output.exc_per_system, 0,
+                      static_cast<std::size_t>(input.nsys) * sizeof(double), stream);
   if (error != cudaSuccess) return CudaStatus(error, "cudaMemsetAsync exc_per_system");
   return LaunchXcFunctional(spec, input, output, stream);
 }
@@ -187,6 +190,16 @@ Status XcArena::Reserve(std::size_t np, int nspin, bool need_grad, bool need_tau
                     static_cast<std::size_t>(nsys + 1) * sizeof(std::int64_t),
                     "cudaMallocAsync xc system offsets");
   if (!status.ok()) { cleanup(); return status; }
+  // Initialize sys_offsets to {0, padded_np, 2*padded_np, ...} as default.
+  {
+    std::vector<std::int64_t> host_offsets(nsys + 1);
+    for (int s = 0; s <= nsys; ++s)
+      host_offsets[s] = static_cast<std::int64_t>(s) * padded_np;
+    cudaError_t err = cudaMemcpyAsync(impl_->sys_offsets, host_offsets.data(),
+                                      (nsys + 1) * sizeof(std::int64_t),
+                                      cudaMemcpyHostToDevice, stream);
+    if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "cudaMemcpyAsync sys_offsets init"); }
+  }
   if (need_grad) {
     status = allocate(reinterpret_cast<void**>(&impl_->grad),
                       static_cast<std::size_t>(nspin) * 3 * padded_np * sizeof(double),

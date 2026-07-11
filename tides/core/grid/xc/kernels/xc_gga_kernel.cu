@@ -25,19 +25,25 @@ namespace {
 
 constexpr int kThreads = 256;
 
+// Default sys_offsets for single-system case where sys_offsets is null.
+__device__ std::int64_t d_default_sys_offsets[2] = {0, 0};
+
 // Generic kernel for any LDA/GGA/RSH functor that returns a GgaEvaluation.
 // Func::kFamily determines whether grad and wv_grad are touched.  mGGA
 // functionals are handled by a separate kernel once their functors are added.
-template <class Func>
+template <class Func, bool kMultiSystem = false>
 __global__ void FunctionalKernel(const double* __restrict__ rho,
                                  const double* __restrict__ grad,
                                  const double* __restrict__ weights,
                                  double* __restrict__ wv_rho,
                                  double* __restrict__ wv_grad,
                                  double* __restrict__ exc,
+                                 const std::int64_t* __restrict__ sys_offsets,
+                                 int nsys,
                                  std::int64_t np, std::int64_t point_stride,
                                  bool fast_reduction) {
   double local_energy = 0.0;
+  std::int64_t local_sys = 0;
   for (std::int64_t point = static_cast<std::int64_t>(blockIdx.x) * blockDim.x +
                             threadIdx.x;
        point < np;
@@ -59,9 +65,19 @@ __global__ void FunctionalKernel(const double* __restrict__ rho,
       wv_grad[2 * point_stride + point] = weighted_gradient * gz;
     }
     wv_rho[point] = weight * evaluation.vrho;
-    if (fast_reduction) local_energy += weight * density * evaluation.eps;
+    if (fast_reduction) {
+      if constexpr (kMultiSystem) {
+        while (local_sys + 1 < nsys && point >= sys_offsets[local_sys + 1])
+          ++local_sys;
+      }
+      local_energy += weight * density * evaluation.eps;
+    }
   }
   if (!fast_reduction) return;
+  if constexpr (kMultiSystem) {
+    atomicAdd(exc + local_sys, local_energy);
+    return;
+  }
   for (int offset = 16; offset > 0; offset /= 2) {
     local_energy += __shfl_down_sync(0xffffffff, local_energy, offset);
   }
@@ -72,24 +88,30 @@ template <class Func>
 __global__ void FunctionalDeterministicEnergyKernel(
     const double* __restrict__ rho, const double* __restrict__ grad,
     const double* __restrict__ weights, double* __restrict__ exc,
+    const std::int64_t* __restrict__ sys_offsets,
+    int nsys,
     std::int64_t np, std::int64_t point_stride) {
   if (blockIdx.x != 0 || threadIdx.x != 0) return;
-  double energy = 0.0;
-  for (std::int64_t point = 0; point < np; ++point) {
-    const double density = rho[point];
-    GgaEvaluation evaluation;
-    if constexpr (Func::kFamily == Family::kLda) {
-      evaluation = Func::Eval(density);
-    } else {
-      const double gx = grad[point];
-      const double gy = grad[point_stride + point];
-      const double gz = grad[2 * point_stride + point];
-      const double sigma = gx * gx + gy * gy + gz * gz;
-      evaluation = Func::Eval(density, sigma);
+  for (int s = 0; s < nsys; ++s) {
+    const std::int64_t begin = sys_offsets[s];
+    const std::int64_t end = sys_offsets[s + 1];
+    double energy = 0.0;
+    for (std::int64_t point = begin; point < end; ++point) {
+      const double density = rho[point];
+      GgaEvaluation evaluation;
+      if constexpr (Func::kFamily == Family::kLda) {
+        evaluation = Func::Eval(density);
+      } else {
+        const double gx = grad[point];
+        const double gy = grad[point_stride + point];
+        const double gz = grad[2 * point_stride + point];
+        const double sigma = gx * gx + gy * gy + gz * gz;
+        evaluation = Func::Eval(density, sigma);
+      }
+      energy += weights[point] * density * evaluation.eps;
     }
-    energy += weights[point] * density * evaluation.eps;
+    exc[s] = energy;
   }
-  exc[0] = energy;
 }
 
 template <class Func>
@@ -97,15 +119,33 @@ template <class Func>
                                             XcGridOut& output,
                                             cudaStream_t stream,
                                             bool deterministic) {
+  const std::int64_t* sys_offsets = input.sys_offsets;
+  if (sys_offsets == nullptr) {
+    std::int64_t host_offsets[2] = {0, input.np};
+    cudaError_t err = cudaMemcpyToSymbolAsync(d_default_sys_offsets, host_offsets,
+                                              sizeof(host_offsets), 0,
+                                              cudaMemcpyHostToDevice, stream);
+    if (err != cudaSuccess) return CudaStatus(err, "cudaMemcpyToSymbol sys_offsets");
+    sys_offsets = d_default_sys_offsets;
+  }
   const std::int64_t required_blocks = (input.np + kThreads - 1) / kThreads;
   const int blocks = static_cast<int>(std::min<std::int64_t>(required_blocks, 65535));
-  FunctionalKernel<Func><<<blocks, kThreads, 0, stream>>>(
-      input.rho, input.grad, input.w, output.wv_rho, output.wv_grad,
-      output.exc_per_system, input.np, input.point_stride, !deterministic);
+  if (input.nsys > 1) {
+    FunctionalKernel<Func, true><<<blocks, kThreads, 0, stream>>>(
+        input.rho, input.grad, input.w, output.wv_rho, output.wv_grad,
+        output.exc_per_system, sys_offsets, input.nsys,
+        input.np, input.point_stride, !deterministic);
+  } else {
+    FunctionalKernel<Func, false><<<blocks, kThreads, 0, stream>>>(
+        input.rho, input.grad, input.w, output.wv_rho, output.wv_grad,
+        output.exc_per_system, sys_offsets, input.nsys,
+        input.np, input.point_stride, !deterministic);
+  }
   Status status = CudaStatus(cudaGetLastError(), "FunctionalKernel launch");
   if (!status.ok() || !deterministic) return status;
   FunctionalDeterministicEnergyKernel<Func><<<1, 1, 0, stream>>>(
-      input.rho, input.grad, input.w, output.exc_per_system, input.np,
+      input.rho, input.grad, input.w, output.exc_per_system,
+      sys_offsets, input.nsys, input.np,
       input.point_stride);
   return CudaStatus(cudaGetLastError(), "FunctionalDeterministicEnergyKernel launch");
 }

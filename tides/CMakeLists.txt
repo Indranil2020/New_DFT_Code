@@ -584,6 +584,42 @@ if(TIDES_ENABLE_CUDA)
     set_tests_properties(xc_stress_fxc PROPERTIES
       SKIP_RETURN_CODE 77)
 
+    # T-X1.5: Roofline benchmark — Gpt/s vs HBM roofline for LDA/PBE
+    add_executable(tides_xc_bench_roofline
+      core/grid/xc/tests/bench_roofline.cpp)
+    target_link_libraries(tides_xc_bench_roofline PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_bench_roofline PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_bench_roofline
+      COMMAND tides_xc_bench_roofline)
+    set_tests_properties(xc_bench_roofline PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X1.6: Rung-1 molecule XC energies — He/Ne/H2O vs libxc CPU reference
+    add_executable(tides_xc_rung1_molecules
+      core/grid/xc/tests/rung1_molecules.cpp)
+    target_link_libraries(tides_xc_rung1_molecules PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_rung1_molecules PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_rung1_molecules
+      COMMAND tides_xc_rung1_molecules)
+    set_tests_properties(xc_rung1_molecules PROPERTIES
+      SKIP_RETURN_CODE 77)
+
+    # T-X2.4: R0 batched layout + CUDA graph capture
+    add_executable(tides_xc_batched_graph
+      core/grid/xc/tests/batched_graph_test.cpp)
+    target_link_libraries(tides_xc_batched_graph PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_xc_batched_graph PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME xc_batched_graph
+      COMMAND tides_xc_batched_graph)
+    set_tests_properties(xc_batched_graph PROPERTIES
+      SKIP_RETURN_CODE 77)
+
     # WP5 T5.3: GPU SP2 purification
     add_library(tides_cuda_sp2 STATIC
       core/solvers/sp2_submatrix/sp2_gpu.cu)
