@@ -40,7 +40,7 @@ struct GgaLyp {
 
     const detail::DualRhoSigma t62 =
         grad * x8 * (3.0 + 7.0 * t16) / 72.0 -
-        (3.0 / 10.0) * detail::Cbrt(detail::kPi * detail::kPi * detail::kPi * detail::kPi);
+        (3.0 / 10.0) * detail::Cbrt(9.0 * detail::kPi * detail::kPi * detail::kPi * detail::kPi);
 
     const detail::DualRhoSigma eps_per_particle = a * (t8 * t5 * t62 - t5);
     const detail::DualRhoSigma energy = density * eps_per_particle;

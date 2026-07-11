@@ -41,14 +41,9 @@ using tides::grid::xc::XcGridOut;
 using tides::grid::xc::XcSpec;
 using tides::grid::xc::XcTerm;
 
-// Per-functional tolerance: most functionals use the coverage tolerance (1%),
-// but some have known implementation differences vs libxc that require a looser bar.
-// RPBE: unpolarized TIDES functor differs ~12% from libxc (vsigma not compared).
-// TPSS: unpolarized TIDES functor differs ~14% from libxc (vtau not compared).
-// B3LYP: LYP correlation has ~1% implementation difference vs libxc.
-// Precision for all is validated by individual oracle tests (polarized path).
+// Per-functional tolerance: all functionals use the coverage tolerance (1%).
+// All unpolarized TIDES functors match libxc at machine precision or near it.
 constexpr double kCoverageRelTolerance = 1.0e-2;
-constexpr double kKnownDiffTolerance = 2.0e-1;
 
 struct Component {
   int libxc_id;
@@ -101,24 +96,20 @@ const FunctionalEntry kFunctionals[] = {
   {Functional::kRevPbe, "revPBE", Family::kGga, kCoverageRelTolerance, true,
    SIMPLE(102, 130)},
   // 6. RPBE: GGA_X_RPBE(117) + GGA_C_PBE(130)
-  //    Unpolarized TIDES functor has known vsigma differences vs libxc.
-  //    Precision validated by tier0_pol_device_oracle (polarized path).
-  {Functional::kRpbe, "RPBE", Family::kGga, kKnownDiffTolerance, false,
+  {Functional::kRpbe, "RPBE", Family::kGga, kCoverageRelTolerance, true,
    SIMPLE(117, 130)},
   // 7. BLYP: GGA_X_B88(106) + GGA_C_LYP(131)
   {Functional::kBlyp, "BLYP", Family::kGga, kCoverageRelTolerance, true,
    SIMPLE(106, 131)},
   // 8. B3LYP-local: 0.08*LDA_X(1) + 0.72*GGA_X_B88(106) + 0.19*LDA_C_VWN(7) + 0.81*GGA_C_LYP(131)
-  {Functional::kB3lyp, "B3LYP-local", Family::kGga, kKnownDiffTolerance, true,
+  {Functional::kB3lyp, "B3LYP-local", Family::kGga, kCoverageRelTolerance, true,
    {{1, 0.08}, {106, 0.72}}, 2, {{7, 0.19}, {131, 0.81}}, 2, {}, 0},
   // 9. PBE0-local: 0.75*GGA_X_PBE(101) + 1.0*GGA_C_PBE(130)
   {Functional::kPbe0, "PBE0-local", Family::kGga, kCoverageRelTolerance, true,
    {{101, 0.75}}, 1, {{130, 1.0}}, 1, {}, 0},
-  // 10. TPSS: MGGA_X_TPSS(201) + MGGA_C_TPSS(202)
-  //    Unpolarized TIDES functor has known vtau differences vs libxc at TF tau.
-  //    Precision validated by mgga_tpss_device_oracle (polarized path).
-  {Functional::kTpss, "TPSS", Family::kMgga, kKnownDiffTolerance, false,
-   SIMPLE(201, 202)},
+  // 10. TPSS: MGGA_X_TPSS(202) + MGGA_C_TPSS(231)
+  {Functional::kTpss, "TPSS", Family::kMgga, kCoverageRelTolerance, true,
+   SIMPLE(202, 231)},
   // 11. SCAN: MGGA_X_SCAN(263) + MGGA_C_SCAN(267)
   {Functional::kScan, "SCAN", Family::kMgga, kCoverageRelTolerance, true,
    SIMPLE(263, 267)},

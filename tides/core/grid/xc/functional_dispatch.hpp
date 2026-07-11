@@ -43,8 +43,14 @@ using PbeSolFunctor = GgaPbe<PbeSolParameters>;
 // revPBE.
 using RevPbeFunctor = GgaPbe<RevPbeParameters>;
 
-// RPBE (Hammer-Hansen-Norskov).
-using RpbeFunctor = GgaRpbe;
+// RPBE (Hammer-Hansen-Norskov): RPBE exchange + PBE correlation.
+struct RpbeFunctor {
+  static constexpr Family kFamily = Family::kGga;
+  TIDES_XC_HOST_DEVICE static GgaEvaluation Eval(double rho, double sigma) {
+    return GgaRpbe::Eval(rho, sigma) +
+           GgaPbeStandard::EvalCorrelation(rho, sigma);
+  }
+};
 
 // BLYP: Becke 88 exchange + Lee-Yang-Parr correlation.
 struct BlypFunctor {
