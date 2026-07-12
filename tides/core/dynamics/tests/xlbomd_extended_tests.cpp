@@ -40,7 +40,7 @@ struct HarmonicModel {
     return E;
   }
 
-  std::vector<double> density(const std::vector<double>& R) {
+  std::vector<double> density(const std::vector<double>& /*R*/) {
     // Model: return empty density so auxiliary dynamics is skipped
     // (the model force_fn ignores P anyway).
     return {};

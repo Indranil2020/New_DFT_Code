@@ -1237,6 +1237,14 @@ add_executable(tides_tile_production_tests
 target_link_libraries(tides_tile_production_tests PRIVATE tides_core)
 add_test(NAME tile_production_gemm COMMAND tides_tile_production_tests)
 
+# E1: TileMat SCF integration test (P@H product in product path)
+add_executable(tides_tile_scf_tests
+  core/tile/tests/tile_scf_tests.cpp)
+target_link_libraries(tides_tile_scf_tests PRIVATE tides_core)
+set_target_properties(tides_tile_scf_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME tile_scf_matrix_operations COMMAND tides_tile_scf_tests)
+
 # ============================================================
 # Remediation Stream B: XL-BOMD extended tests (B1-B4)
 # ============================================================
@@ -1293,3 +1301,36 @@ add_executable(tides_energy_metering_tests
 target_link_libraries(tides_energy_metering_tests PRIVATE tides_core)
 add_test(NAME energy_metering_kwh_logging
   COMMAND tides_energy_metering_tests)
+
+# ============================================================
+# Remediation Stream E: Architecture integration (E1, E4-E7)
+# ============================================================
+# (tile_scf_tests already defined above with CUDA_RUNTIME_LIBRARY)
+
+add_executable(tides_mixed_precision_tests
+  core/tile/tests/mixed_precision_tests.cpp)
+target_link_libraries(tides_mixed_precision_tests PRIVATE tides_core)
+add_test(NAME mixed_precision_ozaki_gemm COMMAND tides_mixed_precision_tests)
+
+add_executable(tides_cuda_graph_scf_tests
+  core/tile/tests/cuda_graph_scf_tests.cpp)
+target_link_libraries(tides_cuda_graph_scf_tests PRIVATE tides_core)
+add_test(NAME cuda_graph_capture_replay COMMAND tides_cuda_graph_scf_tests)
+
+add_executable(tides_qtt_scf_tests
+  core/tile/tests/qtt_scf_tests.cpp)
+target_link_libraries(tides_qtt_scf_tests PRIVATE tides_core)
+add_test(NAME qtt_compression_svd_gemm COMMAND tides_qtt_scf_tests)
+
+add_executable(tides_aspc_tests
+  core/dynamics/tests/aspc_tests.cpp)
+target_link_libraries(tides_aspc_tests PRIVATE tides_core)
+add_test(NAME aspc_extrapolation_predictor COMMAND tides_aspc_tests)
+
+# ============================================================
+# Remediation C6: HSE screened exchange
+# ============================================================
+add_executable(tides_hse_screened_tests
+  core/hybrids/tests/hse_screened_tests.cpp)
+target_link_libraries(tides_hse_screened_tests PRIVATE tides_core)
+add_test(NAME hse_screened_exchange_omega COMMAND tides_hse_screened_tests)

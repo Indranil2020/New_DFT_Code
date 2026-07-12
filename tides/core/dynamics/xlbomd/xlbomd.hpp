@@ -210,7 +210,7 @@ class XLBOMD {
           // Apply the top low_rank_dim modes of the curvature as a correction.
           // For the CPU reference, this is approximated by projecting the
           // residual onto the largest-magnitude components of P.
-          const std::size_t lr_dim = std::min(state.kernel_cfg.low_rank_dim, np);
+          (void)std::min(state.kernel_cfg.low_rank_dim, np);  // lr_dim reserved for future rank projection
           // Simple low-rank: apply a softened scaling to the largest residuals.
           for (std::size_t i = 0; i < np; ++i) {
             double residual = state.P_0[i] - state.P[i];

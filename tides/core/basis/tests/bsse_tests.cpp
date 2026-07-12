@@ -29,7 +29,7 @@ int Fail(const std::string& msg) {
 // less negative but the basis functions still contribute.
 // This simulates the BSSE effect: a monomer in the dimer basis has
 // a lower energy than in its own basis.
-double ModelEnergy(const std::vector<int>& Z, const std::vector<double>& positions) {
+double ModelEnergy(const std::vector<int>& Z, const std::vector<double>& /*positions*/) {
   const std::size_t n = Z.size();
   if (n == 0) return 0.0;
 

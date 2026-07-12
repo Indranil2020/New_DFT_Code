@@ -1,9 +1,20 @@
-TIDES Theory Manual
-==================
+.. TIDES Theory Manual and API Documentation
+
+TIDES — Tensor-Core DFT Engine
+==============================
+
+TIDES (TIdes DFT Engine for Science) is a GPU-native, mixed-precision DFT
+engine built on a tile substrate with solver-broker dispatch, extended-Lagrangian
+Born-Oppenheimer molecular dynamics (XL-BOMD), and certified a-posteriori
+error control.
+
+This documentation set provides the mathematical derivations for every
+physics and math module, the solver broker regime dispatch logic, and the
+auto-generated API configuration reference.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Theory:
+   :caption: Theory Manual
 
    theory/nao_basis
    theory/scf
@@ -15,17 +26,11 @@ TIDES Theory Manual
 
 .. toctree::
    :maxdepth: 2
-   :caption: API:
+   :caption: API Reference
 
    api/config_options
 
-.. toctree::
-   :maxdepth: 1
-   :caption: References:
-
-   references
-
-Indices and tables
+Indices and Tables
 ==================
 
 * :ref:`genindex`

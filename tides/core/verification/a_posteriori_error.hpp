@@ -43,7 +43,7 @@ class APosterioriErrorControl {
   //                evec[k*n + j] = component j of eigenvector k)
   //   P_prev:       previous density (for density residual; empty = skip)
   static ErrorBounds Compute(
-      std::size_t n, std::size_t n_occ,
+      std::size_t n, std::size_t /*n_occ*/,
       const std::vector<double>& H, const std::vector<double>& S,
       const std::vector<double>& P,
       const std::vector<double>& eigenvalues,

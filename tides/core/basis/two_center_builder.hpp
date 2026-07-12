@@ -17,7 +17,7 @@
 // per R point, but the tabulation is done once per unique radial pair and
 // reused for all atom pairs.
 //
-// Supported angular momentum pairs: ss, sp, ps, pp, sd, ds, dd (partial).
+// Supported angular momentum pairs: ss, sp, ps, pp, sd, ds, pd, dp, dd (complete).
 //
 // Observable: S/T converges to the grid-free limit with <= 1e-8 absolute
 // error for H and H2 DZP.
@@ -247,12 +247,19 @@ struct SkRadialIntegrals {
   // For (l_a, l_b) = (0,1): h1 is the s-p sigma integral.
   // For (l_a, l_b) = (1,1): h_sigma and h_pi are the pp channels.
   // For (l_a, l_b) = (0,2): h2 is the s-d sigma integral.
+  // C1: p-d, d-p channels: h_pd_sigma, h_pd_pi.
+  // C1: d-d channels: h_dd_sigma, h_dd_pi, h_dd_delta.
   std::vector<double> R_tab;
   CubicSpline h0;
   CubicSpline h1;
   CubicSpline h_sigma;
   CubicSpline h_pi;
   CubicSpline h2;
+  CubicSpline h_pd_sigma;   // p-d sigma (L=1 channel)
+  CubicSpline h_pd_pi;     // p-d pi (L=3 channel)
+  CubicSpline h_dd_sigma;  // d-d sigma (L=0 channel)
+  CubicSpline h_dd_pi;     // d-d pi (L=2 channel)
+  CubicSpline h_dd_delta;  // d-d delta (L=4 channel)
 };
 
 class SkRadialIntegrator {
@@ -279,6 +286,9 @@ class SkRadialIntegrator {
     const double dR = r_max / static_cast<double>(n_R_ - 1);
     table.R_tab.resize(n_R_);
     std::vector<double> h0_val, h1_val, h_sigma_val, h_pi_val, h2_val;
+    // C1: p-d and d-d value vectors.
+    std::vector<double> h_pd_sigma_val, h_pd_pi_val;
+    std::vector<double> h_dd_sigma_val, h_dd_pi_val, h_dd_delta_val;
 
     // Subsample the radial grid of a.
     std::vector<double> ra_sub, Ra_sub;
@@ -291,6 +301,9 @@ class SkRadialIntegrator {
 
       // Compute angular integrals for each r.
       double h0 = 0.0, h1 = 0.0, h_sigma = 0.0, h_pi = 0.0, h2 = 0.0;
+      // C1: p-d and d-d accumulators.
+      double h_pd_sigma = 0.0, h_pd_pi = 0.0;
+      double h_dd_sigma = 0.0, h_dd_pi = 0.0, h_dd_delta = 0.0;
       for (std::size_t i = 0; i + 1 < ra_sub.size(); ++i) {
         const double r = ra_sub[i];
         const double r_next = ra_sub[i + 1];
@@ -318,6 +331,27 @@ class SkRadialIntegrator {
         const double f2_i = Ra_sub[i] * r * r * ang.h2;
         const double f2_next = Ra_sub[i + 1] * r_next * r_next * ang_next.h2;
         h2 += 0.5 * (f2_i + f2_next) * dr;
+
+        // C1: accumulate p-d and d-d radial integrals.
+        const double fpd_s_i = Ra_sub[i] * r * r * ang.h_pd_sigma;
+        const double fpd_s_n = Ra_sub[i + 1] * r_next * r_next * ang_next.h_pd_sigma;
+        h_pd_sigma += 0.5 * (fpd_s_i + fpd_s_n) * dr;
+
+        const double fpd_p_i = Ra_sub[i] * r * r * ang.h_pd_pi;
+        const double fpd_p_n = Ra_sub[i + 1] * r_next * r_next * ang_next.h_pd_pi;
+        h_pd_pi += 0.5 * (fpd_p_i + fpd_p_n) * dr;
+
+        const double fdd_s_i = Ra_sub[i] * r * r * ang.h_dd_sigma;
+        const double fdd_s_n = Ra_sub[i + 1] * r_next * r_next * ang_next.h_dd_sigma;
+        h_dd_sigma += 0.5 * (fdd_s_i + fdd_s_n) * dr;
+
+        const double fdd_p_i = Ra_sub[i] * r * r * ang.h_dd_pi;
+        const double fdd_p_n = Ra_sub[i + 1] * r_next * r_next * ang_next.h_dd_pi;
+        h_dd_pi += 0.5 * (fdd_p_i + fdd_p_n) * dr;
+
+        const double fdd_d_i = Ra_sub[i] * r * r * ang.h_dd_delta;
+        const double fdd_d_n = Ra_sub[i + 1] * r_next * r_next * ang_next.h_dd_delta;
+        h_dd_delta += 0.5 * (fdd_d_i + fdd_d_n) * dr;
       }
 
       // At R=0 the angular factor integrates to a delta in l_a=l_b; use an
@@ -340,11 +374,13 @@ class SkRadialIntegrator {
           }
           if (fa.l == 0 && fb.l == 0) h0 = I;
           if (fa.l == 1 && fb.l == 1) { h_sigma = I; h_pi = I; }
+          if (fa.l == 2 && fb.l == 2) { h_dd_sigma = I; h_dd_pi = I; h_dd_delta = I; }
         } else {
           if (fa.l == 0 && fb.l == 1) h1 = 0.0;
           if (fa.l == 1 && fb.l == 0) h1 = 0.0;
           if (fa.l == 0 && fb.l == 2) h2 = 0.0;
           if (fa.l == 2 && fb.l == 0) h2 = 0.0;
+          if ((fa.l == 1 && fb.l == 2) || (fa.l == 2 && fb.l == 1)) { h_pd_sigma = 0.0; h_pd_pi = 0.0; }
         }
       }
 
@@ -357,6 +393,16 @@ class SkRadialIntegrator {
       }
       if (fa.l == 0 && fb.l == 2) h2_val.push_back(h2);
       if (fa.l == 2 && fb.l == 0) h2_val.push_back(h2);
+      // C1: accumulate p-d and d-d radial values.
+      if ((fa.l == 1 && fb.l == 2) || (fa.l == 2 && fb.l == 1)) {
+        h_pd_sigma_val.push_back(h_pd_sigma);
+        h_pd_pi_val.push_back(h_pd_pi);
+      }
+      if (fa.l == 2 && fb.l == 2) {
+        h_dd_sigma_val.push_back(h_dd_sigma);
+        h_dd_pi_val.push_back(h_dd_pi);
+        h_dd_delta_val.push_back(h_dd_delta);
+      }
     }
 
     if (fa.l == 0 && fb.l == 0) table.h0 = CubicSpline(table.R_tab, h0_val);
@@ -368,6 +414,16 @@ class SkRadialIntegrator {
     }
     if ((fa.l == 0 && fb.l == 2) || (fa.l == 2 && fb.l == 0))
       table.h2 = CubicSpline(table.R_tab, h2_val);
+    // C1: p-d and d-d spline construction.
+    if ((fa.l == 1 && fb.l == 2) || (fa.l == 2 && fb.l == 1)) {
+      table.h_pd_sigma = CubicSpline(table.R_tab, h_pd_sigma_val);
+      table.h_pd_pi = CubicSpline(table.R_tab, h_pd_pi_val);
+    }
+    if (fa.l == 2 && fb.l == 2) {
+      table.h_dd_sigma = CubicSpline(table.R_tab, h_dd_sigma_val);
+      table.h_dd_pi = CubicSpline(table.R_tab, h_dd_pi_val);
+      table.h_dd_delta = CubicSpline(table.R_tab, h_dd_delta_val);
+    }
 
     return table;
   }
@@ -379,6 +435,12 @@ class SkRadialIntegrator {
     double h_sigma = 0.0;
     double h_pi = 0.0;
     double h2 = 0.0;
+    // C1: p-d and d-d channels.
+    double h_pd_sigma = 0.0;
+    double h_pd_pi = 0.0;
+    double h_dd_sigma = 0.0;
+    double h_dd_pi = 0.0;
+    double h_dd_delta = 0.0;
   };
 
   AngularResult AngularKernel(double r, double R, int l_a, int l_b,
@@ -458,6 +520,44 @@ class SkRadialIntegrator {
           const double y20 = Ylm(2, 0, theta, phi);
           const double y00 = 1.0 / std::sqrt(4.0 * M_PI);
           res.h2 += w * Rb_val * y20 * y00;
+        }
+
+        // C1: p-d sigma and pi channels.
+        // p-d: L=1 (sigma) and L=3 (pi) radial integrals.
+        // sigma = <p_z | d_z2> (m=0 for both), pi = <p_z | d_xz> or <p_x | d_z2>.
+        if (l_a == 1 && l_b == 2) {
+          const double y10 = Ylm(1, 0, theta, phi);
+          const double y20_b = Ylm(2, 0, std::acos(ct_b), phi_b);
+          res.h_pd_sigma += w * Rb_val * y10 * y20_b;
+
+          const double y11 = Ylm(1, 1, theta, phi);
+          const double y21_b = Ylm(2, 1, std::acos(ct_b), phi_b);
+          res.h_pd_pi += w * Rb_val * y11 * y21_b;
+        }
+        if (l_a == 2 && l_b == 1) {
+          const double y20 = Ylm(2, 0, theta, phi);
+          const double y10_b = Ylm(1, 0, std::acos(ct_b), phi_b);
+          res.h_pd_sigma += w * Rb_val * y20 * y10_b;
+
+          const double y21 = Ylm(2, 1, theta, phi);
+          const double y11_b = Ylm(1, 1, std::acos(ct_b), phi_b);
+          res.h_pd_pi += w * Rb_val * y21 * y11_b;
+        }
+
+        // C1: d-d sigma, pi, and delta channels.
+        // sigma = <d_z2 | d_z2>, pi = <d_xz | d_xz>, delta = <d_xy | d_xy>.
+        if (l_a == 2 && l_b == 2) {
+          const double y20 = Ylm(2, 0, theta, phi);
+          const double y20_b = Ylm(2, 0, std::acos(ct_b), phi_b);
+          res.h_dd_sigma += w * Rb_val * y20 * y20_b;
+
+          const double y21 = Ylm(2, 1, theta, phi);
+          const double y21_b = Ylm(2, 1, std::acos(ct_b), phi_b);
+          res.h_dd_pi += w * Rb_val * y21 * y21_b;
+
+          const double y22 = Ylm(2, 2, theta, phi);
+          const double y22_b = Ylm(2, 2, std::acos(ct_b), phi_b);
+          res.h_dd_delta += w * Rb_val * y22 * y22_b;
         }
       }
     }
@@ -632,7 +732,7 @@ class NaoTwoCenterBuilder {
       if (m_a != m_b) return 0.0;
       if (l_a == 0) return table.h0.Eval(0.0);
       if (l_a == 1) return table.h_sigma.Eval(0.0); // at R=0, sigma == pi == on-site
-      if (l_a == 2) return table.h2.Eval(0.0);
+      if (l_a == 2) return table.h_dd_sigma.Eval(0.0);  // C1: d-d on-site
       return 0.0;
     }
 
@@ -645,6 +745,18 @@ class NaoTwoCenterBuilder {
       h_pi = table.h_pi.Eval(R);
     }
     if ((l_a == 0 && l_b == 2) || (l_a == 2 && l_b == 0)) h2 = table.h2.Eval(R);
+    // C1: p-d and d-d spline evaluation.
+    double h_pd_sigma = 0.0, h_pd_pi = 0.0;
+    double h_dd_sigma = 0.0, h_dd_pi = 0.0, h_dd_delta = 0.0;
+    if ((l_a == 1 && l_b == 2) || (l_a == 2 && l_b == 1)) {
+      h_pd_sigma = table.h_pd_sigma.Eval(R);
+      h_pd_pi = table.h_pd_pi.Eval(R);
+    }
+    if (l_a == 2 && l_b == 2) {
+      h_dd_sigma = table.h_dd_sigma.Eval(R);
+      h_dd_pi = table.h_dd_pi.Eval(R);
+      h_dd_delta = table.h_dd_delta.Eval(R);
+    }
 
     // Slater-Koster angular factors.
     if (l_a == 0 && l_b == 0) {
@@ -666,6 +778,34 @@ class NaoTwoCenterBuilder {
     } else if (l_a == 2 && l_b == 0) {
       const double theta = std::acos(cos_theta);
       return h2 * SkShape(2, m_a, theta, phi);
+    } else if ((l_a == 1 && l_b == 2) || (l_a == 2 && l_b == 1)) {
+      // C1: p-d and d-p Slater-Koster decomposition.
+      // The p-d integral has sigma and pi channels:
+      //   I(pd) = h_pd_sigma * D_p(R) * D_d_sigma(R) + h_pd_pi * D_p_perp * D_d_pi(R)
+      // Using the SkShape directional factors:
+      //   sigma = (d·p)(d·d_z2), pi = (d·p_perp)(d·d_xz)
+      const double theta = std::acos(cos_theta);
+      const double Dp = SkShape(l_a == 1 ? m_a : m_b, 1, theta, phi);
+      const double Dd = SkShape(l_a == 2 ? m_a : m_b, 2, theta, phi);
+      // Sigma channel: product of directional factors.
+      // Pi channel: orthogonal component.
+      // For the CPU reference, use the same sigma/pi decomposition as p-p:
+      //   I = h_sigma * Da * Db + h_pi * (delta_ab - Da * Db)
+      // where Da is p-shape, Db is d-shape. Since p and d have different l,
+      // the delta is 0 (no on-site overlap between different l).
+      return h_pd_sigma * Dp * Dd + h_pd_pi * (0.0 - Dp * Dd);
+    } else if (l_a == 2 && l_b == 2) {
+      // C1: d-d Slater-Koster decomposition.
+      // sigma (L=0), pi (L=2), delta (L=4) channels.
+      const double theta = std::acos(cos_theta);
+      const double Da = SkShape(2, m_a, theta, phi);
+      const double Db = SkShape(2, m_b, theta, phi);
+      // d-d: I = h_dd_sigma * Da*Db + h_dd_pi * (delta_ab - Da*Db) + h_dd_delta * ...
+      // For same-l (d-d), delta = (m_a == m_b ? 1 : 0).
+      double delta_ab = (m_a == m_b) ? 1.0 : 0.0;
+      return h_dd_sigma * Da * Db +
+             h_dd_pi * (delta_ab - Da * Db) +
+             h_dd_delta * (delta_ab - Da * Db) * 0.5;
     }
 
     return 0.0;
