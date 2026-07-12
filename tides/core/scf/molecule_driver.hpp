@@ -59,6 +59,7 @@
 #include "grid/xc.hpp"
 #include "grid/xc/xc_engine.hpp"
 #include "forces/analytic_forces.hpp"
+#include "ham/ham_builder.hpp"
 
 namespace tides::scf {
 
@@ -350,10 +351,9 @@ class MoleculeDriver {
       total_vmat_ms += cache.vmat_build_ms;
 
       // --- Step E: Assemble H = T + V_ext + V_H + V_xc ---
-      cache.H.assign(n * n, 0.0);
-      for (std::size_t i = 0; i < static_cast<std::size_t>(mol.n_basis) * mol.n_basis; ++i) {
-        cache.H[i] = T[i] + V_ext[i] + cache.V_H[i] + cache.V_xc[i];
-      }
+      cache.H = tides::ham::AssembleH(
+          static_cast<std::size_t>(mol.n_basis), T, V_ext, cache.V_H, cache.V_xc,
+          std::vector<double>{});
 
       scf_iter_count++;
       return cache.H;

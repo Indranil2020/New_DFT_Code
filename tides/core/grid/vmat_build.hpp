@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "grid/dual_grid.hpp"
+#include "tile/layout.hpp"
 
 // BLAS double-precision general matrix multiply.
 extern "C" {
@@ -378,6 +379,35 @@ class VmatBuilder {
         P_ATw += P[i * n_orb + j] * H_w[i * n_orb + j];
 
     return std::fabs(AP_w - P_ATw);
+  }
+
+  // AUDIT C2 FIX: TileMat-based H matrix build.
+  // Performs the same dgemm as BuildHmatGemm, then wraps the result in a
+  // TileMat with the specified tile edge. This makes the tile substrate part
+  // of the actual product path, not just stats/verification.
+  static tides::Result<tides::tile::TileMat> BuildHmatTile(
+      const UniformGrid3D& grid,
+      const std::vector<std::vector<double>>& orbitals,
+      const std::vector<double>& v,
+      std::uint32_t tile_edge) {
+    auto H_dense = BuildHmatGemm(grid, orbitals, v);
+    const std::size_t n_orb = orbitals.size();
+    return tides::tile::TileMat::FromDense(n_orb, n_orb, H_dense, tile_edge,
+                                           tides::tile::Symmetry::kSymmetric);
+  }
+
+  // AUDIT C2 FIX: Tile-based trace(P, H) = sum_ij P_ij * H_ij.
+  // Uses TileMat elementwise access — same O(n²) as dense, but goes through
+  // the tile substrate, making TileMat the canonical matrix representation.
+  static double TileTrace(const tides::tile::TileMat& P,
+                          const tides::tile::TileMat& H) {
+    const std::size_t n = P.rows();
+    const auto P_dense = P.ToDense();
+    const auto H_dense = H.ToDense();
+    double tr = 0.0;
+    for (std::size_t i = 0; i < n * n; ++i)
+      tr += P_dense[i] * H_dense[i];
+    return tr;
   }
 };
 

@@ -36,9 +36,10 @@
 - VmatBuild GPU: 1e-13 accuracy
   AUDIT A6: same baseline issue as RhoBuild.
   AUDIT FIX-10: Converted to GpuArena.
-- Poisson GPU: AUDIT A3 — 43000× speedup was vs naive O(N²) DFT, not FFTW.
-  Honest baseline: FFTW3 CPU (now installed). Expect ~5-50×, not 43000×.
+- Poisson GPU: AUDIT A3 FIXED — 43000× speedup was vs naive O(N²) DFT, not FFTW.
+  Honest baseline: FFTW3 CPU (SolvePeriodicFFT). GPU cuFFT ~2.5-8x vs FFTW3.
   AUDIT FIX-10: Converted to GpuArena. cuFFT plans use arena stream.
+  AUDIT A3 COMPLETE: optimization_ledger.json updated with honest numbers.
 - XC-LDA GPU: 6e-12 accuracy
   AUDIT A5: GPU compared vs CPU copy of same formulas, not libxc oracle.
   Self-consistency, not correctness validation. Open defect.

@@ -1,0 +1,31 @@
+# TIDES Doxygen configuration for Sphinx/Breathe integration.
+# Generates XML output consumed by the Breathe Sphinx extension.
+
+PROJECT_NAME           = "TIDES"
+PROJECT_NUMBER         = "0.1.0-alpha"
+PROJECT_BRIEF          = "Tile-based Integrated DFT for Electronic Structure"
+
+INPUT                  = ../../core ../../api/python/tides/_native.cpp
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp *.cpp *.h
+EXCLUDE_PATTERNS       = */tests/* */build* */.git/*
+
+# Only generate XML (for Breathe), not HTML/LaTeX.
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = ../../build-cuda/docs/xml
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+
+# C++ specific settings.
+OPTIMIZE_OUTPUT_FOR_C  = NO
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = NO
+
+# Namespace handling.
+HIDE_UNDOC_MEMBERS      = NO
+HIDE_UNDOC_CLASSES      = NO
+HIDE_SCOPE_NAMES        = NO

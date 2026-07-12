@@ -1222,7 +1222,8 @@ endif()
 
 # Broker dispatch test: R0/R1/R2/R3 selection + ChFSI validation
 add_executable(tides_broker_dispatch_tests
-  core/solvers/tests/broker_dispatch_tests.cpp)
+  core/solvers/tests/broker_dispatch_tests.cpp
+  core/solvers/broker.cpp)
 target_link_libraries(tides_broker_dispatch_tests PRIVATE
   tides_solvers tides_scf)
 if(LAPACK_FOUND)
@@ -1235,3 +1236,60 @@ add_executable(tides_tile_production_tests
   core/tile/tests/tile_production_tests.cpp)
 target_link_libraries(tides_tile_production_tests PRIVATE tides_core)
 add_test(NAME tile_production_gemm COMMAND tides_tile_production_tests)
+
+# ============================================================
+# Remediation Stream B: XL-BOMD extended tests (B1-B4)
+# ============================================================
+add_executable(tides_xlbomd_extended_tests
+  core/dynamics/tests/xlbomd_extended_tests.cpp)
+target_link_libraries(tides_xlbomd_extended_tests PRIVATE tides_core)
+set_target_properties(tides_xlbomd_extended_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME xlbomd_extended_nve_nhc_ksa_shadow
+  COMMAND tides_xlbomd_extended_tests)
+
+# ============================================================
+# Remediation Stream C: D4, point-group, BSSE, k-points, Mermin
+# ============================================================
+add_executable(tides_d4_tests
+  core/hybrids/tests/d4_tests.cpp)
+target_link_libraries(tides_d4_tests PRIVATE tides_core)
+add_test(NAME d4_dispersion_charge_dependent COMMAND tides_d4_tests)
+
+add_executable(tides_point_group_tests
+  core/common/tests/point_group_tests.cpp)
+target_link_libraries(tides_point_group_tests PRIVATE tides_core)
+add_test(NAME point_group_detection_symmetrize
+  COMMAND tides_point_group_tests)
+
+add_executable(tides_bsse_tests
+  core/basis/tests/bsse_tests.cpp)
+target_link_libraries(tides_bsse_tests PRIVATE tides_core)
+add_test(NAME bsse_counterpoise_correction COMMAND tides_bsse_tests)
+
+add_executable(tides_kpoints_tests
+  core/tile/tests/kpoints_tests.cpp)
+target_link_libraries(tides_kpoints_tests PRIVATE tides_core)
+add_test(NAME kpoints_monkhorst_pack_bloch_phase
+  COMMAND tides_kpoints_tests)
+
+add_executable(tides_mermin_tests
+  core/scf/tests/mermin_tests.cpp)
+target_link_libraries(tides_mermin_tests PRIVATE tides_core)
+add_test(NAME mermin_finite_temperature_occupations
+  COMMAND tides_mermin_tests)
+
+# ============================================================
+# Remediation Stream D: A-posteriori error control + energy metering
+# ============================================================
+add_executable(tides_a_posteriori_tests
+  core/verification/tests/a_posteriori_tests.cpp)
+target_link_libraries(tides_a_posteriori_tests PRIVATE tides_core)
+add_test(NAME a_posteriori_error_bounds
+  COMMAND tides_a_posteriori_tests)
+
+add_executable(tides_energy_metering_tests
+  core/verification/tests/energy_metering_tests.cpp)
+target_link_libraries(tides_energy_metering_tests PRIVATE tides_core)
+add_test(NAME energy_metering_kwh_logging
+  COMMAND tides_energy_metering_tests)

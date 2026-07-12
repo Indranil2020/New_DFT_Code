@@ -103,7 +103,7 @@ int RunBenchmark() {
         E += 0.5 * k * R[i] * R[i];
       return E;
     };
-    auto force_fn = [&](const std::vector<double>& R) -> std::vector<double> {
+    auto force_fn = [&](const std::vector<double>& R, const std::vector<double>& P) -> std::vector<double> {
       std::vector<double> F(n_dof, 0.0);
       for (std::size_t i = 0; i < n_dof; i += 3)
         F[i] = -k * R[i];

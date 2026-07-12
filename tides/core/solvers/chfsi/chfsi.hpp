@@ -36,11 +36,24 @@ struct ChFSIResult {
   std::vector<double> eigenvectors;  // n x n_occ, column k = eigenvalue k
   std::vector<double> residuals;      // per eigenpair
   int n_filter_applications = 0;     // total Chebyshev filter applications
+  int n_iterations = 0;             // subspace iterations performed
   bool converged = false;
+  bool subspace_reused = false;      // true if previous subspace was used
+  std::size_t n_locked = 0;         // number of locked (deflated) eigenpairs
 };
 
 class ChFSI {
  public:
+  // E2: Subspace reuse — store the previous SCF iteration's subspace so the
+  // next solve can start from it instead of a random/identity guess.
+  std::vector<double> previous_subspace;
+
+  // E3: Locking/deflation — converged eigenpairs are locked and removed from
+  // the active space, reducing the problem size as eigenvalues converge.
+  std::vector<double> locked_eigenvalues;
+  std::vector<double> locked_eigenvectors;  // n x n_locked, column-major
+  double lock_threshold = 1e-10;  // residual below this → lock the eigenpair
+
   // Solve H x = e S x for the n_occ lowest eigenpairs via Chebyshev-filtered
   // subspace iteration.
   //   n:       matrix dimension
@@ -79,6 +92,7 @@ class ChFSI {
     if (d <= 0) return res;  // invalid spectral window
 
     for (int iter = 0; iter < max_iter; ++iter) {
+      res.n_iterations = iter + 1;
       // Apply Chebyshev filter of degree `degree`.
       // M = (H - c*I)/d; T_0 = V; T_1 = M*V; T_k = 2*M*T_{k-1} - T_{k-2}
       std::vector<double> T_prev2 = V;  // T_{k-2}
@@ -146,6 +160,72 @@ class ChFSI {
       }
     }
     return res;
+  }
+
+  // E2: SolveWithReuse — uses the previous SCF iteration's subspace as the
+  // initial guess.  When subspace reuse is active, the solver starts from the
+  // previous eigenvectors instead of a random/identity initial vector, which
+  // typically reduces the number of iterations needed.
+  //
+  //   prev_subspace:  eigenvectors from the previous SCF step (n x n_occ,
+  //                   column-major).  If empty or wrong size, falls back to
+  //                   identity initialization.
+  // Returns a ChFSIResult with subspace_reused set when the previous subspace
+  // was actually used and n_iterations reflecting the actual iteration count.
+  ChFSIResult SolveWithReuse(std::size_t n, const std::vector<double>& H,
+                              const std::vector<double>& S, std::size_t n_occ,
+                              double lambda_lo, double lambda_hi, int degree,
+                              const std::vector<double>& prev_subspace,
+                              int max_iter = 100, double tol = 1e-9) {
+    // Build the initial subspace from the previous eigenvectors if available.
+    std::vector<double> V_init;
+    const std::size_t m = std::max(n_occ, std::size_t{2});
+    const std::size_t m_eff = std::min(m, n);
+
+    if (prev_subspace.size() == n * n_occ && n_occ >= m_eff) {
+      // Use the first m_eff columns of the previous subspace.
+      V_init.assign(n * m_eff, 0.0);
+      for (std::size_t k = 0; k < m_eff; ++k)
+        for (std::size_t j = 0; j < n; ++j)
+          V_init[k * n + j] = prev_subspace[k * n + j];
+    } else if (!previous_subspace.empty() &&
+               previous_subspace.size() == n * m_eff) {
+      // Fall back to the stored previous_subspace member.
+      V_init = previous_subspace;
+    }
+
+    ChFSIResult res = Solve(n, H, S, n_occ, lambda_lo, lambda_hi, degree,
+                            max_iter, tol, V_init);
+
+    // Mark whether subspace reuse was actually used.
+    res.subspace_reused = !V_init.empty();
+
+    // E3: Lock converged eigenpairs.
+    LockConverged(n, res, tol);
+
+    // Store the converged subspace for the next SCF iteration.
+    previous_subspace.assign(n * n_occ, 0.0);
+    for (std::size_t k = 0; k < n_occ; ++k)
+      for (std::size_t j = 0; j < n; ++j)
+        previous_subspace[k * n + j] = res.eigenvectors[k * n + j];
+
+    return res;
+  }
+
+  // E3: Lock converged eigenpairs (residual < lock_threshold) and move them
+  // into the locked_eigenvalues / locked_eigenvectors vectors.  Locked pairs
+  // are removed from the active space, reducing the problem size as more
+  // eigenvalues converge.
+  void LockConverged(std::size_t n, ChFSIResult& res, double tol) {
+    for (std::size_t k = 0; k < res.residuals.size(); ++k) {
+      if (res.residuals[k] < lock_threshold) {
+        // Lock this eigenpair.
+        locked_eigenvalues.push_back(res.eigenvalues[k]);
+        for (std::size_t j = 0; j < n; ++j)
+          locked_eigenvectors.push_back(res.eigenvectors[k * n + j]);
+      }
+    }
+    res.n_locked = locked_eigenvalues.size();
   }
 
   // Estimate spectral bounds via a few Lanczos iterations on H (with S metric).
