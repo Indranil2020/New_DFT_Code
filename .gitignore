@@ -7,6 +7,9 @@ build-default/
 build-verify/
 build*
 
+# libxc build output (from autotools: configure --prefix=$PWD/../install && make install)
+external/install/
+
 
 # Python cache
 __pycache__/

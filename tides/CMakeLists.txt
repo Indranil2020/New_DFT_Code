@@ -333,10 +333,15 @@ if(TIDES_ENABLE_CUDA)
       core/grid/xc/kernels/xc_gga_kernel.cu
       core/grid/xc/kernels/xc_mgga_kernel.cu
       core/grid/xc/tier2/cpu_fallback.cpp
-      core/grid/xc/tier_stubs.cpp
-    )
+      core/grid/xc/tier0/tier0_pol.cu
+      core/grid/xc/tier1/mgga_tpss.cu
+      core/grid/xc/tier1/mgga_scan.cu
+      core/grid/xc/tier1/mgga_r2scan.cu
+      core/grid/xc/tier1/mgga_m06_2x.cu
+      core/grid/xc/tier1/rsh_hse06.cu
+      core/grid/xc/tier1/rsh_wb97x.cu)
     target_link_libraries(tides_cuda_grid PUBLIC tides_grid tides_cuda_tile cufft)
-    # # add_dependencies disabled  # disabled: libxc submodule not available
+    add_dependencies(tides_cuda_grid tides_peephole_maple2c)
     target_include_directories(tides_cuda_grid PRIVATE
       "${TIDES_PEEPHOLE_OUTDIR}"
       "${TIDES_LIBXC_MAPLE2C_DIR}")
@@ -776,9 +781,9 @@ target_link_libraries(tides_grid INTERFACE ${FFTW3_LIBRARIES})
 # libxc installed library (CPU oracle + Tier-2 fallback).  Built from the
 # external/libxc submodule (tag 7.0.0) via autotools:
 #   cd external/libxc && autoreconf -i && ./configure --prefix=$PWD/../install && make install
-set(LIBXC_ROOT "/home/niel/src/libxc-7.0.0-install" CACHE PATH "libxc install prefix")
-find_path(LIBXC_INCLUDE_DIR xc.h PATHS ${LIBXC_ROOT}/include REQUIRED)
-find_library(LIBXC_LIBRARY NAMES xc PATHS ${LIBXC_ROOT}/lib REQUIRED)
+set(LIBXC_ROOT "${CMAKE_SOURCE_DIR}/../external/install" CACHE PATH "libxc install prefix")
+find_path(LIBXC_INCLUDE_DIR xc.h HINTS ${LIBXC_ROOT}/include REQUIRED)
+find_library(LIBXC_LIBRARY NAMES xc HINTS ${LIBXC_ROOT}/lib REQUIRED)
 message(STATUS "libxc found: ${LIBXC_LIBRARY} (headers: ${LIBXC_INCLUDE_DIR})")
 target_include_directories(tides_grid INTERFACE ${LIBXC_INCLUDE_DIR})
 target_link_libraries(tides_grid INTERFACE ${LIBXC_LIBRARY})
