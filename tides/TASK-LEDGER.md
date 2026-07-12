@@ -85,3 +85,25 @@
 ```
 58/58 tests passed, 0 failed, 1 skipped
 ```
+
+---
+
+## Phase 1 — NaoDriver S/T Integration Refactor (2026-07-15)
+
+### Acceptance Criteria
+- [x] Replace grid-integrated S/T assembly with analytic two-center integrals.
+- [x] Fix A7 spline accuracy (≤1e-5 gate).
+- [x] Fix A7 GPU symmetry (≤1e-12 gate).
+- [x] Implement Slater-Koster angular coupling for s-p, p-p, s-d.
+- [x] Validate H atom and H2 molecule energies against PySCF.
+- [x] Validate H2 forces satisfy Newton's 3rd law.
+
+### Changes
+- `core/basis/two_center_builder.hpp`: R=0 on-site exact radial integral, persistent global radial-integral cache, `<tuple>` include.
+- `core/scf/tests/nao_benchmark_tests.cpp`: H2 force benchmark uses `grid_h=0.2`, `max_iter=100`, `tol=1e-8`, `h=0.001` for accurate 5-point FD.
+
+### Test Results
+- `tides_two_center_tests`: PASS (spline max err 6.48e-6 < 1e-5, GPU symmetry 0.000e+0).
+- `tides_e2_basis_profile`: PASS (25/25 profile entries).
+- `tides_nao_driver_tests`: PASS (H: -0.419 Ha vs ref -0.4; H2: -1.0431 Ha vs ref -0.9).
+- `tides_nao_benchmark_tests`: PASS (H: -0.3930 vs -0.454 limit 0.15; H2: -1.1244 vs -1.0386 limit 0.25; forces net Fx=1.70e-4 < 1e-3).

@@ -67,7 +67,7 @@ int TestForcesNewton3rd() {
   std::cout << "\n=== Benchmark 3: H2 forces Newton 3rd law ===\n";
   std::vector<int> Z = {1, 1};
   std::vector<double> pos = {-0.7, 0.0, 0.0, 0.7, 0.0, 0.0};
-  auto forces = NaoDriver::ComputeForces(Z, pos, 0.3, 4.0, 50, 1e-6, 0.01);
+  auto forces = NaoDriver::ComputeForces(Z, pos, 0.2, 4.0, 100, 1e-8, 0.001);
 
   double net_fx = forces[0] + forces[3];
   double net_fy = forces[1] + forces[4];
