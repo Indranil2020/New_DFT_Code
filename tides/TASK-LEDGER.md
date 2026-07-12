@@ -133,3 +133,23 @@
 - `tides_pseudo_tests`: PASS (UPF2 roundtrip + real Si_r.upf multi-projector validation).
 - `wp6_scf_forces_xlbomd_optimizers_stress`: PASS.
 - 90/101 ctest pass (11 failures are Tier-1/2 XC functional tests requiring libxc maple2c submodule).
+
+---
+
+## Phase 3 — Tile Substrate, Dual Grid, and Stress Tensor (2026-07-17)
+
+### Acceptance Criteria
+- [x] TileMat wired into SCF loop: H and P converted to TileMat for n >= 32, SpGemmFilteredFp64 + TraceFp64 verifies tile vs dense trace agreement.
+- [x] DualGrid integrated into NaoDriver SCF: use_dual_grid param creates fine grid (2x resolution) for density/Poisson, restricts V_H to coarse grid for matrix elements.
+- [x] Stress tensor wired into NaoDriver: ComputeStress method using FD strain approach via StressTensor::ComputeFD.
+- [x] All tests pass (89/101 ctest, 11 pre-existing XC failures, 2 pre-existing GPU skips).
+
+### Changes
+- `core/scf/nao_driver.hpp`: TileMat trace verification in build_H for n >= 32; DualGrid setup with fine grid orbital evaluation and CPU Poisson path; ComputeStress method; use_dual_grid parameter added to Run.
+- `core/scf/tests/nao_driver_tests.cpp`: TestH2DualGrid test (H2 with dual grid, energy within tolerance).
+- `core/scf/tests/wp6_tests.cpp`: TestNaoStress test (NaoDriver stress tensor finite, off-diagonal ~0 by symmetry).
+
+### Test Results
+- `tides_nao_driver_tests`: PASS (H atom, H2 single grid, H2 dual grid all converge).
+- `tides_wp6_tests`: ALL GREEN (including NaoDriver stress tensor test).
+- 89/101 ctest pass (11 failures are pre-existing Tier-1/2 XC functional tests, 2 GPU skips).

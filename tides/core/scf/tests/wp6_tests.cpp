@@ -8,6 +8,7 @@
 #include "scf/scf_driver.hpp"
 #include "scf/energy_assembly.hpp"
 #include "scf/stress.hpp"
+#include "scf/nao_driver.hpp"
 #include "forces/analytic_forces.hpp"
 #include "dynamics/xlbomd/xlbomd.hpp"
 #include "dynamics/optimizers/optimizers.hpp"
@@ -233,6 +234,33 @@ int TestStress() {
   return 0;
 }
 
+// T6.4b: NaoDriver stress tensor — verify it runs and produces finite values.
+int TestNaoStress() {
+  std::cout << "\n=== T6.4b: NaoDriver stress tensor ===\n";
+  std::vector<int> Z = {1, 1};
+  std::vector<double> pos = {0.0, 0.0, 0.0, 1.4, 0.0, 0.0};
+  auto stress = tides::scf::NaoDriver::ComputeStress(Z, pos, 0.3, 4.0, 30, 1e-4, 1e-4);
+  std::cout << "  stress tensor:\n";
+  for (int a = 0; a < 3; ++a) {
+    std::cout << "    ";
+    for (int b = 0; b < 3; ++b)
+      std::cout << stress[a * 3 + b] << "  ";
+    std::cout << "\n";
+  }
+  // Check all components are finite.
+  for (int i = 0; i < 9; ++i)
+    if (!std::isfinite(stress[i]))
+      return Fail("T6.4b: stress component " + std::to_string(i) + " is not finite");
+  // For a symmetric molecule at equilibrium, diagonal stress should be small.
+  // Off-diagonal should be near zero by symmetry.
+  for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < 3; ++b)
+      if (a != b && std::fabs(stress[a * 3 + b]) > 1e-2)
+        return Fail("T6.4b: off-diagonal stress too large");
+  std::cout << "T6.4b: GREEN (NaoDriver stress finite, off-diagonal ~0)\n";
+  return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -242,6 +270,7 @@ int main() {
   if (TestXLBOMD()) return 1;
   if (TestOptimizers()) return 1;
   if (TestStress()) return 1;
+  if (TestNaoStress()) return 1;
   std::cout << "\nwp6_tests: ALL GREEN\n";
   return 0;
 }

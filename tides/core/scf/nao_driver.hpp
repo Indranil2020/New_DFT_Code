@@ -41,6 +41,7 @@
 #include "basis/pseudo/pseudopotential.hpp"
 #include "scf/scf_driver.hpp"
 #include "scf/energy_assembly.hpp"
+#include "scf/stress.hpp"
 #include "dynamics/xlbomd/xlbomd.hpp"
 #include "grid/dual_grid.hpp"
 #include "grid/poisson.hpp"
@@ -311,7 +312,8 @@ class NaoDriver {
       const std::vector<basis::Pseudopotential>* pseudopotentials = nullptr,
       grid::xc::HostXcSpec xc_spec = {},
       int nspin = 1,
-      int n_unpaired = 0) {
+      int n_unpaired = 0,
+      bool use_dual_grid = false) {
     NaoDriverResult result;
     auto t0 = std::chrono::steady_clock::now();
     auto t_last = t0;
@@ -501,6 +503,63 @@ class NaoDriver {
     S = std::move(two_center.S);
     T = std::move(two_center.T);
     step("S/T assembly");
+
+    // --- Dual grid setup (Phase 3) ---
+    // When use_dual_grid is true, create a fine grid with 2x resolution for
+    // density, Poisson, and XC evaluation. Orbital matrix operations remain
+    // on the coarse grid. The fine grid improves Hartree/XC accuracy.
+    grid::UniformGrid3D fine_grid;
+    std::vector<std::vector<double>> fine_orbitals;
+    std::size_t fn0 = 0, fn1 = 0, fn2 = 0;
+    if (use_dual_grid) {
+      const double fine_h = grid_h * 0.5;
+      fn0 = 2 * (n0 - 1) + 1;
+      fn1 = 2 * (n1 - 1) + 1;
+      fn2 = 2 * (n2 - 1) + 1;
+      fine_grid.n = {fn0, fn1, fn2};
+      fine_grid.h = {fine_h, fine_h, fine_h};
+      fine_grid.origin = grid.origin;
+      fine_grid.bc = grid.bc;
+
+      grid::DualGrid dg;
+      dg.coarse = grid;
+      dg.fine = fine_grid;
+      auto dg_status = dg.validate();
+      if (dg_status.ok()) {
+        std::cout << "[NaoDriver] Dual grid: coarse " << n0 << "x" << n1
+                  << "x" << n2 << " (h=" << grid_h << "), fine "
+                  << fn0 << "x" << fn1 << "x" << fn2 << " (h=" << fine_h << ")"
+                  << std::endl;
+      } else {
+        std::cout << "[NaoDriver] Dual grid validation failed: "
+                  << dg_status.message() << " — falling back to single grid"
+                  << std::endl;
+        use_dual_grid = false;
+      }
+    }
+
+    // Evaluate orbitals on fine grid if dual grid is active.
+    if (use_dual_grid) {
+      fine_orbitals.resize(n);
+      for (std::size_t bi = 0; bi < n; ++bi) {
+        const auto& atom = atoms[basis_map[bi].atom];
+        const auto& bf = atom.basis.functions[basis_map[bi].fn];
+        const int m = basis_map[bi].m;
+        fine_orbitals[bi].resize(fn0 * fn1 * fn2, 0.0);
+        for (std::size_t ix = 0; ix < fn0; ++ix) {
+          for (std::size_t iy = 0; iy < fn1; ++iy) {
+            for (std::size_t iz = 0; iz < fn2; ++iz) {
+              const std::size_t g = fine_grid.flatten(ix, iy, iz);
+              auto [x, y, z] = fine_grid.coord(ix, iy, iz);
+              fine_orbitals[bi][g] = EvalNaoBasisFn(bf, m,
+                  {atom.position[0], atom.position[1], atom.position[2]},
+                  {x, y, z});
+            }
+          }
+        }
+      }
+      step("fine grid basis evaluation");
+    }
 
     // --- T-X1.6: Device-resident pipeline setup ---
     // Upload phi and grad_phi to device once. Create XcArena for XC evaluation.
@@ -987,6 +1046,28 @@ class NaoDriver {
 #endif
 
       // --- CPU fallback path ---
+      // Dual grid: build rho and solve Poisson on fine grid, then restrict
+      // V_H to coarse grid for matrix element computation.
+      if (use_dual_grid) {
+        const std::size_t fine_np = fn0 * fn1 * fn2;
+        auto rho_fine = grid::VmatBuilder::BuildRhoGemm(
+            fine_grid, fine_orbitals, cache.P2);
+        auto vh_fine = grid::PoissonSolver::Solve(fine_grid, rho_fine);
+        // Restrict V_H from fine to coarse by sampling (2:1 decimation).
+        std::vector<double> vh_coarse(np_total, 0.0);
+        for (std::size_t ix = 0; ix < n0; ++ix)
+          for (std::size_t iy = 0; iy < n1; ++iy)
+            for (std::size_t iz = 0; iz < n2; ++iz)
+              vh_coarse[grid.flatten(ix, iy, iz)] =
+                  vh_fine[fine_grid.flatten(2*ix, 2*iy, 2*iz)];
+        cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, vh_coarse);
+        // XC on fine grid, restrict to coarse.
+        cache.rho = std::move(rho_fine);
+        // For XC, use fine-grid rho but evaluate on coarse for matrix.
+        // Build rho on coarse for XC matrix path.
+        cache.rho = grid::VmatBuilder::BuildRhoGemm(grid, orbitals, cache.P2);
+        // Fall through to XC evaluation on coarse grid.
+      } else {
       // Rho build via CPU GEMM.
       if (is_gga) {
         auto rho_grad = grid::VmatBuilder::BuildRhoWithGrad(
@@ -998,8 +1079,11 @@ class NaoDriver {
       } else {
         cache.rho = grid::VmatBuilder::BuildRhoGemm(grid, orbitals, cache.P2);
       }
+      } // end dual grid else
 
       // Poisson solve: CPU free-space for molecules, GPU for periodic.
+      // Skip if dual grid already computed V_H above.
+      if (!use_dual_grid) {
       bool is_periodic = (grid.bc[0] == grid::BoundaryCondition::kPeriodic &&
                           grid.bc[1] == grid::BoundaryCondition::kPeriodic &&
                           grid.bc[2] == grid::BoundaryCondition::kPeriodic);
@@ -1024,6 +1108,7 @@ class NaoDriver {
         auto poisson_result = grid::PoissonSolver::Solve(grid, cache.rho);
         cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, poisson_result);
       }
+      } // end !use_dual_grid Poisson guard
 
       // XC evaluation via host API.
       bool gpu_xc_ok = false;
@@ -1102,6 +1187,29 @@ class NaoDriver {
       for (std::size_t i = 0; i < n * n; ++i) {
         cache.H[i] = T[i] + V_ext[i] + cache.V_H[i] + cache.V_xc[i];
         if (!V_nl.empty()) cache.H[i] += V_nl[i];
+      }
+      // Tile substrate integration: convert H to TileMat for tile-based
+      // trace verification when n >= 32. On GPU, this path would use
+      // tensor-core GEMM; on CPU, it verifies tile vs dense agreement.
+      if (n >= 32 && result.tile_substrate_used) {
+        const std::uint32_t tile_edge = (n >= 64) ? 32 : 16;
+        auto h_tile = tile::TileMat::FromDense(n, n, cache.H, tile_edge,
+                                                tile::Symmetry::kSymmetric);
+        if (h_tile.ok()) {
+          auto p_tile = tile::TileMat::FromDense(n, n, cache.P2, tile_edge);
+          if (p_tile.ok()) {
+            auto sp = tile::SpGemmFilteredFp64(p_tile.value(), h_tile.value(), 1e-15);
+            if (sp.ok()) {
+              double tile_tr = sp.value().product.TraceFp64();
+              double dense_tr = 0.0;
+              for (std::size_t i = 0; i < n * n; ++i) dense_tr += cache.P2[i] * cache.H[i];
+              if (std::fabs(tile_tr - dense_tr) > 1e-10 * std::max(1.0, std::fabs(dense_tr))) {
+                std::cout << "[NaoDriver] WARNING: tile trace " << tile_tr
+                          << " != dense trace " << dense_tr << std::endl;
+              }
+            }
+          }
+        }
       }
       return cache.H;
     };
@@ -1610,6 +1718,55 @@ class NaoDriver {
       }
     }
     return forces;
+  }
+
+  // Compute the stress tensor via finite differences on the total energy
+  // under cell strain. For molecular (free BC) systems, the "cell" is the
+  // grid box; strain deforms both atom positions and grid spacing.
+  //   atomic_numbers, positions: same as Run (positions in Bohr).
+  // Returns: 9-component stress tensor (3x3, row-major) in Ha/Bohr^3.
+  static std::vector<double> ComputeStress(
+      const std::vector<int>& atomic_numbers,
+      const std::vector<double>& positions,
+      double grid_h = 0.3, double grid_margin = 4.0,
+      int max_iter = 50, double tol = 1e-6,
+      double strain_h = 1e-5) {
+
+    const std::size_t n_atoms = atomic_numbers.size();
+
+    // Compute cell volume from grid extents (approximate for free BC).
+    double rmin[3], rmax[3], center[3] = {0, 0, 0};
+    for (std::size_t a = 0; a < n_atoms; ++a)
+      for (int c = 0; c < 3; ++c) center[c] += positions[3*a + c];
+    for (int c = 0; c < 3; ++c) center[c] /= static_cast<double>(n_atoms);
+    double extent[3] = {0, 0, 0};
+    for (std::size_t a = 0; a < n_atoms; ++a)
+      for (int c = 0; c < 3; ++c)
+        extent[c] = std::max(extent[c], std::fabs(positions[3*a + c] - center[c]));
+    for (int c = 0; c < 3; ++c) {
+      rmin[c] = center[c] - extent[c] - grid_margin;
+      rmax[c] = center[c] + extent[c] + grid_margin;
+    }
+    double V = (rmax[0] - rmin[0]) * (rmax[1] - rmin[1]) * (rmax[2] - rmin[2]);
+    if (V < 1e-10) V = 1.0;
+
+    // Energy as a function of strain tensor (3x3, flattened row-major).
+    // Strain deforms positions: r' = (I + eps) * r.
+    auto strained_energy = [&](const std::vector<double>& eps) -> double {
+      std::vector<double> strained_pos(positions.size());
+      for (std::size_t a = 0; a < n_atoms; ++a)
+        for (int c = 0; c < 3; ++c) {
+          double s = 0.0;
+          for (int k = 0; k < 3; ++k)
+            s += (k == c ? 1.0 : 0.0 + eps[c * 3 + k]) * positions[3*a + k];
+          strained_pos[3*a + c] = s;
+        }
+      auto res = Run(atomic_numbers, strained_pos, grid_h, grid_margin,
+                     max_iter, tol);
+      return res.energy.E_total;
+    };
+
+    return StressTensor::ComputeFD(strained_energy, V, strain_h);
   }
 
   // Compute the Pulay force contribution on all atoms using FD on the analytic

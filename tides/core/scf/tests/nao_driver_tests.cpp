@@ -100,6 +100,38 @@ int TestH2() {
   return 0;
 }
 
+int TestH2DualGrid() {
+  std::cout << "\n=== Test 3: H2 molecule (DZP NAO, dual grid) ===\n";
+
+  std::vector<int> Z = {1, 1};
+  std::vector<double> pos = {0.0, 0.0, 0.0, 1.4, 0.0, 0.0};
+
+  auto result = NaoDriver::Run(Z, pos, 0.3, 4.0, 50, 1e-6,
+                               nullptr, {}, 1, 0, true);
+
+  std::cout << "  n_basis = " << result.n_basis << ", n_electrons = " << result.n_electrons << "\n";
+  std::cout << "  Converged: " << (result.scf.converged ? "YES" : "NO") << "\n";
+  std::cout << "  Iterations: " << result.scf.n_iterations << "\n";
+  std::cout << "  Energy: " << std::setprecision(10) << result.scf.energy << " Ha\n";
+  std::cout << "  Grid: " << result.grid_n[0] << "x" << result.grid_n[1] << "x" << result.grid_n[2] << "\n";
+
+  if (!result.scf.converged)
+    return Fail("H2 dual grid SCF did not converge");
+
+  // Dual grid energy should be in the same ballpark as single grid.
+  const double H2_REF = -0.9;
+  const double H2_TOL = 0.3;
+  double h2_err = std::fabs(result.scf.energy - H2_REF);
+  if (h2_err > H2_TOL)
+    return Fail("H2 dual grid energy " + std::to_string(result.scf.energy) +
+                " vs reference " + std::to_string(H2_REF) +
+                " (err=" + std::to_string(h2_err) + " > " + std::to_string(H2_TOL) + ")");
+
+  std::cout << "  PASS (energy = " << result.scf.energy << " Ha, ref = " << H2_REF
+            << ", err = " << h2_err << ")\n";
+  return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -110,6 +142,7 @@ int main() {
   int failures = 0;
   failures += TestHAtom();
   failures += TestH2();
+  failures += TestH2DualGrid();
 
   std::cout << "\n=== Summary ===\n";
   if (failures == 0) {
