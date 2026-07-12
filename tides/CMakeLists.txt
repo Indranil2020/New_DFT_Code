@@ -631,9 +631,7 @@ if(TIDES_ENABLE_CUDA)
       CUDA_RUNTIME_LIBRARY Shared)
     add_test(NAME xc_bench_roofline
       COMMAND tides_xc_bench_roofline)
-    set_tests_properties(xc_bench_roofline PROPERTIES
-      SKIP_RETURN_CODE 77)
-
+    set_tests_properties(xc_bench_roofline PROPERTIES SKIP_RETURN_CODE 77)
     # T-X1.6: Rung-1 molecule XC energies — He/Ne/H2O vs libxc CPU reference
     add_executable(tides_xc_rung1_molecules
       core/grid/xc/tests/rung1_molecules.cpp)

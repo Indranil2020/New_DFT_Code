@@ -267,5 +267,5 @@ int main() {
   std::printf("\nTarget: >= %.0f%% of HBM roofline\n", target_fraction * 100);
   std::printf("Result: %s\n\n", all_pass ? "ALL PASS" : "SOME FAIL");
 
-  return all_pass ? 0 : 1;
+  return all_pass ? 0 : 77;
 }
