@@ -712,6 +712,11 @@ class MoleculeDriver {
     const double fd_h = 0.001;  // Bohr
     const std::vector<double>& P = scf_result.P;
     const std::vector<double>& evals = scf_result.eigenvalues;
+    std::size_t n_el = 0;
+    for (int Z : mol.atomic_numbers) n_el += static_cast<std::size_t>(Z);
+    const std::size_t n_occ = n_el / 2;
+    const double occ_factor = (n_occ > 0)
+        ? static_cast<double>(n_el) / static_cast<double>(n_occ) : 0.0;
 
     for (std::size_t a = 0; a < n_atoms; ++a) {
       for (int c = 0; c < 3; ++c) {
@@ -730,25 +735,34 @@ class MoleculeDriver {
         // dH/dR = dT/dR + dV/dR (H = T + V_ext + V_H + V_xc, but V_H and V_xc
         // depend on P which is fixed at the converged geometry).
         // For the HF force, only the geometry-dependent parts of H matter.
-        double dH_trace = 0.0, dS_trace = 0.0;
-        for (std::size_t i = 0; i < static_cast<std::size_t>(mol.n_basis) * mol.n_basis; ++i) {
+        const std::size_t n = mol.n_basis;
+        double dH_trace = 0.0;
+        for (std::size_t i = 0; i < n * n; ++i) {
           double dH = (T_plus[i] + V_plus[i]) - (T_minus[i] + V_minus[i]);
-          double dS = S_plus[i] - S_minus[i];
           dH_trace += P[i] * dH;
-          dS_trace += P[i] * dS;
         }
-        // F_HF = -dE/dR = -Tr(P dH/dR) / (2h)
-        // F_Pulay = Tr(P dS/dR * eps) / (2h) = sum_k eps_k * C_k^T dS C_k
-        // For the diagonal approximation: Tr(P * dS/dR) * eps_avg
+        // F_HF = -Tr(P * dH/dR) / (2h)
         double f_hf = -dH_trace / (2.0 * fd_h);
-        // Pulay: use trace(P * dS/dR) weighted by average eigenvalue.
-        // Full Pulay: sum_k eps_k * (C_k^T dS C_k). For small systems,
-        // the diagonal approximation is: Tr(P * dS/dR) * <eps>.
-        double eps_avg = 0.0;
-        for (std::size_t k = 0; k < evals.size() && k < static_cast<std::size_t>(mol.n_basis); ++k)
-          eps_avg += evals[k];
-        if (!evals.empty()) eps_avg /= static_cast<double>(evals.size());
-        double f_pulay = eps_avg * dS_trace / (2.0 * fd_h);
+
+        // Full Pulay: F_Pulay = sum_k f_k * eps_k * (C_k^T * dS/dR * C_k) / (2h)
+        // where f_k is the occupation (2 for closed-shell), eps_k the eigenvalue,
+        // and C_k the k-th eigenvector. This replaces the previous eps_avg
+        // approximation which weighted all orbitals equally.
+        const auto& evec = scf_result.eigenvectors;
+        double f_pulay = 0.0;
+        for (std::size_t k = 0; k < n_occ && k < evals.size(); ++k) {
+          const double eps_k = evals[k];
+          double ctds_c = 0.0;
+          for (std::size_t i = 0; i < n; ++i) {
+            const double ci = evec[k * n + i];
+            for (std::size_t j = 0; j < n; ++j) {
+              const double dS_ij = S_plus[i * n + j] - S_minus[i * n + j];
+              ctds_c += ci * dS_ij * evec[k * n + j];
+            }
+          }
+          f_pulay += occ_factor * eps_k * ctds_c;
+        }
+        f_pulay /= (2.0 * fd_h);
 
         forces[3*a + c] += f_hf + f_pulay;
       }

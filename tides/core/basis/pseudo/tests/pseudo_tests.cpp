@@ -153,23 +153,30 @@ int main() {
   }
 
   // 5. UPF2 XML round-trip: construct a minimal UPF2 string, parse it,
-  //    verify the extracted fields.
+  //    verify the extracted fields. Values are in Ry (energies) and PP_BETA
+  //    stores r*beta(r), so the reader converts to Ha and beta(r) internally.
   {
     std::string xml =
         "<UPF version=\"2.0.1\">\n"
-        "  <PP_INFO element=\"Si\" z_valence=\"4\" l_max=\"2\" rcut=\"1.8\"/>\n"
-        "  <PP_R size=\"5\">\n"
-        "    0.1 0.2 0.3 0.4 0.5\n"
-        "  </PP_R>\n"
-        "  <PP_VLOCAL size=\"5\">\n"
+        "  <PP_INFO/>\n"
+        "  <PP_HEADER element=\"Si\" z_valence=\"4\" l_max=\"2\"/>\n"
+        "  <PP_MESH>\n"
+        "    <PP_R size=\"5\">\n"
+        "      0.1 0.2 0.3 0.4 0.5\n"
+        "    </PP_R>\n"
+        "  </PP_MESH>\n"
+        "  <PP_LOCAL size=\"5\">\n"
         "    -40.0 -20.0 -13.3 -10.0 -8.0\n"
-        "  </PP_VLOCAL>\n"
-        "  <PP_BETA.1 angular_momentum=\"0\" cutoff_radius_index=\"3\">\n"
-        "    1.0 0.8 0.5 0.3 0.1\n"
+        "  </PP_LOCAL>\n"
+        "  <PP_BETA.1 index=\"1\" angular_momentum=\"0\" cutoff_radius_index=\"5\">\n"
+        "    0.1 0.16 0.15 0.12 0.05\n"
         "  </PP_BETA.1>\n"
-        "  <PP_BETA.2 angular_momentum=\"1\" cutoff_radius_index=\"3\">\n"
+        "  <PP_BETA.2 index=\"2\" angular_momentum=\"1\" cutoff_radius_index=\"5\">\n"
         "    0.0 0.2 0.4 0.3 0.1\n"
         "  </PP_BETA.2>\n"
+        "  <PP_DIJ size=\"4\" columns=\"4\">\n"
+        "    2.0 0.0 0.0 2.0\n"
+        "  </PP_DIJ>\n"
         "</UPF>\n";
     auto result = Upf2Reader::Parse(xml);
     if (!result.ok()) return Fail("upf2 parse failed: " + result.status().message());
@@ -184,19 +191,51 @@ int main() {
     if (pp.l_max != 2) return Fail("upf2: l_max mismatch");
     if (pp.r_grid.size() != 5) return Fail("upf2: grid size mismatch");
     if (pp.v_local.size() != 5) return Fail("upf2: v_local size mismatch");
+    // Ry -> Ha: -40.0 Ry becomes -20.0 Ha.
+    if (std::fabs(pp.v_local[0] + 20.0) > 1e-12)
+      return Fail("upf2: v_local[0] mismatch");
     if (pp.channels.size() != 2) return Fail("upf2: channel count mismatch");
     if (pp.channels[0].l != 0 || pp.channels[1].l != 1)
       return Fail("upf2: channel l mismatch");
     if (pp.channels[0].projector.empty())
       return Fail("upf2: projector[0] empty");
-    if (std::fabs(pp.r_grid[0] - 0.1) > 1e-12)
-      return Fail("upf2: r_grid[0] mismatch");
-    if (std::fabs(pp.v_local[0] + 40.0) > 1e-12)
-      return Fail("upf2: v_local[0] mismatch");
+    // r*beta at r=0.1 is 0.1, so beta(0.1) = 1.0.
     if (std::fabs(pp.channels[0].projector[0] - 1.0) > 1e-12)
       return Fail("upf2: projector mismatch");
+    if (pp.channels[0].Dij.empty() || pp.channels[0].Dij[0][0] != 1.0)
+      return Fail("upf2: Dij diagonal mismatch");
     if (!pp.md5_checksum.empty())
       std::cout << "upf2: checksum=" << pp.md5_checksum << '\n';
+  }
+
+  // 6. Real UPF2 file (Quantum ESPRESSO distribution, NC Si): parse and verify
+  //    structural fields and multi-projector Dij blocks.
+  {
+    const std::string path = "/usr/share/espresso/pseudo/Si_r.upf";
+    auto result = Upf2Reader::Read(path);
+    if (!result.ok()) return Fail("real_upf2 parse failed: " + result.status().message());
+    const auto& pp = result.value();
+    std::cout << "real_upf2: element=" << pp.element
+              << " Z=" << pp.Z_valence << " l_max=" << pp.l_max
+              << " n_grid=" << pp.r_grid.size()
+              << " n_vlocal=" << pp.v_local.size()
+              << " n_channels=" << pp.channels.size() << '\n';
+    if (pp.Z_valence != 4) return Fail("real_upf2: Z mismatch");
+    if (pp.l_max != 2) return Fail("real_upf2: l_max mismatch");
+    if (pp.r_grid.size() != 1528) return Fail("real_upf2: grid size mismatch");
+    if (pp.v_local.size() != 1528) return Fail("real_upf2: v_local size mismatch");
+    if (pp.channels.size() != 3) return Fail("real_upf2: channel count mismatch");
+    // Si_r.upf has 2 projectors for l=0, 4 for l=1, 4 for l=2.
+    if (pp.channels[0].projectors.size() != 2 ||
+        pp.channels[1].projectors.size() != 4 ||
+        pp.channels[2].projectors.size() != 4)
+      return Fail("real_upf2: projector count mismatch");
+    if (pp.channels[0].Dij.size() != 2 || pp.channels[0].Dij[0].size() != 2)
+      return Fail("real_upf2: Dij block mismatch");
+    if (pp.channels[1].Dij.size() != 4 || pp.channels[2].Dij.size() != 4)
+      return Fail("real_upf2: Dij block mismatch");
+    if (!pp.md5_checksum.empty())
+      std::cout << "real_upf2: checksum=" << pp.md5_checksum << '\n';
   }
 
   std::cout << "pseudo_tests: ALL GREEN\n";

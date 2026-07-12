@@ -23,12 +23,17 @@ struct Pseudopotential {
   int l_max = 0;                      // max angular momentum
   std::vector<double> r_grid;        // radial grid
   std::vector<double> v_local;       // local potential on r_grid
-  // Nonlocal KB projectors: one set per angular momentum channel.
+  // Nonlocal KB projectors: one entry per angular momentum channel.
+  // Legacy fields (projector, kb_coeff) keep single-projector support.
+  // Modern UPF2/ONCV multi-projector data uses projectors (n_beta x r_grid)
+  // and Dij (n_beta x n_beta) coupling.
   struct KBChannel {
     int l = 0;
-    double eiganvalue = 0.0;          // reference eigenvalue (Ha)
-    std::vector<double> projector;    // beta_l(r) on r_grid
-    double kb_coeff = 0.0;            // <beta|delta V|beta> / eiganvalue
+    double eiganvalue = 0.0;                       // reference eigenvalue (Ha)
+    std::vector<double> projector;                 // legacy: single beta_l(r)
+    double kb_coeff = 0.0;                         // legacy: single h_l coefficient
+    std::vector<std::vector<double>> projectors;   // multi-projector beta_i(r)
+    std::vector<std::vector<double>> Dij;          // multi-projector Dij matrix
   };
   std::vector<KBChannel> channels;
 

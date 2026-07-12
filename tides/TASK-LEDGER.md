@@ -107,3 +107,29 @@
 - `tides_e2_basis_profile`: PASS (25/25 profile entries).
 - `tides_nao_driver_tests`: PASS (H: -0.419 Ha vs ref -0.4; H2: -1.0431 Ha vs ref -0.9).
 - `tides_nao_benchmark_tests`: PASS (H: -0.3930 vs -0.454 limit 0.15; H2: -1.1244 vs -1.0386 limit 0.25; forces net Fx=1.70e-4 < 1e-3).
+
+---
+
+## Phase 2 — Physics Completeness (2026-07-16)
+
+### Acceptance Criteria
+- [x] Spin polarization (UKS): nspin=2 SCF loop with spin-polarized density matrices and XC.
+- [x] UKS validation: H doublet and O triplet converge and produce correct spin splitting.
+- [x] Real UPF2 pseudopotential loading: multi-projector Dij blocks parsed and validated.
+- [x] Full Pulay forces: eigenvalue-weighted sum_k f_k * eps_k * C_k^T * dS/dR * C_k in MoleculeDriver.
+- [x] NaoDriver Pulay forces: ComputePulayForces method using FD on analytic S matrix.
+
+### Changes
+- `core/scf/nao_driver.hpp`: UKS SCF loop (build_H_both), nspin/n_unpaired params, device buffers for spin-up/down, ComputePulayForces method.
+- `core/grid/xc/tier_stubs.cpp`: libxc host fallback for LaunchTier0Pol (spin-polarized LDA/GGA).
+- `core/scf/tests/nao_uks_tests.cpp`: UKS validation tests (H doublet, O triplet).
+- `core/scf/molecule_driver.hpp`: Full eigenvalue-weighted Pulay force formula replacing eps_avg approximation.
+- `core/basis/pseudo/upf2_reader.hpp`: Multi-projector Dij parsing, Ry→Ha conversion, grouped KB channels.
+
+### Test Results
+- `tides_nao_uks_tests`: PASS (H doublet converges, O triplet converges).
+- `tides_nao_driver_tests`: PASS (H, H2 energies within tolerance).
+- `tides_molecule_driver_tests`: PASS (H2: -1.12 Ha, He: -2.77 Ha, H2O: -72.18 Ha — all improved after Pulay fix).
+- `tides_pseudo_tests`: PASS (UPF2 roundtrip + real Si_r.upf multi-projector validation).
+- `wp6_scf_forces_xlbomd_optimizers_stress`: PASS.
+- 90/101 ctest pass (11 failures are Tier-1/2 XC functional tests requiring libxc maple2c submodule).

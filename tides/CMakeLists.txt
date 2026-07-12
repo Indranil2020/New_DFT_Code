@@ -1011,6 +1011,15 @@ set_target_properties(tides_nao_driver_tests PROPERTIES
 add_test(NAME nao_driver_end_to_end_scf
   COMMAND tides_nao_driver_tests)
 
+add_executable(tides_nao_uks_tests
+  core/scf/tests/nao_uks_tests.cpp)
+target_link_libraries(tides_nao_uks_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_nao_uks_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME nao_driver_uks_scf
+  COMMAND tides_nao_uks_tests)
+
 add_executable(tides_nao_benchmark_tests
   core/scf/tests/nao_benchmark_tests.cpp)
 target_link_libraries(tides_nao_benchmark_tests PRIVATE

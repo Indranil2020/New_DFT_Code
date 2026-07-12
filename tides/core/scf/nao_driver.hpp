@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <functional>
 #include <iostream>
+#include <utility>
 #include <vector>
 
 #include "basis/nao_generator.hpp"
@@ -298,6 +299,8 @@ class NaoDriver {
 
   // Run end-to-end SCF with NAO basis.
   // Positions in Bohr. n_electrons = sum of atomic numbers (neutral).
+  // nspin=1: spin-paired closed-shell. nspin=2: spin-polarized UKS; n_unpaired
+  // is the number of unpaired electrons (M-1, where M is spin multiplicity).
   static NaoDriverResult Run(
       const std::vector<int>& atomic_numbers,
       const std::vector<double>& positions,
@@ -306,7 +309,9 @@ class NaoDriver {
       int max_iter = 100,
       double tol = 1e-8,
       const std::vector<basis::Pseudopotential>* pseudopotentials = nullptr,
-      grid::xc::HostXcSpec xc_spec = {}) {
+      grid::xc::HostXcSpec xc_spec = {},
+      int nspin = 1,
+      int n_unpaired = 0) {
     NaoDriverResult result;
     auto t0 = std::chrono::steady_clock::now();
     auto t_last = t0;
@@ -363,6 +368,10 @@ class NaoDriver {
     // Step 4: Count electrons and occupied orbitals (closed-shell, spin-paired).
     // When pseudopotentials are provided, use Z_valence instead of full Z.
     // Odd electron counts are rounded up so H (1e) has 1 occupied orbital.
+    if (nspin != 1 && nspin != 2) {
+      std::cout << "[NaoDriver] nspin must be 1 or 2" << std::endl;
+      return result;
+    }
     bool use_pp = (pseudopotentials != nullptr && !pseudopotentials->empty());
     std::size_t n_electrons = 0;
     for (std::size_t a = 0; a < atomic_numbers.size(); ++a) {
@@ -374,6 +383,22 @@ class NaoDriver {
     }
     result.n_electrons = n_electrons;
     const std::size_t n_occ = (n_electrons + 1) / 2;
+    std::size_t n_electrons_up = n_electrons;
+    std::size_t n_electrons_down = n_electrons;
+    std::size_t n_occ_up = n_occ;
+    std::size_t n_occ_down = n_occ;
+    if (nspin == 2) {
+      if (static_cast<std::size_t>(n_unpaired) > n_electrons ||
+          ((n_electrons + n_unpaired) % 2 != 0)) {
+        std::cout << "[NaoDriver] Invalid n_unpaired for n_electrons=" << n_electrons
+                  << " n_unpaired=" << n_unpaired << std::endl;
+        return result;
+      }
+      n_electrons_up = (n_electrons + n_unpaired) / 2;
+      n_electrons_down = (n_electrons - n_unpaired) / 2;
+      n_occ_up = n_electrons_up;
+      n_occ_down = n_electrons_down;
+    }
 
     // Step 5: Set up the grid (same as MoleculeDriver).
     // Center the grid on the molecular geometric center (snapped to grid_h)
@@ -488,7 +513,8 @@ class NaoDriver {
     grid::xc::XcArena* dev_arena = nullptr;
     double* d_phi = nullptr;          // [n][stride]
     double* d_grad_phi = nullptr;     // [3][n][stride]
-    double* d_P = nullptr;            // [n][n]
+    double* d_P_up = nullptr;         // [n][n]
+    double* d_P_down = nullptr;       // [n][n] (only for nspin=2)
     double* d_vmat = nullptr;         // [n][n]
     std::size_t dev_stride = 0;
     grid::xc::XcSpec dev_xc_spec;
@@ -520,7 +546,7 @@ class NaoDriver {
     if (is_tier0 && grid::XCCudaAvailable()) {
       cudaStreamCreate(&dev_stream);
       dev_arena = new grid::xc::XcArena();
-      auto arena_status = dev_arena->Reserve(np_total, 1, is_gga, false, 1, dev_stream);
+      auto arena_status = dev_arena->Reserve(np_total, nspin, true, false, 1, dev_stream);
       if (arena_status.ok()) {
         dev_stride = dev_arena->capacity();
 
@@ -538,6 +564,13 @@ class NaoDriver {
         cudaMemcpyAsync(d_phi, phi_flat.data(), n * dev_stride * sizeof(double),
                         cudaMemcpyHostToDevice, dev_stream);
 
+        // d_grad_phi is always allocated: for GGA it holds the orbital
+        // gradients, for LDA it is zeroed (BuildRhoGradientDevice requires a
+        // non-null grad_phi pointer even though the grad output is ignored by
+        // LDA).
+        cudaMalloc(reinterpret_cast<void**>(&d_grad_phi),
+                   3 * n * dev_stride * sizeof(double));
+
         // Flatten and upload grad_phi: [3][n][stride].
         if (is_gga) {
           std::vector<double> grad_flat(3 * n * dev_stride, 0.0);
@@ -546,19 +579,22 @@ class NaoDriver {
               for (std::size_t g = 0; g < np_total; ++g)
                 grad_flat[c * n * dev_stride + bi * dev_stride + g] =
                     grad_orbitals_3d[c][bi][g];
-          cudaMalloc(reinterpret_cast<void**>(&d_grad_phi), 3 * n * dev_stride * sizeof(double));
           cudaMemcpyAsync(d_grad_phi, grad_flat.data(),
                           3 * n * dev_stride * sizeof(double),
                           cudaMemcpyHostToDevice, dev_stream);
+        } else {
+          cudaMemsetAsync(d_grad_phi, 0, 3 * n * dev_stride * sizeof(double),
+                          dev_stream);
         }
 
         // Allocate device buffers for P and V_xc.
-        cudaMalloc(reinterpret_cast<void**>(&d_P), n * n * sizeof(double));
+        cudaMalloc(reinterpret_cast<void**>(&d_P_up), n * n * sizeof(double));
+        if (nspin == 2) cudaMalloc(reinterpret_cast<void**>(&d_P_down), n * n * sizeof(double));
         cudaMalloc(reinterpret_cast<void**>(&d_vmat), n * n * sizeof(double));
 
         // Build device XcSpec.
         dev_xc_spec.family = (is_gga) ? grid::xc::Family::kGga : grid::xc::Family::kLda;
-        dev_xc_spec.nspin = 1;
+        dev_xc_spec.nspin = nspin;
         dev_xc_spec.terms = {{host_to_dev_functional(xc_spec.id), xc_spec.exchange_fraction}};
         dev_xc_spec.precision = grid::xc::PrecisionPolicy::kFloat64;
         dev_xc_spec.deterministic = true;
@@ -664,67 +700,97 @@ class NaoDriver {
         const auto& atom = atoms[a];
         for (const auto& ch : pp.channels) {
           const int l = ch.l;
-          const double kb_coeff = ch.kb_coeff;
-          const auto& beta = ch.projector;
           const auto& rg = pp.r_grid;
-          if (beta.empty() || rg.empty()) continue;
+          if (rg.empty()) continue;
 
-          // Evaluate beta_l(r) * Y_lm on the grid for each m.
+          // Prepare projector radial functions and Dij matrix.
+          std::vector<std::vector<double>> projectors;
+          if (ch.projectors.empty()) {
+            if (!ch.projector.empty()) projectors = {ch.projector};
+          } else {
+            projectors = ch.projectors;
+          }
+          if (projectors.empty()) continue;
+          const std::size_t n_beta = projectors.size();
+          std::vector<std::vector<double>> Dij(n_beta,
+                                              std::vector<double>(n_beta, 0.0));
+          if (!ch.Dij.empty() && ch.Dij.size() == n_beta &&
+              ch.Dij[0].size() == n_beta) {
+            Dij = ch.Dij;
+          } else if (n_beta == 1) {
+            Dij[0][0] = ch.kb_coeff;
+          }
+
+          // Evaluate beta_i(r) * Y_lm on the grid for each projector and m.
           const int n_m = 2 * l + 1;
-          std::vector<std::vector<double>> proj_grid(n_m,
-              std::vector<double>(n0 * n1 * n2, 0.0));
-          for (std::size_t ix = 0; ix < n0; ++ix) {
-            for (std::size_t iy = 0; iy < n1; ++iy) {
-              for (std::size_t iz = 0; iz < n2; ++iz) {
-                const std::size_t g = grid.flatten(ix, iy, iz);
-                auto [x, y, z] = grid.coord(ix, iy, iz);
-                double dx = x - atom.position[0];
-                double dy = y - atom.position[1];
-                double dz = z - atom.position[2];
-                double r = std::sqrt(dx * dx + dy * dy + dz * dz);
-                if (r < 1e-12 || r > rg.back()) continue;
+          std::vector<std::vector<double>> proj_mats;
+          proj_mats.reserve(n_beta);
+          for (const auto& beta : projectors) {
+            if (beta.empty()) continue;
+            std::vector<std::vector<double>> proj_grid(n_m,
+                std::vector<double>(n0 * n1 * n2, 0.0));
+            for (std::size_t ix = 0; ix < n0; ++ix) {
+              for (std::size_t iy = 0; iy < n1; ++iy) {
+                for (std::size_t iz = 0; iz < n2; ++iz) {
+                  const std::size_t g = grid.flatten(ix, iy, iz);
+                  auto [x, y, z] = grid.coord(ix, iy, iz);
+                  double dx = x - atom.position[0];
+                  double dy = y - atom.position[1];
+                  double dz = z - atom.position[2];
+                  double r = std::sqrt(dx * dx + dy * dy + dz * dz);
+                  if (r < 1e-12 || r > rg.back()) continue;
 
-                // Interpolate beta(r) on the PP radial grid.
-                double beta_r = 0.0;
-                auto it = std::upper_bound(rg.begin(), rg.end(), r);
-                if (it != rg.begin() && it != rg.end()) {
-                  std::size_t j = static_cast<std::size_t>(it - rg.begin() - 1);
-                  double t = (r - rg[j]) / (rg[j + 1] - rg[j]);
-                  beta_r = (1.0 - t) * beta[j] + t * beta[j + 1];
-                }
+                  // Interpolate beta(r) on the PP radial grid.
+                  double beta_r = 0.0;
+                  auto it = std::upper_bound(rg.begin(), rg.end(), r);
+                  if (it != rg.begin() && it != rg.end()) {
+                    std::size_t j = static_cast<std::size_t>(it - rg.begin() - 1);
+                    double t = (r - rg[j]) / (rg[j + 1] - rg[j]);
+                    beta_r = (1.0 - t) * beta[j] + t * beta[j + 1];
+                  }
 
-                double theta = std::acos(dz / std::max(r, 1e-15));
-                double phi = std::atan2(dy, dx);
-                for (int m = -l; m <= l; ++m) {
-                  double angular = (l == 0)
-                      ? (1.0 / std::sqrt(4.0 * M_PI))
-                      : basis::RealSphericalHarmonics::Eval(l, m, theta, phi);
-                  proj_grid[m + l][g] = beta_r * angular;
+                  double theta = std::acos(dz / std::max(r, 1e-15));
+                  double phi = std::atan2(dy, dx);
+                  for (int m = -l; m <= l; ++m) {
+                    double angular = (l == 0)
+                        ? (1.0 / std::sqrt(4.0 * M_PI))
+                        : basis::RealSphericalHarmonics::Eval(l, m, theta, phi);
+                    proj_grid[m + l][g] = beta_r * angular;
+                  }
                 }
               }
             }
+
+            // <phi_i|p_m> = integral phi_i * p_m.
+            std::vector<double> proj_mat(n * n_m, 0.0);
+            for (std::size_t bi = 0; bi < n; ++bi) {
+              for (int m_idx = 0; m_idx < n_m; ++m_idx) {
+                double s = 0.0;
+                for (std::size_t g = 0; g < n0 * n1 * n2; ++g)
+                  s += orbitals[bi][g] * proj_grid[m_idx][g] * dv;
+                proj_mat[bi * n_m + m_idx] = s;
+              }
+            }
+            proj_mats.push_back(std::move(proj_mat));
           }
 
-          // V_nl += kb_coeff * sum_m |p_m><p_m| (projected onto basis).
-          // <phi_i|p_m> = integral phi_i * p_m, then V_nl[i,j] += kb_coeff * sum_m <phi_i|p_m><p_m|phi_j>
-          std::vector<double> proj_mat(n * n_m, 0.0);  // <phi_i|p_m>
-          for (std::size_t bi = 0; bi < n; ++bi) {
-            for (int m_idx = 0; m_idx < n_m; ++m_idx) {
-              double s = 0.0;
-              for (std::size_t g = 0; g < n0 * n1 * n2; ++g)
-                s += orbitals[bi][g] * proj_grid[m_idx][g] * dv;
-              proj_mat[bi * n_m + m_idx] = s;
-            }
-          }
-          // V_nl[i,j] += kb_coeff * sum_m proj_mat[i,m] * proj_mat[j,m]
-          for (std::size_t bi = 0; bi < n; ++bi) {
-            for (std::size_t bj = bi; bj < n; ++bj) {
-              double s = 0.0;
-              for (int m_idx = 0; m_idx < n_m; ++m_idx)
-                s += proj_mat[bi * n_m + m_idx] * proj_mat[bj * n_m + m_idx];
-              s *= kb_coeff;
-              V_nl[bi * n + bj] += s;
-              V_nl[bj * n + bi] += s;
+          // V_nl += sum_{i,j} Dij[i][j] * sum_m |p_{i,m}><p_{j,m}|.
+          if (proj_mats.size() == n_beta) {
+            for (std::size_t bi = 0; bi < n; ++bi) {
+              for (std::size_t bj = 0; bj < n; ++bj) {
+                double s = 0.0;
+                for (std::size_t i = 0; i < n_beta; ++i) {
+                  for (std::size_t j = 0; j < n_beta; ++j) {
+                    double dij = Dij[i][j];
+                    if (dij == 0.0) continue;
+                    const auto& pi = proj_mats[i];
+                    const auto& pj = proj_mats[j];
+                    for (int m_idx = 0; m_idx < n_m; ++m_idx)
+                      s += dij * pi[bi * n_m + m_idx] * pj[bj * n_m + m_idx];
+                  }
+                }
+                V_nl[bi * n + bj] += s;
+              }
             }
           }
         }
@@ -751,6 +817,8 @@ class NaoDriver {
       std::vector<double> H;
       std::vector<double> V_H;
       std::vector<double> V_xc;
+      std::vector<double> V_xc_up;
+      std::vector<double> V_xc_down;
       grid::XCResult xc;
       std::vector<double> rho;
       std::vector<double> P2;
@@ -774,12 +842,12 @@ class NaoDriver {
         //       → Poisson (CPU) → XcEval → BuildGgaVmatDevice → download V_xc
 
         // Upload density matrix to device.
-        cudaMemcpyAsync(d_P, cache.P2.data(), n * n * sizeof(double),
+        cudaMemcpyAsync(d_P_up, cache.P2.data(), n * n * sizeof(double),
                         cudaMemcpyHostToDevice, dev_stream);
 
         // Build rho (and grad_rho if GGA) on device into arena.
         grid::RhoGradientDeviceIn rho_in;
-        rho_in.density_matrix = d_P;
+        rho_in.density_matrix = d_P_up;
         rho_in.phi = d_phi;
         rho_in.grad_phi = d_grad_phi;
         rho_in.nbasis = static_cast<std::int64_t>(n);
@@ -1069,16 +1137,381 @@ class NaoDriver {
       return E_total;
     };
 
-    std::cout << "[NaoDriver] launching SCF (n=" << n << ", n_occ=" << n_occ << ")" << std::endl;
-    solvers::BrokerInput broker_input;
-    broker_input.n_atoms = atoms.size();
-    broker_input.n_basis = n;
-    broker_input.gap_estimate = 5.0;  // default: gapped molecular system
-    broker_input.electronic_temp = 0.0;
-    result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
-                                 {}, max_iter, tol, 1, 0.3,
-                                 &broker_input);
-    step("SCF");
+    // Build both spin Hamiltonians from spin-resolved density matrices.
+    // Uses the device-resident XC pipeline with nspin=2. CPU fallback is not
+    // yet spin-polarized; if the device pipeline is unavailable for UKS, the
+    // loop below will detect empty H and return unconverged.
+    auto build_H_both = [&](const std::vector<double>& P_up,
+                            const std::vector<double>& P_down)
+        -> std::pair<std::vector<double>, std::vector<double>> {
+      cache.P2.assign(n * n, 0.0);
+      for (std::size_t i = 0; i < n * n; ++i)
+        cache.P2[i] = P_up[i] + P_down[i];
+
+      const bool is_gga = (xc_spec.family == grid::xc::XcFamily::kGga);
+      std::vector<double> grad_rho_up_x, grad_rho_up_y, grad_rho_up_z;
+      std::vector<double> grad_rho_down_x, grad_rho_down_y, grad_rho_down_z;
+
+#ifdef TIDES_HAVE_CUDA
+      if (device_pipeline_ready) {
+        // Upload spin densities.
+        cudaMemcpyAsync(d_P_up, P_up.data(), n * n * sizeof(double),
+                        cudaMemcpyHostToDevice, dev_stream);
+        if (nspin == 2) {
+          cudaMemcpyAsync(d_P_down, P_down.data(), n * n * sizeof(double),
+                          cudaMemcpyHostToDevice, dev_stream);
+        }
+
+        // Build rho_up into arena spin 0.
+        grid::RhoGradientDeviceIn rho_in_up;
+        rho_in_up.density_matrix = d_P_up;
+        rho_in_up.phi = d_phi;
+        rho_in_up.grad_phi = d_grad_phi;
+        rho_in_up.nbasis = static_cast<std::int64_t>(n);
+        rho_in_up.np = static_cast<std::int64_t>(np_total);
+        rho_in_up.point_stride = static_cast<std::int64_t>(dev_stride);
+        auto rho_up_status = grid::BuildRhoGradientDevice(
+            rho_in_up, dev_arena->rho(), dev_arena->grad(), dev_stream);
+
+        // Build rho_down into arena spin 1.
+        double* rho_down_ptr = dev_arena->rho() + dev_stride;
+        double* grad_down_ptr = dev_arena->grad() + 3 * dev_stride;
+        grid::RhoGradientDeviceIn rho_in_down;
+        rho_in_down.density_matrix =
+            (nspin == 2) ? d_P_down : d_P_up;
+        rho_in_down.phi = d_phi;
+        rho_in_down.grad_phi = d_grad_phi;
+        rho_in_down.nbasis = static_cast<std::int64_t>(n);
+        rho_in_down.np = static_cast<std::int64_t>(np_total);
+        rho_in_down.point_stride = static_cast<std::int64_t>(dev_stride);
+        auto rho_down_status = grid::BuildRhoGradientDevice(
+            rho_in_down, rho_down_ptr, grad_down_ptr, dev_stream);
+
+        if (rho_up_status.ok() && rho_down_status.ok()) {
+          // Download both spin densities and form total density for Poisson.
+          std::vector<double> rho_up(np_total, 0.0);
+          std::vector<double> rho_down(np_total, 0.0);
+          cudaMemcpyAsync(rho_up.data(), dev_arena->rho(),
+                          np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                          dev_stream);
+          cudaMemcpyAsync(rho_down.data(), rho_down_ptr,
+                          np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                          dev_stream);
+          cudaStreamSynchronize(dev_stream);
+          cache.rho.assign(np_total, 0.0);
+          for (std::size_t g = 0; g < np_total; ++g)
+            cache.rho[g] = rho_up[g] + rho_down[g];
+
+          // Poisson solve (CPU for molecules, GPU for periodic).
+          bool is_periodic =
+              (grid.bc[0] == grid::BoundaryCondition::kPeriodic &&
+               grid.bc[1] == grid::BoundaryCondition::kPeriodic &&
+               grid.bc[2] == grid::BoundaryCondition::kPeriodic);
+          bool gpu_poisson_ok = false;
+          if (is_periodic && grid::PoissonFftCudaAvailable()) {
+            auto gpu_res = grid::PoissonFftCuda(grid, cache.rho);
+            if (gpu_res.ok()) {
+              cache.V_H = grid::VmatBuilder::BuildHmatGemm(
+                  grid, orbitals, gpu_res.value().V);
+              gpu_poisson_ok = true;
+            }
+          }
+          if (!gpu_poisson_ok) {
+            auto poisson_result = grid::PoissonSolver::Solve(grid, cache.rho);
+            cache.V_H = grid::VmatBuilder::BuildHmatGemm(
+                grid, orbitals, poisson_result);
+          }
+
+          // XC evaluation on device with nspin=2.
+          grid::xc::XcGridIn xc_in;
+          xc_in.rho = dev_arena->rho();
+          xc_in.grad = is_gga ? dev_arena->grad() : nullptr;
+          xc_in.tau = nullptr;
+          xc_in.w = dev_arena->weights();
+          xc_in.np = static_cast<std::int64_t>(np_total);
+          xc_in.point_stride = static_cast<std::int64_t>(dev_stride);
+          xc_in.nsys = 1;
+          xc_in.sys_offsets = dev_arena->sys_offsets();
+
+          grid::xc::XcGridOut xc_out;
+          xc_out.wv_rho = dev_arena->wv_rho();
+          xc_out.wv_grad = is_gga ? dev_arena->wv_grad() : nullptr;
+          xc_out.wv_tau = nullptr;
+          xc_out.exc_per_system = dev_arena->exc_per_system();
+
+          auto xc_status = grid::xc::XcEval(dev_xc_spec, xc_in, xc_out, dev_stream);
+          if (xc_status.ok()) {
+            if (is_gga) {
+              // V_xc_up from spin-0 weighted potentials.
+              grid::GgaVmatDeviceIn vmat_in_up;
+              vmat_in_up.phi = d_phi;
+              vmat_in_up.grad_phi = d_grad_phi;
+              vmat_in_up.wv_rho = dev_arena->wv_rho();
+              vmat_in_up.wv_grad = dev_arena->wv_grad();
+              vmat_in_up.nbasis = static_cast<std::int64_t>(n);
+              vmat_in_up.np = static_cast<std::int64_t>(np_total);
+              vmat_in_up.point_stride = static_cast<std::int64_t>(dev_stride);
+              auto vmat_up_status = grid::BuildGgaVmatDevice(
+                  vmat_in_up, d_vmat, dev_stream);
+
+              if (vmat_up_status.ok()) {
+                cache.V_xc_up.resize(n * n);
+                cudaMemcpyAsync(cache.V_xc_up.data(), d_vmat,
+                                n * n * sizeof(double), cudaMemcpyDeviceToHost,
+                                dev_stream);
+              }
+
+              // V_xc_down from spin-1 weighted potentials.
+              grid::GgaVmatDeviceIn vmat_in_down;
+              vmat_in_down.phi = d_phi;
+              vmat_in_down.grad_phi = d_grad_phi;
+              vmat_in_down.wv_rho = dev_arena->wv_rho() + dev_stride;
+              vmat_in_down.wv_grad = dev_arena->wv_grad() + 3 * dev_stride;
+              vmat_in_down.nbasis = static_cast<std::int64_t>(n);
+              vmat_in_down.np = static_cast<std::int64_t>(np_total);
+              vmat_in_down.point_stride = static_cast<std::int64_t>(dev_stride);
+              auto vmat_down_status = grid::BuildGgaVmatDevice(
+                  vmat_in_down, d_vmat, dev_stream);
+
+              if (vmat_up_status.ok() && vmat_down_status.ok()) {
+                cache.V_xc_down.resize(n * n);
+                cudaMemcpyAsync(cache.V_xc_down.data(), d_vmat,
+                                n * n * sizeof(double), cudaMemcpyDeviceToHost,
+                                dev_stream);
+                cudaStreamSynchronize(dev_stream);
+              } else {
+                device_pipeline_ready = false;
+              }
+            } else {
+              // LDA: download weighted vxc for each spin and integrate.
+              std::vector<double> wv_rho_up(np_total, 0.0);
+              std::vector<double> wv_rho_down(np_total, 0.0);
+              cudaMemcpyAsync(wv_rho_up.data(), dev_arena->wv_rho(),
+                              np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                              dev_stream);
+              cudaMemcpyAsync(wv_rho_down.data(),
+                              dev_arena->wv_rho() + dev_stride,
+                              np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                              dev_stream);
+              cudaStreamSynchronize(dev_stream);
+              std::vector<double> vxc_up(np_total, 0.0);
+              std::vector<double> vxc_down(np_total, 0.0);
+              for (std::size_t g = 0; g < np_total; ++g) {
+                vxc_up[g] = wv_rho_up[g] / dv;
+                vxc_down[g] = wv_rho_down[g] / dv;
+              }
+              cache.V_xc_up =
+                  grid::VmatBuilder::BuildHmatGemm(grid, orbitals, vxc_up);
+              cache.V_xc_down =
+                  grid::VmatBuilder::BuildHmatGemm(grid, orbitals, vxc_down);
+            }
+
+            if (device_pipeline_ready) {
+              // Download XC energy.
+              double exc = 0.0;
+              cudaMemcpyAsync(&exc, dev_arena->exc_per_system(),
+                              sizeof(double), cudaMemcpyDeviceToHost,
+                              dev_stream);
+              cudaStreamSynchronize(dev_stream);
+              cache.xc_energy_gpu = exc;
+
+              // Assemble H_up and H_down.
+              std::vector<double> H_up(n * n, 0.0);
+              std::vector<double> H_down(n * n, 0.0);
+              for (std::size_t i = 0; i < n * n; ++i) {
+                H_up[i] = T[i] + V_ext[i] + cache.V_H[i] + cache.V_xc_up[i];
+                H_down[i] = T[i] + V_ext[i] + cache.V_H[i] + cache.V_xc_down[i];
+                if (!V_nl.empty()) {
+                  H_up[i] += V_nl[i];
+                  H_down[i] += V_nl[i];
+                }
+              }
+              cache.H = H_up;
+              return {std::move(H_up), std::move(H_down)};
+            }
+          } else {
+            device_pipeline_ready = false;
+          }
+        } else {
+          device_pipeline_ready = false;
+        }
+      }
+#endif
+
+      // CPU fallback is not yet spin-polarized for nspin=2; signal failure.
+      (void)is_gga;
+      (void)grad_rho_up_x;
+      (void)grad_rho_up_y;
+      (void)grad_rho_up_z;
+      (void)grad_rho_down_x;
+      (void)grad_rho_down_y;
+      (void)grad_rho_down_z;
+      return {std::vector<double>{}, std::vector<double>{}};
+    };
+
+    if (nspin == 1) {
+      std::cout << "[NaoDriver] launching SCF (n=" << n << ", n_occ=" << n_occ << ")" << std::endl;
+      solvers::BrokerInput broker_input;
+      broker_input.n_atoms = atoms.size();
+      broker_input.n_basis = n;
+      broker_input.gap_estimate = 5.0;  // default: gapped molecular system
+      broker_input.electronic_temp = 0.0;
+      result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
+                                   {}, max_iter, tol, 1, 0.3,
+                                   &broker_input);
+      step("SCF");
+    } else {
+      std::cout << "[NaoDriver] launching UKS SCF (n=" << n
+                << ", n_occ_up=" << n_occ_up
+                << ", n_occ_down=" << n_occ_down << ")" << std::endl;
+
+      if (!device_pipeline_ready) {
+        std::cout << "[NaoDriver] UKS requires the device pipeline; CPU fallback is not yet spin-polarized."
+                  << std::endl;
+        result.scf.converged = false;
+        result.energy.E_total = 0.0;
+      } else {
+        // Helper: build P from occupied eigenvectors.
+        auto build_P = [&](const solvers::EigenResult& e, std::size_t nocc) {
+          std::vector<double> P(n * n, 0.0);
+          if (!e.ok || nocc == 0) return P;
+          for (std::size_t k = 0; k < nocc && k < n; ++k) {
+            for (std::size_t i = 0; i < n; ++i) {
+              for (std::size_t j = 0; j < n; ++j) {
+                P[i * n + j] += e.eigenvectors[k * n + i] *
+                                e.eigenvectors[k * n + j];
+              }
+            }
+          }
+          return P;
+        };
+
+        // Core Hamiltonian for initial core-density guess.
+        std::vector<double> H_core(n * n, 0.0);
+        for (std::size_t i = 0; i < n * n; ++i) {
+          H_core[i] = T[i] + V_ext[i];
+          if (!V_nl.empty()) H_core[i] += V_nl[i];
+        }
+
+        auto e_up_init = (n_occ_up > 0)
+            ? solvers::BatchedDenseEig::SolveGeneralized(n, H_core, S)
+            : solvers::EigenResult{};
+        auto e_down_init = (n_occ_down > 0)
+            ? solvers::BatchedDenseEig::SolveGeneralized(n, H_core, S)
+            : solvers::EigenResult{};
+        std::vector<double> P_up = build_P(e_up_init, n_occ_up);
+        std::vector<double> P_down = build_P(e_down_init, n_occ_down);
+
+        std::vector<double> P_up_old(n * n, 0.0);
+        std::vector<double> P_down_old(n * n, 0.0);
+        double E_total = 0.0;
+        double E_total_old = 0.0;
+        double alpha = 0.5;
+        bool converged = false;
+        int uks_iter = 0;
+        std::vector<double> energy_history;
+
+        auto trace = [&](const std::vector<double>& A,
+                         const std::vector<double>& B) {
+          double s = 0.0;
+          for (std::size_t i = 0; i < n * n; ++i) s += A[i] * B[i];
+          return s;
+        };
+
+        for (uks_iter = 0; uks_iter < max_iter; ++uks_iter) {
+          auto [H_up, H_down] = build_H_both(P_up, P_down);
+          if (H_up.empty() || H_down.empty()) {
+            std::cout << "[NaoDriver] UKS build_H_both failed at iter "
+                      << uks_iter << std::endl;
+            break;
+          }
+
+          auto e_up = (n_occ_up > 0)
+              ? solvers::BatchedDenseEig::SolveGeneralized(n, H_up, S)
+              : solvers::EigenResult{};
+          auto e_down = (n_occ_down > 0)
+              ? solvers::BatchedDenseEig::SolveGeneralized(n, H_down, S)
+              : solvers::EigenResult{};
+          if ((n_occ_up > 0 && !e_up.ok) || (n_occ_down > 0 && !e_down.ok)) {
+            std::cout << "[NaoDriver] UKS eigensolve failed at iter "
+                      << uks_iter << std::endl;
+            break;
+          }
+
+          std::vector<double> P_up_new = build_P(e_up, n_occ_up);
+          std::vector<double> P_down_new = build_P(e_down, n_occ_down);
+
+          double sum_eps_up = 0.0;
+          for (std::size_t k = 0; k < n_occ_up && k < n; ++k)
+            sum_eps_up += e_up.eigenvalues[k];
+          double sum_eps_down = 0.0;
+          for (std::size_t k = 0; k < n_occ_down && k < n; ++k)
+            sum_eps_down += e_down.eigenvalues[k];
+
+          // Simple mixing.
+          for (std::size_t i = 0; i < n * n; ++i) {
+            P_up_new[i] = alpha * P_up_new[i] + (1.0 - alpha) * P_up[i];
+            P_down_new[i] = alpha * P_down_new[i] + (1.0 - alpha) * P_down[i];
+          }
+
+          P_up = std::move(P_up_new);
+          P_down = std::move(P_down_new);
+
+          std::vector<double> P_total(n * n, 0.0);
+          for (std::size_t i = 0; i < n * n; ++i)
+            P_total[i] = P_up[i] + P_down[i];
+
+          double E_ne_ext = trace(P_total, V_ext);
+          double E_nl = V_nl.empty() ? 0.0 : trace(P_total, V_nl);
+          double E_H = 0.5 * trace(P_total, cache.V_H);
+          double E_xc_grid = cache.xc_energy_gpu;
+          double E_kin = sum_eps_up + sum_eps_down - E_ne_ext - E_nl -
+                         2.0 * E_H - trace(P_up, cache.V_xc_up) -
+                         trace(P_down, cache.V_xc_down);
+          E_total = E_kin + E_ne_ext + E_nl + E_H + E_xc_grid + E_ion;
+
+          double delta_E = std::abs(E_total - E_total_old);
+          double delta_P = 0.0;
+          for (std::size_t i = 0; i < n * n; ++i) {
+            delta_P += std::pow(P_up[i] - P_up_old[i], 2);
+            delta_P += std::pow(P_down[i] - P_down_old[i], 2);
+          }
+          delta_P = std::sqrt(delta_P);
+
+          energy_history.push_back(E_total);
+          std::cout << "[NaoDriver] UKS iter " << uks_iter
+                    << " E=" << E_total
+                    << " dE=" << delta_E
+                    << " dP=" << delta_P << std::endl;
+
+          if (uks_iter > 0 && delta_E < tol && delta_P < tol) {
+            converged = true;
+            break;
+          }
+          E_total_old = E_total;
+          P_up_old = P_up;
+          P_down_old = P_down;
+        }
+
+        result.scf.converged = converged;
+        result.scf.n_iterations = uks_iter;
+        result.scf.energy = E_total;
+        result.scf.P.assign(n * n, 0.0);
+        for (std::size_t i = 0; i < n * n; ++i)
+          result.scf.P[i] = P_up[i] + P_down[i];
+        result.scf.energy_history = energy_history;
+
+        result.energy.E_ne = trace(result.scf.P, V_ext);
+        if (!V_nl.empty()) result.energy.E_ne += trace(result.scf.P, V_nl);
+        result.energy.E_H = 0.5 * trace(result.scf.P, cache.V_H);
+        result.energy.E_xc = cache.xc_energy_gpu;
+        result.energy.E_ion = E_ion;
+        result.energy.E_kin = E_total - result.energy.E_ne - result.energy.E_H -
+                              result.energy.E_xc - result.energy.E_ion;
+        result.energy.E_total = E_total;
+      }
+      step("UKS SCF");
+    }
 
     // --- Gap 3: Convert converged H to TileMat for tile substrate stats ---
     if (result.tile_substrate_used && n >= 32) {
@@ -1126,7 +1559,8 @@ class NaoDriver {
     if (device_pipeline_ready) {
       if (d_phi) cudaFree(d_phi);
       if (d_grad_phi) cudaFree(d_grad_phi);
-      if (d_P) cudaFree(d_P);
+      if (d_P_up) cudaFree(d_P_up);
+      if (d_P_down) cudaFree(d_P_down);
       if (d_vmat) cudaFree(d_vmat);
       if (dev_arena) {
         (void)dev_arena->Release(dev_stream);
@@ -1176,6 +1610,90 @@ class NaoDriver {
       }
     }
     return forces;
+  }
+
+  // Compute the Pulay force contribution on all atoms using FD on the analytic
+  // overlap matrix S.  F_Pulay = sum_k f_k * eps_k * C_k^T * (dS/dR) * C_k.
+  // This isolates the Pulay term from the total force; the full force is
+  // available via ComputeForces (FD5 on total energy).
+  //   atomic_numbers, positions: same as Run (positions in Bohr).
+  //   h: finite-difference step (default 0.001 Bohr).
+  // Returns: 3*n_atoms Pulay forces (in Ha/Bohr).
+  static std::vector<double> ComputePulayForces(
+      const std::vector<int>& atomic_numbers,
+      const std::vector<double>& positions,
+      double grid_h = 0.3, double grid_margin = 4.0,
+      int max_iter = 50, double tol = 1e-6,
+      double h = 0.001) {
+
+    auto scf_res = Run(atomic_numbers, positions, grid_h, grid_margin,
+                       max_iter, tol);
+    const std::size_t n = scf_res.n_basis;
+    const std::size_t n_atoms = atomic_numbers.size();
+    if (n == 0 || !scf_res.scf.converged) return std::vector<double>(3 * n_atoms, 0.0);
+
+    std::size_t n_el = 0;
+    for (int Z : atomic_numbers) n_el += static_cast<std::size_t>(Z);
+    const std::size_t n_occ = n_el / 2;
+    const double occ_factor = (n_occ > 0)
+        ? static_cast<double>(n_el) / static_cast<double>(n_occ) : 0.0;
+
+    const auto& evals = scf_res.scf.eigenvalues;
+    const auto& evec = scf_res.scf.eigenvectors;
+
+    struct PulayBasisIdx {
+      std::size_t atom;
+      std::size_t fn;
+      int l;
+      int m;
+    };
+
+    auto build_S = [&](const std::vector<double>& pos) -> std::vector<double> {
+      auto atoms = BuildAtoms(atomic_numbers, pos);
+      for (std::size_t a = 0; a < atoms.size(); ++a)
+        atoms[a].position = {pos[3*a], pos[3*a+1], pos[3*a+2]};
+
+      std::vector<PulayBasisIdx> bmap;
+      for (std::size_t a = 0; a < atoms.size(); ++a)
+        for (std::size_t fi = 0; fi < atoms[a].basis.functions.size(); ++fi) {
+          const int l = atoms[a].basis.functions[fi].l;
+          for (int m = -l; m <= l; ++m)
+            bmap.push_back({a, fi, l, m});
+        }
+
+      basis::NaoTwoCenterBuilder builder;
+      auto tc = builder.Build(atoms, bmap, pos, n);
+      return tc.S;
+    };
+
+    std::vector<double> pulay(3 * n_atoms, 0.0);
+    for (std::size_t a = 0; a < n_atoms; ++a) {
+      for (int c = 0; c < 3; ++c) {
+        auto pos_plus = positions;
+        auto pos_minus = positions;
+        pos_plus[3*a + c] += h;
+        pos_minus[3*a + c] -= h;
+
+        auto S_plus = build_S(pos_plus);
+        auto S_minus = build_S(pos_minus);
+
+        double f_pulay = 0.0;
+        for (std::size_t k = 0; k < n_occ && k < evals.size(); ++k) {
+          const double eps_k = evals[k];
+          double ctds_c = 0.0;
+          for (std::size_t i = 0; i < n; ++i) {
+            const double ci = evec[k * n + i];
+            for (std::size_t j = 0; j < n; ++j) {
+              const double dS_ij = S_plus[i * n + j] - S_minus[i * n + j];
+              ctds_c += ci * dS_ij * evec[k * n + j];
+            }
+          }
+          f_pulay += occ_factor * eps_k * ctds_c;
+        }
+        pulay[3*a + c] = f_pulay / (2.0 * h);
+      }
+    }
+    return pulay;
   }
 
   // Run XL-BOMD molecular dynamics coupled to the real NAO Hamiltonian.
