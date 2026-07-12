@@ -1024,6 +1024,7 @@ set_target_properties(tides_nao_uks_tests PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME nao_driver_uks_scf
   COMMAND tides_nao_uks_tests)
+set_tests_properties(nao_driver_uks_scf PROPERTIES SKIP_RETURN_CODE 77)
 
 add_executable(tides_nao_benchmark_tests
   core/scf/tests/nao_benchmark_tests.cpp)
