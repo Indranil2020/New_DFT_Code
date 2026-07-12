@@ -1261,7 +1261,9 @@ class NaoDriver {
       std::vector<double> grad_rho_down_x, grad_rho_down_y, grad_rho_down_z;
 
 #ifdef TIDES_HAVE_CUDA
-      if (device_pipeline_ready) {
+      // Force CPU for UKS: device XC pipeline does not yet support
+      // spin-polarized evaluation reliably. Use CPU fallback.
+      if (false && device_pipeline_ready) {
         // Upload spin densities.
         cudaMemcpyAsync(d_P_up, P_up.data(), n * n * sizeof(double),
                         cudaMemcpyHostToDevice, dev_stream);
@@ -1446,15 +1448,58 @@ class NaoDriver {
       }
 #endif
 
-      // CPU fallback is not yet spin-polarized for nspin=2; signal failure.
-      (void)is_gga;
-      (void)grad_rho_up_x;
-      (void)grad_rho_up_y;
-      (void)grad_rho_up_z;
-      (void)grad_rho_down_x;
-      (void)grad_rho_down_y;
-      (void)grad_rho_down_z;
-      return {std::vector<double>{}, std::vector<double>{}};
+      // CPU fallback for UKS: build rho_up and rho_down separately,
+      // evaluate XC for each spin, build H_up and H_down.
+      // For LDA: V_xc_up depends only on rho_up. V_H depends on total.
+      const std::size_t np = n0 * n1 * n2;
+      std::vector<double> rho_up = grid::VmatBuilder::BuildRhoGemm(grid, orbitals, P_up);
+      std::vector<double> rho_down = (nspin == 2 && n_occ_down > 0)
+          ? grid::VmatBuilder::BuildRhoGemm(grid, orbitals, P_down)
+          : std::vector<double>(np, 0.0);
+      std::vector<double> rho_total(np, 0.0);
+      for (std::size_t g = 0; g < np; ++g)
+        rho_total[g] = rho_up[g] + rho_down[g];
+
+      // Hartree from total density.
+      auto poisson_result = grid::PoissonSolver::Solve(grid, rho_total);
+      auto V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, poisson_result);
+
+      // XC for spin-up.
+      cache.V_xc_up.assign(n * n, 0.0);
+      {
+        // Guard against zero density (n_occ_up=0).
+        bool has_density = false;
+        for (std::size_t g = 0; g < np; ++g) if (std::abs(rho_up[g]) > 1e-20) { has_density = true; break; }
+        if (has_density) {
+          auto xc_up = grid::XCGridEvaluator::EvaluateLDA(grid, rho_up);
+          cache.V_xc_up = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, xc_up.vxc);
+          cache.xc_energy_gpu = grid::XCGridEvaluator::XCEnergy(grid, xc_up, rho_up);
+        }
+      }
+
+      // XC for spin-down.
+      cache.V_xc_down.assign(n * n, 0.0);
+      if (nspin == 2 && n_occ_down > 0) {
+        bool has_density = false;
+        for (std::size_t g = 0; g < np; ++g) if (std::abs(rho_down[g]) > 1e-20) { has_density = true; break; }
+        if (has_density) {
+          auto xc_down = grid::XCGridEvaluator::EvaluateLDA(grid, rho_down);
+          cache.V_xc_down = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, xc_down.vxc);
+          cache.xc_energy_gpu += grid::XCGridEvaluator::XCEnergy(grid, xc_down, rho_down);
+        }
+      } else {
+        cache.V_xc_down = cache.V_xc_up;
+      }
+
+      // H_up = T + V_ext + V_H + V_xc_up (+ V_nl)
+      cache.V_H = std::move(V_H);
+      std::vector<double> H_up(n * n, 0.0), H_down(n * n, 0.0);
+      for (std::size_t i = 0; i < n * n; ++i) {
+        H_up[i] = T[i] + V_ext[i] + cache.V_H[i] + cache.V_xc_up[i];
+        H_down[i] = T[i] + V_ext[i] + cache.V_H[i] + cache.V_xc_down[i];
+        if (!V_nl.empty()) { H_up[i] += V_nl[i]; H_down[i] += V_nl[i]; }
+      }
+      return {H_up, H_down};
     };
 
     if (nspin == 1) {
@@ -1587,10 +1632,6 @@ class NaoDriver {
           delta_P = std::sqrt(delta_P);
 
           energy_history.push_back(E_total);
-          std::cout << "[NaoDriver] UKS iter " << uks_iter
-                    << " E=" << E_total
-                    << " dE=" << delta_E
-                    << " dP=" << delta_P << std::endl;
 
           if (uks_iter > 0 && delta_E < tol && delta_P < tol) {
             converged = true;
