@@ -210,6 +210,7 @@ def test_scf_h2():
             atomic_numbers=[1, 1],
             positions=[[0, 0, 0], [0, 0, 1.4]],
         ),
+        grid=GridConfig(coarse_spacing=0.30, fine_spacing=0.20, margin=2.0),
     )
     calc = TidesCalculator(cfg)
     result = calc.run_scf()
@@ -225,6 +226,7 @@ def test_energy_h2():
             atomic_numbers=[1, 1],
             positions=[[0, 0, 0], [0, 0, 1.4]],
         ),
+        grid=GridConfig(coarse_spacing=0.30, fine_spacing=0.20, margin=2.0),
     )
     calc = TidesCalculator(cfg)
     e_res = calc.compute_energy()
@@ -239,6 +241,7 @@ def test_forces_h2():
             atomic_numbers=[1, 1],
             positions=[[0, 0, 0], [0, 0, 2.0]],  # stretched
         ),
+        grid=GridConfig(coarse_spacing=0.30, fine_spacing=0.20, margin=2.0),
     )
     calc = TidesCalculator(cfg)
     f_res = calc.compute_forces()
@@ -255,6 +258,7 @@ def test_forces_newton_third_law():
             atomic_numbers=[1, 1],
             positions=[[0, 0, 0], [0, 0, 2.0]],
         ),
+        grid=GridConfig(coarse_spacing=0.30, fine_spacing=0.20, margin=2.0),
     )
     calc = TidesCalculator(cfg)
     f_res = calc.compute_forces()
@@ -276,6 +280,7 @@ def test_xlbomd_h2():
             atomic_numbers=[1, 1],
             positions=[[0, 0, 0], [0, 0, 1.5]],
         ),
+        grid=GridConfig(coarse_spacing=0.30, fine_spacing=0.20, margin=2.0),
         md=MDConfig(mode="xl-bomd", n_steps=10, timestep=0.5),
     )
     calc = TidesCalculator(cfg)
@@ -292,6 +297,7 @@ def test_optimize_h2():
             atomic_numbers=[1, 1],
             positions=[[0, 0, 0], [0, 0, 1.8]],
         ),
+        grid=GridConfig(coarse_spacing=0.30, fine_spacing=0.20, margin=2.0),
         md=MDConfig(mode="optimize", n_steps=50, f_max=1e-3),
     )
     calc = TidesCalculator(cfg)
@@ -307,6 +313,7 @@ def test_static_mode():
             atomic_numbers=[1, 1],
             positions=[[0, 0, 0], [0, 0, 1.4]],
         ),
+        grid=GridConfig(coarse_spacing=0.30, fine_spacing=0.20, margin=2.0),
         md=MDConfig(mode="static"),
     )
     calc = TidesCalculator(cfg)
@@ -345,6 +352,60 @@ def test_cli_run():
     rc = main(["run", path])
     os.unlink(path)
     assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# Native backend verification tests (WP10 gap #17)
+# ---------------------------------------------------------------------------
+
+def test_native_available_check():
+    """TidesCalculator.native_available() returns a bool."""
+    assert isinstance(TidesCalculator.native_available(), bool)
+
+
+def test_require_native_raises_when_unavailable():
+    """require_native=True must raise RuntimeError when native backend is missing."""
+    if TidesCalculator.native_available():
+        return  # Skip: native is available, can't test the failure path
+    cfg = TidesConfig(
+        system=SystemConfig(
+            n_atoms=2,
+            atomic_numbers=[1, 1],
+            positions=[[0, 0, 0], [0, 0, 1.4]],
+        ),
+    )
+    import pytest
+    with pytest.raises(RuntimeError, match="Native C\\+\\+ backend required"):
+        TidesCalculator(cfg, require_native=True)
+
+
+def test_native_backend_has_molecule_driver():
+    """When native is available, MoleculeDriver must be accessible (not model Hamiltonian)."""
+    if not TidesCalculator.native_available():
+        return  # Skip: native not built
+    from tides import _native
+    assert hasattr(_native, "MoleculeDriver"), "MoleculeDriver not found in native bindings"
+    assert hasattr(_native, "NaoDriver"), "NaoDriver not found in native bindings"
+    assert hasattr(_native, "SCFDriver"), "SCFDriver not found in native bindings"
+
+
+def test_native_backend_h2_scf():
+    """When native is available, H2 SCF must use MoleculeDriver (not model Hamiltonian)."""
+    if not TidesCalculator.native_available():
+        return  # Skip: native not built
+    cfg = TidesConfig(
+        system=SystemConfig(
+            n_atoms=2,
+            atomic_numbers=[1, 1],
+            positions=[[0, 0, 0], [0, 0, 1.4]],
+        ),
+    )
+    calc = TidesCalculator(cfg, require_native=True)
+    assert calc.backend == "native"
+    result = calc.run_scf()
+    assert result.is_ok, f"Native SCF failed: {result.status}"
+    assert result.value.converged
+    assert result.value.energy < 0
 
 
 # ---------------------------------------------------------------------------

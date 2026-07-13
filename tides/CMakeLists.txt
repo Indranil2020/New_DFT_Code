@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(TIDES_ENABLE_CUDA "Build CUDA WP1 substrate probes when CUDA is available" ON)
 option(TIDES_ENABLE_HIP "Build HIP/ROCm backend when available" OFF)
+option(TIDES_ENABLE_METIS "Link METIS for high-quality graph partitioning" ON)
 
 add_library(tides_core INTERFACE)
 target_include_directories(tides_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
@@ -110,8 +111,8 @@ if(TIDES_ENABLE_CUDA)
   check_language(CUDA)
   if(CMAKE_CUDA_COMPILER)
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-      set(CMAKE_CUDA_ARCHITECTURES 75-virtual 86-virtual CACHE STRING
-          "CUDA architectures; PTX targets keep builds runnable on newer GPUs")
+      set(CMAKE_CUDA_ARCHITECTURES 75-virtual 86-virtual 90-virtual CACHE STRING
+          "CUDA architectures; PTX targets keep builds runnable on newer GPUs (RTX 5050 = sm_120 via JIT)")
     endif()
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
@@ -1042,6 +1043,38 @@ set_target_properties(tides_nao_pseudo_tests PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME nao_pseudo_scf_validation
   COMMAND tides_nao_pseudo_tests)
+
+add_executable(tides_pp_scf_validation_tests
+  core/scf/tests/pp_scf_validation_tests.cpp)
+target_link_libraries(tides_pp_scf_validation_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_pp_scf_validation_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME pp_scf_validation
+  COMMAND tides_pp_scf_validation_tests)
+add_executable(tides_paw_tests
+  core/basis/paw/tests/paw_tests.cpp)
+target_link_libraries(tides_paw_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_paw_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME paw_projector_augmented_wave COMMAND tides_paw_tests)
+
+add_executable(tides_diffuse_basis_tests
+  core/basis/tests/diffuse_basis_tests.cpp)
+target_link_libraries(tides_diffuse_basis_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_diffuse_basis_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME diffuse_basis_augmentation COMMAND tides_diffuse_basis_tests)
+
+add_executable(tides_real_pp_scf_tests
+  core/scf/tests/real_pp_scf_tests.cpp)
+target_link_libraries(tides_real_pp_scf_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_real_pp_scf_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME real_pp_scf_validation COMMAND tides_real_pp_scf_tests)
 add_executable(tides_e6_dynamics_profile
   tests/per_engine/e6_dynamics/e6_test_profile.cpp)
 target_link_libraries(tides_e6_dynamics_profile PRIVATE
@@ -1142,9 +1175,67 @@ add_test(NAME hse_short_range_screening COMMAND tides_hse_screening_tests)
 
 # --- WP8: Parallel, HPC, packaging (CPU foundation) -------------------------
 
+# --- METIS graph partitioner (optional, high-quality k-way) -----------------
+# Searches system paths and the project-local external/metis directory.
+# When found, defines TIDES_HAVE_METIS for the partitioner backend.
+if(TIDES_ENABLE_METIS)
+  set(METIS_ROOT "${CMAKE_SOURCE_DIR}/../external/metis" CACHE PATH "METIS install prefix")
+  find_path(METIS_INCLUDE_DIR metis.h
+    HINTS ${METIS_ROOT}/include /usr/include /usr/local/include
+    REQUIRED)
+  find_library(METIS_LIBRARY NAMES metis metis5
+    HINTS ${METIS_ROOT} ${METIS_ROOT}/lib /usr/lib/x86_64-linux-gnu /usr/local/lib
+    REQUIRED)
+  message(STATUS "METIS found: ${METIS_LIBRARY} (headers: ${METIS_INCLUDE_DIR})")
+endif()
+
 add_library(tides_parallel_lib INTERFACE)
 target_include_directories(tides_parallel_lib INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(tides_parallel_lib INTERFACE tides_core)
+if(TIDES_ENABLE_METIS AND METIS_LIBRARY)
+  target_include_directories(tides_parallel_lib INTERFACE ${METIS_INCLUDE_DIR})
+  target_link_libraries(tides_parallel_lib INTERFACE ${METIS_LIBRARY})
+  target_compile_definitions(tides_parallel_lib INTERFACE TIDES_HAVE_METIS=1)
+  message(STATUS "WP8: METIS graph partitioner enabled (TIDES_HAVE_METIS=1)")
+endif()
+
+# --- NCCL (single-node multi-GPU communication) ---------------------------
+# Searched in NVIDIA HPC SDK, pip nvidia-nccl, and system paths.
+find_path(NCCL_INCLUDE_DIR nccl.h
+  HINTS /opt/nvidia/hpc_sdk/Linux_x86_64/*/comm_libs/*/nccl/include
+        $ENV{HOME}/.local/lib/python3.12/site-packages/nvidia/nccl/include
+        /usr/include /usr/local/include
+  NO_DEFAULT_PATH)
+find_library(NCCL_LIBRARY NAMES nccl
+  HINTS /opt/nvidia/hpc_sdk/Linux_x86_64/*/comm_libs/*/nccl/lib
+        $ENV{HOME}/.local/lib/python3.12/site-packages/nvidia/nccl/lib
+        /usr/lib/x86_64-linux-gnu /usr/local/lib)
+if(NCCL_INCLUDE_DIR AND NCCL_LIBRARY)
+  target_include_directories(tides_parallel_lib INTERFACE ${NCCL_INCLUDE_DIR})
+  target_link_libraries(tides_parallel_lib INTERFACE ${NCCL_LIBRARY})
+  target_compile_definitions(tides_parallel_lib INTERFACE TIDES_HAVE_NCCL=1)
+  message(STATUS "WP8: NCCL found: ${NCCL_LIBRARY}")
+else()
+  message(STATUS "WP8: NCCL not found — multi-GPU halo exchange uses CPU simulation")
+endif()
+
+# --- NVSHMEM (multi-node GPU PGAS communication) ----------------------------
+# Searched in NVIDIA HPC SDK.
+find_path(NVSHMEM_INCLUDE_DIR nvshmem.h
+  HINTS /opt/nvidia/hpc_sdk/Linux_x86_64/*/comm_libs/*/nvshmem/include
+        /usr/include /usr/local/include
+  NO_DEFAULT_PATH)
+find_library(NVSHMEM_LIBRARY NAMES nvshmem_host nvshmem
+  HINTS /opt/nvidia/hpc_sdk/Linux_x86_64/*/comm_libs/*/nvshmem/lib
+        /usr/lib/x86_64-linux-gnu /usr/local/lib)
+if(NVSHMEM_INCLUDE_DIR AND NVSHMEM_LIBRARY)
+  target_include_directories(tides_parallel_lib INTERFACE ${NVSHMEM_INCLUDE_DIR})
+  target_link_libraries(tides_parallel_lib INTERFACE ${NVSHMEM_LIBRARY})
+  target_compile_definitions(tides_parallel_lib INTERFACE TIDES_HAVE_NVSHMEM=1)
+  message(STATUS "WP8: NVSHMEM found: ${NVSHMEM_LIBRARY}")
+else()
+  message(STATUS "WP8: NVSHMEM not found — multi-node PGAS deferred")
+endif()
 
 add_executable(tides_wp8_tests
   core/parallel/tests/wp8_tests.cpp)
@@ -1206,9 +1297,16 @@ if(BUILD_PYTHON_BINDINGS)
     find_package(nanobind CONFIG REQUIRED)
     nanobind_add_module(tides_native
       api/python/tides/_native.cpp)
-    target_link_libraries(tides_native PRIVATE tides_core tides_scf tides_solvers)
+    if(TIDES_ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
+      set_source_files_properties(api/python/tides/_native.cpp PROPERTIES LANGUAGE CUDA)
+    endif()
+    target_link_libraries(tides_native PRIVATE
+      tides_core tides_scf tides_solvers tides_basis tides_grid)
     if(LAPACK_FOUND)
-      target_link_libraries(tides_native PRIVATE -lmkl_rt)
+      target_link_libraries(tides_native PRIVATE ${LAPACK_LIBRARIES})
+    endif()
+    if(TIDES_HAVE_CUDA)
+      target_link_libraries(tides_native PRIVATE tides_cuda_grid)
     endif()
     set_target_properties(tides_native PROPERTIES
       OUTPUT_NAME "_native"
@@ -1221,7 +1319,8 @@ endif()
 
 # Broker dispatch test: R0/R1/R2/R3 selection + ChFSI validation
 add_executable(tides_broker_dispatch_tests
-  core/solvers/tests/broker_dispatch_tests.cpp)
+  core/solvers/tests/broker_dispatch_tests.cpp
+  core/solvers/broker.cpp)
 target_link_libraries(tides_broker_dispatch_tests PRIVATE
   tides_solvers tides_scf)
 if(LAPACK_FOUND)
@@ -1234,3 +1333,153 @@ add_executable(tides_tile_production_tests
   core/tile/tests/tile_production_tests.cpp)
 target_link_libraries(tides_tile_production_tests PRIVATE tides_core)
 add_test(NAME tile_production_gemm COMMAND tides_tile_production_tests)
+
+# E1: TileMat SCF integration test (P@H product in product path)
+add_executable(tides_tile_scf_tests
+  core/tile/tests/tile_scf_tests.cpp)
+target_link_libraries(tides_tile_scf_tests PRIVATE tides_core)
+set_target_properties(tides_tile_scf_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME tile_scf_matrix_operations COMMAND tides_tile_scf_tests)
+
+# ============================================================
+# Remediation Stream B: XL-BOMD extended tests (B1-B4)
+# ============================================================
+add_executable(tides_xlbomd_extended_tests
+  core/dynamics/tests/xlbomd_extended_tests.cpp)
+target_link_libraries(tides_xlbomd_extended_tests PRIVATE tides_core)
+set_target_properties(tides_xlbomd_extended_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME xlbomd_extended_nve_nhc_ksa_shadow
+  COMMAND tides_xlbomd_extended_tests)
+
+# ============================================================
+# Remediation Stream C: D4, point-group, BSSE, k-points, Mermin
+# ============================================================
+add_executable(tides_d4_tests
+  core/hybrids/tests/d4_tests.cpp)
+target_link_libraries(tides_d4_tests PRIVATE tides_core)
+add_test(NAME d4_dispersion_charge_dependent COMMAND tides_d4_tests)
+
+add_executable(tides_point_group_tests
+  core/common/tests/point_group_tests.cpp)
+target_link_libraries(tides_point_group_tests PRIVATE tides_core)
+add_test(NAME point_group_detection_symmetrize
+  COMMAND tides_point_group_tests)
+
+add_executable(tides_bsse_tests
+  core/basis/tests/bsse_tests.cpp)
+target_link_libraries(tides_bsse_tests PRIVATE tides_core)
+add_test(NAME bsse_counterpoise_correction COMMAND tides_bsse_tests)
+
+add_executable(tides_kpoints_tests
+  core/tile/tests/kpoints_tests.cpp)
+target_link_libraries(tides_kpoints_tests PRIVATE tides_core)
+add_test(NAME kpoints_monkhorst_pack_bloch_phase
+  COMMAND tides_kpoints_tests)
+
+add_executable(tides_mermin_tests
+  core/scf/tests/mermin_tests.cpp)
+target_link_libraries(tides_mermin_tests PRIVATE tides_core)
+add_test(NAME mermin_finite_temperature_occupations
+  COMMAND tides_mermin_tests)
+
+# ============================================================
+# Remediation Stream D: A-posteriori error control + energy metering
+# ============================================================
+add_executable(tides_a_posteriori_tests
+  core/verification/tests/a_posteriori_tests.cpp)
+target_link_libraries(tides_a_posteriori_tests PRIVATE tides_core)
+add_test(NAME a_posteriori_error_bounds
+  COMMAND tides_a_posteriori_tests)
+
+add_executable(tides_energy_metering_tests
+  core/verification/tests/energy_metering_tests.cpp)
+target_link_libraries(tides_energy_metering_tests PRIVATE tides_core)
+add_test(NAME energy_metering_kwh_logging
+  COMMAND tides_energy_metering_tests)
+
+# ============================================================
+# Remediation Stream E: Architecture integration (E1, E4-E7)
+# ============================================================
+# (tile_scf_tests already defined above with CUDA_RUNTIME_LIBRARY)
+
+add_executable(tides_mixed_precision_tests
+  core/tile/tests/mixed_precision_tests.cpp)
+target_link_libraries(tides_mixed_precision_tests PRIVATE tides_core)
+add_test(NAME mixed_precision_ozaki_gemm COMMAND tides_mixed_precision_tests)
+
+add_executable(tides_cuda_graph_scf_tests
+  core/tile/tests/cuda_graph_scf_tests.cpp)
+target_link_libraries(tides_cuda_graph_scf_tests PRIVATE tides_core)
+add_test(NAME cuda_graph_capture_replay COMMAND tides_cuda_graph_scf_tests)
+
+add_executable(tides_qtt_scf_tests
+  core/tile/tests/qtt_scf_tests.cpp)
+target_link_libraries(tides_qtt_scf_tests PRIVATE tides_core)
+add_test(NAME qtt_compression_svd_gemm COMMAND tides_qtt_scf_tests)
+
+add_executable(tides_aspc_tests
+  core/dynamics/tests/aspc_tests.cpp)
+target_link_libraries(tides_aspc_tests PRIVATE tides_core)
+add_test(NAME aspc_extrapolation_predictor COMMAND tides_aspc_tests)
+
+# ============================================================
+# Remediation C6: HSE screened exchange
+# ============================================================
+add_executable(tides_hse_screened_tests
+  core/hybrids/tests/hse_screened_tests.cpp)
+target_link_libraries(tides_hse_screened_tests PRIVATE tides_core)
+add_test(NAME hse_screened_exchange_omega COMMAND tides_hse_screened_tests)
+
+
+# ============================================================
+# Gap integration: verify all partially-resolved modules are wired
+# into the product DFT engine path (NaoDriver, MoleculeDriver,
+# SCFDriver, XLBOMD).
+# ============================================================
+add_executable(tides_gap_integration_tests
+  core/tests/gap_integration_tests.cpp)
+target_link_libraries(tides_gap_integration_tests PRIVATE
+  tides_scf tides_grid tides_cuda_grid tides_solvers)
+add_test(NAME gap_modules_wired_into_product_path
+  COMMAND tides_gap_integration_tests)
+
+# ============================================================
+# WP10: Sphinx documentation build target
+# ============================================================
+# Provides a `sphinx_docs` target that builds the TIDES theory manual
+# and API reference into HTML. Requires Python and Sphinx installed.
+#
+# Usage:
+#   cmake -DBUILD_DOCS=ON ..
+#   cmake --build . --target sphinx_docs
+#
+# The output is placed in ${CMAKE_CURRENT_BINARY_DIR}/sphinx_html.
+option(BUILD_DOCS "Build Sphinx documentation" OFF)
+if(BUILD_DOCS)
+  find_package(Python COMPONENTS Interpreter REQUIRED)
+  execute_process(
+    COMMAND ${Python_EXECUTABLE} -c "import sphinx; print(sphinx.__version__)"
+    OUTPUT_VARIABLE SPHINX_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE SPHINX_RESULT)
+  if(SPHINX_RESULT EQUAL 0)
+    set(SPHINX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/docs/sphinx")
+    set(SPHINX_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/sphinx_html")
+    add_custom_target(sphinx_docs
+      COMMAND ${Python_EXECUTABLE} -m sphinx
+              -b html
+              "${SPHINX_SOURCE_DIR}"
+              "${SPHINX_BUILD_DIR}"
+      DEPENDS "${SPHINX_SOURCE_DIR}/conf.py"
+              "${SPHINX_SOURCE_DIR}/index.rst"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+      COMMENT "Building Sphinx HTML documentation into ${SPHINX_BUILD_DIR}"
+      VERBATIM)
+    message(STATUS "WP10: Sphinx docs target enabled (sphinx ${SPHINX_VERSION})")
+    message(STATUS "  Build with: cmake --build . --target sphinx_docs")
+  else()
+    message(WARNING "WP10: Sphinx not found — docs target skipped. Install with: pip install sphinx")
+  endif()
+endif()

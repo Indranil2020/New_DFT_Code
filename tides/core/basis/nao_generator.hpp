@@ -194,6 +194,20 @@ class NaoGenerator {
     return r;
   }
 
+  // Augmented DZP recipe: DZP + one diffuse function per l.
+  // The diffuse function has a large r_cut (wide confinement radius) to
+  // capture the tail of weakly-bound systems (anions, polarizabilities,
+  // dispersion interactions). This is the aug-cc-pVDZ analog for NAO.
+  static NaoRecipe AugDzpRecipe(int Z, const std::string& el) {
+    NaoRecipe r = DzpRecipe(Z, el);
+    const double base = 10.0 / std::sqrt(static_cast<double>(Z));
+    for (auto& ch : r.channels) {
+      // Add a diffuse zeta with a large confinement radius.
+      ch.rcuts.push_back(base * 2.5);  // diffuse: 2.5x the valence radius
+    }
+    return r;
+  }
+
  private:
   static double LdaXC_V(double n) {
     return tides::atomgen::LdaXC::VXC(n, 0.0);

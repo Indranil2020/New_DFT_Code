@@ -124,7 +124,7 @@ int TestXLBOMD() {
   // dt=1.0fs gives ~15 steps per period — stable.
   double k = 0.01;
   double R_eq = 1.4;
-  auto force_fn = [&](const std::vector<double>& R) -> std::vector<double> {
+  auto force_fn = [&](const std::vector<double>& R, const std::vector<double>& P) -> std::vector<double> {
     std::vector<double> F(6, 0.0);
     double dr = R[0] - R[3] - R_eq;  // displacement along x
     F[0] = -k * dr;

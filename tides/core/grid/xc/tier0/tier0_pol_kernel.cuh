@@ -30,6 +30,14 @@ __global__ void LdaPolKernel(const double* __restrict__ rho,
     const double rho_up = rho[point];
     const double rho_down = rho[point_stride + point];
     const double weight = weights[point];
+    const double rho_total = rho_up + rho_down;
+
+    if (rho_total < 1e-15) {
+      wv_rho[point] = 0.0;
+      wv_rho[point_stride + point] = 0.0;
+      continue;
+    }
+
     const double rho_in[2] = {rho_up, rho_down};
 
     LdaPolEvaluation evaluation = pol(rho_in);
@@ -38,7 +46,7 @@ __global__ void LdaPolKernel(const double* __restrict__ rho,
     wv_rho[point_stride + point] = weight * evaluation.vrho[1];
 
     if (fast_reduction) {
-      local_energy += weight * (rho_up + rho_down) * evaluation.eps;
+      local_energy += weight * rho_total * evaluation.eps;
     }
   }
   if (!fast_reduction) return;
@@ -60,9 +68,11 @@ __global__ void LdaPolDeterministicEnergyKernel(
   for (std::int64_t point = 0; point < np; ++point) {
     const double rho_up = rho[point];
     const double rho_down = rho[point_stride + point];
+    const double rho_total = rho_up + rho_down;
+    if (rho_total < 1e-15) continue;
     const double rho_in[2] = {rho_up, rho_down};
     LdaPolEvaluation evaluation = pol(rho_in);
-    energy += weights[point] * (rho_up + rho_down) * evaluation.eps;
+    energy += weights[point] * rho_total * evaluation.eps;
   }
   exc[0] = energy;
 }
@@ -87,6 +97,20 @@ __global__ void GgaPolKernel(const double* __restrict__ rho,
     const double rho_up = rho[point];
     const double rho_down = rho[point_stride + point];
     const double weight = weights[point];
+    const double rho_total = rho_up + rho_down;
+
+    if (rho_total < 1e-15) {
+      wv_rho[point] = 0.0;
+      wv_rho[point_stride + point] = 0.0;
+      wv_grad[point] = 0.0;
+      wv_grad[point_stride + point] = 0.0;
+      wv_grad[2 * point_stride + point] = 0.0;
+      wv_grad[3 * point_stride + point] = 0.0;
+      wv_grad[4 * point_stride + point] = 0.0;
+      wv_grad[5 * point_stride + point] = 0.0;
+      continue;
+    }
+
     const double gx_up = grad[point];
     const double gy_up = grad[point_stride + point];
     const double gz_up = grad[2 * point_stride + point];
@@ -138,6 +162,8 @@ __global__ void GgaPolDeterministicEnergyKernel(
   for (std::int64_t point = 0; point < np; ++point) {
     const double rho_up = rho[point];
     const double rho_down = rho[point_stride + point];
+    const double rho_total = rho_up + rho_down;
+    if (rho_total < 1e-15) continue;
     const double gx_up = grad[point];
     const double gy_up = grad[point_stride + point];
     const double gz_up = grad[2 * point_stride + point];
@@ -150,7 +176,7 @@ __global__ void GgaPolDeterministicEnergyKernel(
         gx_up * gx_down + gy_up * gy_down + gz_up * gz_down,
         gx_down * gx_down + gy_down * gy_down + gz_down * gz_down};
     GgaPolEvaluation evaluation = pol(rho_in, sigma_in);
-    energy += weights[point] * (rho_up + rho_down) * evaluation.eps;
+    energy += weights[point] * rho_total * evaluation.eps;
   }
   exc[0] = energy;
 }

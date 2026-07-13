@@ -67,4 +67,24 @@ class RhoBuilder {
   }
 };
 
+  // Build density from a density matrix (R2/R3 path — no eigenvectors needed).
+  // rho(r) = sum_{mu,nu} P_{mu,nu} * phi_mu(r) * phi_nu(r)
+  static std::vector<double> BuildFromDensityMatrix(
+      const UniformGrid3D& grid,
+      const std::vector<double>& P,       // [n_basis][n_basis]
+      const std::vector<std::vector<double>>& phi,  // [n_basis][n_points]
+      std::size_t n_basis) {
+    const std::size_t N = grid.total_points();
+    std::vector<double> rho(N, 0.0);
+    for (std::size_t mu = 0; mu < n_basis; ++mu) {
+      for (std::size_t nu = 0; nu < n_basis; ++nu) {
+        const double p = P[mu * n_basis + nu];
+        if (std::abs(p) < 1e-30) continue;
+        for (std::size_t g = 0; g < N; ++g)
+          rho[g] += p * phi[mu][g] * phi[nu][g];
+      }
+    }
+    return rho;
+  }
+
 }  // namespace tides::grid

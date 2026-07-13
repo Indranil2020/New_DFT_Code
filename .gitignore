@@ -9,7 +9,7 @@ build*
 
 # libxc build output (from autotools: configure --prefix=$PWD/../install && make install)
 external/install/
-
+external/libxc/*
 
 # Python cache
 __pycache__/

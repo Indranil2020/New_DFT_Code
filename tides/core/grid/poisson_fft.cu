@@ -75,6 +75,21 @@ __global__ void ApplyGreensFunctionKernel(
   }
 }
 
+// Kernel: pointwise complex multiplication for FFT-based convolution.
+// V(k) = a(k) * b(k) (complex multiply).
+__global__ void ComplexMultiplyKernel(
+    cufftDoubleComplex* out,
+    const cufftDoubleComplex* a,
+    const cufftDoubleComplex* b,
+    int total) {
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= total) return;
+  const double ar = a[idx].x, ai = a[idx].y;
+  const double br = b[idx].x, bi = b[idx].y;
+  out[idx].x = ar * br - ai * bi;
+  out[idx].y = ar * bi + ai * br;
+}
+
 }  // namespace
 
 struct PoissonFftGpuResult {
@@ -319,6 +334,242 @@ struct PoissonFftGpuResult {
           "GPU cuFFT Poisson vs CPU reference"},
       0.0, static_cast<std::uint64_t>(N), static_cast<std::uint64_t>(N), 0,
       "CUDA cuFFT periodic Poisson solver"});
+
+  return result;
+}
+
+// GPU free-space Poisson solver via zero-padded cuFFT convolution.
+// Ports PoissonSolver::SolveFreeFFT to GPU: doubles the grid, zero-pads rho
+// into the first octant, builds the 1/|r| Coulomb kernel, forward-FFT both,
+// pointwise multiply, inverse-FFT, extract first octant.
+// This eliminates the D2H transfer for molecular Poisson in the SCF loop.
+[[nodiscard]] Result<PoissonFftGpuResult> PoissonFreeCuda(
+    const UniformGrid3D& grid,
+    const std::vector<double>& rho) {
+  const std::size_t N = grid.total_points();
+  PoissonFftGpuResult result;
+  result.grid_size = N;
+
+  if (N == 0) return result;
+  if (rho.size() != N)
+    return Status::InvalidArgument("rho size mismatch with grid");
+
+  // Small grids: CPU FFTW is faster (cuFFT plan creation overhead).
+  if (N <= 32768) {
+    auto t0 = std::chrono::steady_clock::now();
+    auto V_cpu = PoissonSolver::SolveFreeFFT(grid, rho);
+    auto t1 = std::chrono::steady_clock::now();
+    result.V = V_cpu;
+    result.kernel_ms =
+        std::chrono::duration<double, std::milli>(t1 - t0).count();
+    const auto [h0, h1, h2] = grid.h;
+    const double dv = h0 * h1 * h2;
+    double E = 0.0;
+    for (std::size_t i = 0; i < N; ++i)
+      E += rho[i] * V_cpu[i] * dv;
+    result.hartree_energy = 0.5 * E;
+    tides::tile::PrecisionDescriptor desc;
+    desc.storage = tides::tile::NumericFormat::kFloat64;
+    desc.compute = tides::tile::NumericFormat::kFloat64;
+    desc.reduction = tides::tile::NumericFormat::kFloat64;
+    desc.determinism = tides::tile::DeterminismMode::kDeterministic;
+    desc.label = "cuda-poisson-free";
+    result.ledger.Add(tides::tile::OperationLedgerEntry{
+        tides::tile::OperationKind::kPoissonSolve,
+        desc,
+        tides::tile::ErrorBudget{tides::tile::ErrorMetric::kAbsolute, 0.0,
+            "CPU fallback free-space Poisson"},
+        0.0, N, N, 0,
+        "CUDA free-space Poisson (CPU fallback for small grid)"});
+    return result;
+  }
+
+  if (!PoissonFftCudaAvailable())
+    return Status::IoError("CUDA runtime not available for free-space Poisson");
+
+  const auto [n0, n1, n2] = grid.n;
+  const auto [h0, h1, h2] = grid.h;
+  const std::size_t m0 = 2 * n0, m1 = 2 * n1, m2 = 2 * n2;
+  const std::size_t M = m0 * m1 * m2;
+  const double dv = h0 * h1 * h2;
+  const double h_eff = std::cbrt(dv);
+  const double self_phi = 2.3801 / h_eff;
+
+  // Prepare zero-padded rho and 1/|r| kernel on host.
+  std::vector<cufftDoubleComplex> host_rho(M);
+  std::vector<cufftDoubleComplex> host_g(M);
+  for (std::size_t i = 0; i < M; ++i) {
+    host_rho[i].x = 0.0; host_rho[i].y = 0.0;
+    host_g[i].x = 0.0;   host_g[i].y = 0.0;
+  }
+  // Place rho*dv in the first octant.
+  for (std::size_t iz = 0; iz < n2; ++iz)
+    for (std::size_t iy = 0; iy < n1; ++iy)
+      for (std::size_t ix = 0; ix < n0; ++ix) {
+        const std::size_t src = grid.flatten(ix, iy, iz);
+        const std::size_t dst = ix + m0 * (iy + m1 * iz);
+        host_rho[dst].x = rho[src] * dv;
+      }
+  // Build the 1/|r| kernel on the doubled grid.
+  for (std::size_t iz = 0; iz < m2; ++iz) {
+    const double dz = (iz < n2) ? static_cast<double>(iz) * h2
+                                : (static_cast<double>(iz) - static_cast<double>(m2)) * h2;
+    for (std::size_t iy = 0; iy < m1; ++iy) {
+      const double dy = (iy < n1) ? static_cast<double>(iy) * h1
+                                  : (static_cast<double>(iy) - static_cast<double>(m1)) * h1;
+      for (std::size_t ix = 0; ix < m0; ++ix) {
+        const double dx = (ix < n0) ? static_cast<double>(ix) * h0
+                                    : (static_cast<double>(ix) - static_cast<double>(m0)) * h0;
+        const bool wrap = (ix == n0) || (iy == n1) || (iz == n2);
+        const std::size_t g = ix + m0 * (iy + m1 * iz);
+        if (wrap) {
+          host_g[g].x = 0.0;
+        } else {
+          const double r2 = dx * dx + dy * dy + dz * dz;
+          if (r2 < 1e-30)
+            host_g[g].x = self_phi;
+          else
+            host_g[g].x = 1.0 / std::sqrt(r2);
+        }
+      }
+    }
+  }
+
+  // Upload to device via GPU arena.
+  GpuArena& arena = GpuArena::Instance();
+  cudaStream_t stream = arena.Stream();
+
+  cufftDoubleComplex* d_rho = nullptr;
+  cufftDoubleComplex* d_g = nullptr;
+  cufftDoubleComplex* d_V = nullptr;
+  cufftHandle plan_fwd_rho = 0, plan_fwd_g = 0, plan_inv = 0;
+
+  auto cleanup = [&]() {
+    if (d_rho) arena.Free(d_rho);
+    if (d_g) arena.Free(d_g);
+    if (d_V) arena.Free(d_V);
+    if (plan_fwd_rho) cufftDestroy(plan_fwd_rho);
+    if (plan_fwd_g) cufftDestroy(plan_fwd_g);
+    if (plan_inv) cufftDestroy(plan_inv);
+  };
+
+  d_rho = static_cast<cufftDoubleComplex*>(
+      arena.Alloc(M * sizeof(cufftDoubleComplex)));
+  if (!d_rho) { cleanup(); return Status::IoError("arena.Alloc failed for rho"); }
+  cudaError_t err = arena.H2D(d_rho, host_rho.data(),
+                               M * sizeof(cufftDoubleComplex));
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "arena.H2D rho"); }
+
+  d_g = static_cast<cufftDoubleComplex*>(
+      arena.Alloc(M * sizeof(cufftDoubleComplex)));
+  if (!d_g) { cleanup(); return Status::IoError("arena.Alloc failed for g"); }
+  err = arena.H2D(d_g, host_g.data(), M * sizeof(cufftDoubleComplex));
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "arena.H2D g"); }
+
+  d_V = static_cast<cufftDoubleComplex*>(
+      arena.Alloc(M * sizeof(cufftDoubleComplex)));
+  if (!d_V) { cleanup(); return Status::IoError("arena.Alloc failed for V"); }
+
+  // Create cuFFT plans (dimension order: m2, m1, m0 for column-major arrays).
+  cufftResult cufft_err = cufftPlan3d(&plan_fwd_rho,
+      static_cast<int>(m2), static_cast<int>(m1), static_cast<int>(m0),
+      CUFFT_Z2Z);
+  if (cufft_err != CUFFT_SUCCESS) {
+    cleanup(); return CufftStatus(cufft_err, "cufftPlan3d Z2Z fwd rho");
+  }
+  cufftSetStream(plan_fwd_rho, stream);
+
+  cufft_err = cufftPlan3d(&plan_fwd_g,
+      static_cast<int>(m2), static_cast<int>(m1), static_cast<int>(m0),
+      CUFFT_Z2Z);
+  if (cufft_err != CUFFT_SUCCESS) {
+    cleanup(); return CufftStatus(cufft_err, "cufftPlan3d Z2Z fwd g");
+  }
+  cufftSetStream(plan_fwd_g, stream);
+
+  cufft_err = cufftPlan3d(&plan_inv,
+      static_cast<int>(m2), static_cast<int>(m1), static_cast<int>(m0),
+      CUFFT_Z2Z);
+  if (cufft_err != CUFFT_SUCCESS) {
+    cleanup(); return CufftStatus(cufft_err, "cufftPlan3d Z2Z inv");
+  }
+  cufftSetStream(plan_inv, stream);
+
+  auto kernel_start = std::chrono::steady_clock::now();
+
+  // Forward FFT: rho(r) -> rho(k), g(r) -> g(k).
+  cufft_err = cufftExecZ2Z(plan_fwd_rho, d_rho, d_rho, CUFFT_FORWARD);
+  if (cufft_err != CUFFT_SUCCESS) {
+    cleanup(); return CufftStatus(cufft_err, "cufftExecZ2Z fwd rho");
+  }
+  cufft_err = cufftExecZ2Z(plan_fwd_g, d_g, d_g, CUFFT_FORWARD);
+  if (cufft_err != CUFFT_SUCCESS) {
+    cleanup(); return CufftStatus(cufft_err, "cufftExecZ2Z fwd g");
+  }
+  err = cudaStreamSynchronize(stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "sync after fwd"); }
+
+  // Pointwise multiply: V(k) = rho(k) * g(k).
+  {
+    const int total = static_cast<int>(M);
+    const int threads = 256;
+    const int blocks = (total + threads - 1) / threads;
+    ComplexMultiplyKernel<<<blocks, threads, 0, stream>>>(
+        d_V, d_rho, d_g, total);
+  }
+  err = cudaStreamSynchronize(stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "sync after multiply"); }
+
+  // Inverse FFT: V(k) -> V(r).
+  cufft_err = cufftExecZ2Z(plan_inv, d_V, d_V, CUFFT_INVERSE);
+  if (cufft_err != CUFFT_SUCCESS) {
+    cleanup(); return CufftStatus(cufft_err, "cufftExecZ2Z inv");
+  }
+  err = cudaStreamSynchronize(stream);
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "sync after inv"); }
+
+  auto kernel_end = std::chrono::steady_clock::now();
+  result.kernel_ms =
+      std::chrono::duration<double, std::milli>(kernel_end - kernel_start).count();
+
+  // Download result.
+  std::vector<cufftDoubleComplex> host_V(M);
+  err = arena.D2H(host_V.data(), d_V, M * sizeof(cufftDoubleComplex));
+  if (err != cudaSuccess) { cleanup(); return CudaStatus(err, "arena.D2H V"); }
+
+  cleanup();
+
+  // Extract first octant and normalize by 1/M.
+  result.V.resize(N);
+  const double inv_M = 1.0 / static_cast<double>(M);
+  for (std::size_t iz = 0; iz < n2; ++iz)
+    for (std::size_t iy = 0; iy < n1; ++iy)
+      for (std::size_t ix = 0; ix < n0; ++ix) {
+        const std::size_t src = ix + m0 * (iy + m1 * iz);
+        const std::size_t dst = grid.flatten(ix, iy, iz);
+        result.V[dst] = host_V[src].x * inv_M;
+      }
+
+  // Hartree energy: E_H = 0.5 * integral rho * V * dv.
+  double E = 0.0;
+  for (std::size_t i = 0; i < N; ++i)
+    E += rho[i] * result.V[i] * dv;
+  result.hartree_energy = 0.5 * E;
+
+  // Ledger.
+  tides::tile::PrecisionDescriptor desc;
+  desc.storage = tides::tile::NumericFormat::kFloat64;
+  desc.compute = tides::tile::NumericFormat::kFloat64;
+  desc.reduction = tides::tile::NumericFormat::kFloat64;
+  desc.determinism = tides::tile::DeterminismMode::kDeterministic;
+  desc.label = "cuda-poisson-free";
+  result.ledger.Add(tides::tile::OperationLedgerEntry{
+      tides::tile::OperationKind::kPoissonSolve,
+      desc,
+      tides::tile::ErrorBudget{tides::tile::ErrorMetric::kAbsolute, 0.0,
+          "GPU cuFFT free-space Poisson vs CPU reference"},
+      0.0, static_cast<std::uint64_t>(N), static_cast<std::uint64_t>(M), 0,
+      "CUDA cuFFT free-space Poisson (zero-padded convolution)"});
 
   return result;
 }

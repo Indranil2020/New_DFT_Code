@@ -4,6 +4,7 @@
 #include "solvers/dense/batched_eig.hpp"
 #include "solvers/chfsi/chfsi.hpp"
 #include "solvers/sp2_submatrix/sp2.hpp"
+#include "solvers/foe_sq/foe.hpp"
 #include <cmath>
 #include <iostream>
 #include <random>
@@ -14,6 +15,8 @@ namespace {
 using tides::solvers::SolverBroker;
 using tides::solvers::SolverRegime;
 using tides::solvers::BrokerInput;
+using tides::solvers::BrokerRunner;
+using tides::solvers::BrokerSolveResult;
 
 int Fail(const std::string& msg) {
   std::cerr << "broker_dispatch_tests: " << msg << '\n';
@@ -45,6 +48,21 @@ void BuildFromSpectrum(std::size_t n, const std::vector<double>& lambda,
     for (std::size_t j = 0; j < n; ++j)
       for (std::size_t k = 0; k < n; ++k)
         A[i*n+j] += Q[k*n+i] * lambda[k] * Q[k*n+j];
+}
+
+// Compute ||P*P - P||_F (Frobenius norm of idempotency residual).
+double IdempotencyError(std::size_t n, const std::vector<double>& P) {
+  double err = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    for (std::size_t j = 0; j < n; ++j) {
+      double pp = 0.0;
+      for (std::size_t k = 0; k < n; ++k)
+        pp += P[i * n + k] * P[k * n + j];
+      double diff = pp - P[i * n + j];
+      err += diff * diff;
+    }
+  }
+  return std::sqrt(err);
 }
 
 int TestBrokerDispatch() {
@@ -142,7 +160,108 @@ int TestBrokerDispatch() {
     }
   }
 
-  std::cout << "  PASS (broker dispatch + ChFSI validation)\n";
+  // Test BrokerRunner::Solve for R0 (small system) — verify P is idempotent: P^2 ≈ P.
+  {
+    std::cout << "\n  --- BrokerRunner R0 execution test (idempotency) ---\n";
+    const std::size_t n = 12, n_occ = 3;
+    std::vector<double> lam(n);
+    for (std::size_t i = 0; i < n; ++i) lam[i] = -5.0 + 0.3 * static_cast<double>(i);
+    std::vector<double> H, Q;
+    BuildFromSpectrum(n, lam, 123, H, Q);
+    std::vector<double> S(n * n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) S[i * n + i] = 1.0;
+
+    BrokerInput input;
+    input.n_atoms = 3;
+    input.n_basis = n;  // small → R0
+    input.gap_estimate = 5.0;
+    input.electronic_temp = 0.0;
+
+    BrokerSolveResult res = BrokerRunner::Solve(input, n, n_occ, H, S, 1e-12);
+    std::cout << "    regime_used=R" << static_cast<int>(res.regime_used)
+              << " converged=" << res.converged
+              << " reason=" << res.reason << "\n";
+
+    if (res.regime_used != SolverRegime::kR0_BatchDense)
+      return Fail("BrokerRunner expected R0 for small system");
+
+    if (!res.converged)
+      return Fail("BrokerRunner R0 did not converge");
+
+    if (res.P.size() != n * n)
+      return Fail("BrokerRunner R0 produced wrong P size");
+
+    // Check idempotency: P^2 ≈ P (P is a projector onto the occupied subspace).
+    double idem_err = IdempotencyError(n, res.P);
+    std::cout << "    ||P^2 - P||_F = " << idem_err << "\n";
+    if (idem_err > 1e-9)
+      return Fail("BrokerRunner R0 P not idempotent (||P^2-P||_F=" +
+                  std::to_string(idem_err) + ")");
+
+    // Check trace(P) = n_occ (for S=I, tr(P) = number of occupied orbitals).
+    double tr = 0.0;
+    for (std::size_t i = 0; i < n; ++i) tr += res.P[i * n + i];
+    std::cout << "    tr(P) = " << tr << " (expected " << n_occ << ")\n";
+    if (std::fabs(tr - static_cast<double>(n_occ)) > 1e-9)
+      return Fail("BrokerRunner R0 tr(P) mismatch (got " +
+                  std::to_string(tr) + ", expected " +
+                  std::to_string(n_occ) + ")");
+
+    // Check eigenvalues against the reference.
+    auto ref = tides::solvers::BatchedDenseEig::SolveGeneralized(n, H, S);
+    if (!ref.ok) return Fail("Dense reference failed for BrokerRunner test");
+    for (std::size_t k = 0; k < n_occ; ++k) {
+      double err = std::fabs(res.eigenvalues[k] - ref.eigenvalues[k]);
+      std::cout << "    k=" << k << " eig=" << res.eigenvalues[k]
+                << " ref=" << ref.eigenvalues[k] << " err=" << err << "\n";
+      if (err > 1e-9)
+        return Fail("BrokerRunner R0 eigenvalue mismatch at k=" + std::to_string(k));
+    }
+
+    std::cout << "    PASS (R0 idempotency + trace + eigenvalues)\n";
+  }
+
+  // Test BrokerRunner::Solve for R2 (SP2) — verify P is approximately idempotent.
+  {
+    std::cout << "\n  --- BrokerRunner R2 execution test (SP2 idempotency) ---\n";
+    const std::size_t n = 16, n_occ = 4;
+    std::vector<double> lam(n);
+    for (std::size_t i = 0; i < n; ++i) lam[i] = -5.0 + 0.3 * static_cast<double>(i);
+    std::vector<double> H, Q;
+    BuildFromSpectrum(n, lam, 777, H, Q);
+    std::vector<double> S(n * n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) S[i * n + i] = 1.0;
+
+    BrokerInput input;
+    input.n_atoms = 500;
+    input.n_basis = 3000;  // large → R2
+    input.gap_estimate = 2.0;
+    input.electronic_temp = 0.0;
+    input.user_override = true;
+    input.forced_regime = SolverRegime::kR2_SP2;
+
+    BrokerSolveResult res = BrokerRunner::Solve(input, n, n_occ, H, S, 1e-10);
+    std::cout << "    regime_used=R" << static_cast<int>(res.regime_used)
+              << " converged=" << res.converged
+              << " reason=" << res.reason << "\n";
+
+    if (res.regime_used != SolverRegime::kR2_SP2)
+      return Fail("BrokerRunner expected R2 for forced regime");
+
+    if (res.P.size() != n * n)
+      return Fail("BrokerRunner R2 produced wrong P size");
+
+    // SP2 should produce an approximately idempotent P (||P^2 - P|| small).
+    double idem_err = IdempotencyError(n, res.P);
+    std::cout << "    ||P^2 - P||_F = " << idem_err << "\n";
+    if (idem_err > 1e-5)
+      return Fail("BrokerRunner R2 P not approximately idempotent (||P^2-P||_F=" +
+                  std::to_string(idem_err) + ")");
+
+    std::cout << "    PASS (R2 SP2 approximate idempotency)\n";
+  }
+
+  std::cout << "  PASS (broker dispatch + ChFSI validation + R0 execution)\n";
   return 0;
 }
 

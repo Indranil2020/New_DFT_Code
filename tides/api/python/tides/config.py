@@ -106,6 +106,12 @@ class SolverConfig:
     """Solver regime: auto, R0, R1, R2, R3 (auto = broker dispatch)."""
     broker_calib_file: str = ""
     """Path to broker calibration table from `tides tune`."""
+    use_qtt: bool = False
+    """Enable QTT density matrix compression in SCF."""
+    use_cuda_graph: bool = False
+    """Enable CUDA graph capture/replay for SCF build_H operations."""
+    kpoint_grid: list[int] = field(default_factory=lambda: [1, 1, 1])
+    """Monkhorst-Pack k-point grid [nkx, nky, nkz]. >1 enables k-point sampling."""
 
 
 @dataclass
@@ -142,11 +148,15 @@ class PrecisionConfig:
 
 @dataclass
 class GridConfig:
-    """Real-space grid configuration."""
-    coarse_spacing: float = 0.20
-    """Coarse grid spacing in Angstroms (orbital grid)."""
-    fine_spacing: float = 0.15
-    """Fine grid spacing in Angstroms (density grid)."""
+    """Real-space grid configuration. All distances in Angstrom."""
+    coarse_spacing: float = 0.15
+    """Coarse grid spacing in Angstroms (orbital grid). Converted to Bohr for C++."""
+    fine_spacing: float = 0.10
+    """Fine grid spacing in Angstroms (density/potential grid). Converted to Bohr for C++."""
+    margin: float = 2.0
+    """Grid margin around molecule in Angstroms. Converted to Bohr for C++."""
+    dual_grid: bool = True
+    """Use dual-grid (fine grid for density/Poisson, coarse for orbitals)."""
 
 
 @dataclass
@@ -285,6 +295,7 @@ def validate_config(cfg: TidesConfig) -> Status:
     # Grid
     _check_positive(cfg.grid.coarse_spacing, "grid.coarse_spacing", errors)
     _check_positive(cfg.grid.fine_spacing, "grid.fine_spacing", errors)
+    _check_positive(cfg.grid.margin, "grid.margin", errors)
     if cfg.grid.fine_spacing > cfg.grid.coarse_spacing:
         errors.append("grid.fine_spacing: must be <= coarse_spacing.")
 

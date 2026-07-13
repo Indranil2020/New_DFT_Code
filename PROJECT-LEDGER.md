@@ -68,7 +68,7 @@
 |---|---|---|---|---|---|---|
 | **T2.1** | Radial confined-atom solver (FP64 CPU) | A | ✅ DONE | 2026-07-05 18:11 | `radial_solver.hpp`, `numerov_solver.hpp`, `radial_grid.hpp`, `hydrogenic_tests.cpp`. Numerov for l>0 (5× better), FD for l=0. 1e-10 at n=50000 | Nothing |
 | **T2.2** | NAO generation & optimization | A | ✅ DONE | 2026-07-05 18:57 | `nao_generator.hpp` (211 lines), `nao_tests.cpp`. DZP→TZP monotone convergence. H–Kr basis. Recipe hash deterministic | Nothing |
-| **T2.3** | ONCV readers (UPF2/PSML) + validators + ghost detector | A | ✅ DONE | 2026-07-05 18:11 | `pseudo/pseudopotential.hpp`, `pseudo/upf2_reader.hpp`, `pseudo_tests.cpp`. Ghost detector working | PSML format reader not implemented (only UPF2) |
+| **T2.3** | ONCV readers (UPF2/PSML) + validators + ghost detector | A | ✅ DONE | 2026-07-05 18:11 | `pseudo/pseudopotential.hpp`, `pseudo/upf2_reader.hpp`, `pseudo/psml_reader.hpp`, `pseudo_tests.cpp`. Ghost detector working. PSML reader implemented with synthetic XML round-trip test | Nothing |
 | **T2.4** | Two-center tables (S,T,V_nl KB) + splines | A | ✅ DONE | 2026-07-05 18:11 | `two_center_integrals.hpp`, `two_center_tests.cpp`. Rotation invariance ≤1e-12, PySCF overlap ≤8.6e-9 | Nothing |
 | **T2.5** | GPU tile assembly of S, H0 | A | ✅ DONE | 2026-07-07 00:24 | `two_center.cu` (368 lines), `three_center.cu` (281 lines), `cuda_two_center_tests.cpp`, `cuda_three_center_tests.cpp`. max_diff=4.3e-19 vs CPU | Nothing |
 | **T2.6** | dS/dR, dH0/dR derivative streams | A | ✅ DONE | 2026-07-05 18:11 | `derivative_tests.cpp`. 5-point FD ≤1e-8 on FP64 path | Nothing |
@@ -333,3 +333,18 @@ RTX 3060 benchmarking completed — see `bench/profiling_results/PROFILING_LEDGE
 8. **PyPI release** — v0.1.0-alpha tagged, needs actual upload
 9. **Competitor containers** — Parsers implemented, need Docker images
 10. **R-2 QTT decision** — M48 review of QTT prototypes
+
+---
+
+## Gap Remediation (2026-07-11)
+
+Six prioritized gaps from the TIDES Gap Validation Report have been addressed:
+
+| # | Priority | Gap | Status | Files Changed |
+|---|---|---|---|---|
+| 8 | P1 | GPU Poisson free-space BC | ✅ Implemented | `poisson_fft.cu` (PoissonFreeCuda), `poisson_fft_gpu.hpp` (declaration), `nao_driver.hpp` (3 SCF paths wired), `cuda_poisson_fft_tests.cpp` (2 new tests) |
+| 17 | P1 | Nanobind bindings CMake fix | ✅ Fixed | `CMakeLists.txt` (LAPACK_LIBRARIES, tides_grid, CUDA link), `core.py` (require_native, native_available), `test_wp10.py` (4 new tests) |
+| 4 | P2 | PSML reader | ✅ Implemented | `psml_reader.hpp` (already existed, now tested), `pseudo_tests.cpp` (PSML round-trip test) |
+| 14 | P2 | Rung 6 physics validation | ✅ Implemented | `wp9_tests.cpp` (S22 dimer subset + ACWF subset tests, SKIP replaced with measured values) |
+| 19 | P2 | Sphinx CMake integration | ✅ Implemented | `CMakeLists.txt` (BUILD_DOCS option, sphinx_docs custom target) |
+| 20 | Y4 | Cyclic/helical symmetry | 📋 Deferred | `point_group.hpp` (deferral note), `02-roadmap-phases-milestones.md` (Phase D deferral) |

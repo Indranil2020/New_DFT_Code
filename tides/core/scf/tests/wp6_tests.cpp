@@ -150,7 +150,7 @@ int TestXLBOMD() {
     double dx = R[0] - R0;
     return 0.5 * k * dx * dx;
   };
-  auto force_fn = [&](const std::vector<double>& R) -> std::vector<double> {
+  auto force_fn = [&](const std::vector<double>& R, const std::vector<double>& P) -> std::vector<double> {
     return {-k * (R[0] - R0), 0.0, 0.0};
   };
   auto density_fn = [&](const std::vector<double>& R) -> std::vector<double> {
