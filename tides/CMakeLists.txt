@@ -1075,6 +1075,15 @@ target_link_libraries(tides_real_pp_scf_tests PRIVATE
 set_target_properties(tides_real_pp_scf_tests PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME real_pp_scf_validation COMMAND tides_real_pp_scf_tests)
+
+add_executable(tides_real_pseudodojo_tests
+  core/scf/tests/real_pseudodojo_tests.cpp)
+target_link_libraries(tides_real_pseudodojo_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_real_pseudodojo_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME real_pseudodojo_scf COMMAND tides_real_pseudodojo_tests)
+
 add_executable(tides_e6_dynamics_profile
   tests/per_engine/e6_dynamics/e6_test_profile.cpp)
 target_link_libraries(tides_e6_dynamics_profile PRIVATE
