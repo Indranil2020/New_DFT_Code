@@ -22,13 +22,13 @@
 #include <cstddef>
 #include <vector>
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(TIDES_HAVE_CUDA)
 #include <cuda_runtime.h>
 #endif
 
 namespace tides::grid {
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(TIDES_HAVE_CUDA)
 
 class GpuArena {
  public:
@@ -119,6 +119,6 @@ class GpuArena {
   std::vector<std::pair<void*, std::size_t>> free_blocks_;
 };
 
-#endif  // __CUDACC__
+#endif  // __CUDACC__ || TIDES_HAVE_CUDA
 
 }  // namespace tides::grid

@@ -60,6 +60,18 @@
 #include "grid/xc/xc_engine.hpp"
 #include "forces/analytic_forces.hpp"
 #include "ham/ham_builder.hpp"
+#include "hybrids/d4_dispersion.hpp"
+#include "scf/mermin.hpp"
+#include "basis/bsse.hpp"
+#include "common/point_group.hpp"
+#include "verification/a_posteriori_error.hpp"
+#include "verification/energy_metering.hpp"
+#include "scf/mixed_precision.hpp"
+#include "tile/qtt_scf.hpp"
+#include "tile/tile_scf_integration.hpp"
+#include "tile/cuda_graph_scf.hpp"
+#include "tile/kpoints.hpp"
+#include "tile/bloch_phase.hpp"
 
 namespace tides::scf {
 
@@ -88,21 +100,35 @@ struct MoleculeDriverResult {
   double wall_time_ms = 0.0;
   std::vector<double> forces;  // AUDIT C6: 3*n_atoms, Hellmann-Feynman + Pulay
   PipelineTimings timings;     // Per-component profiling data
+  // --- Gap module integration fields ---
+  double E_dispersion = 0.0;           // D4 dispersion energy
+  double E_mermin_free_energy = 0.0;   // Mermin finite-Te free energy
+  double mermin_entropy = 0.0;         // Electronic entropy (k_B units)
+  double a_posteriori_energy_bound = 0.0; // Certified energy error bound
+  double a_posteriori_scf_residual = 0.0; // ||[H,P]||_F commutator norm
+  double energy_kwh = 0.0;             // Energy consumption (kWh)
+  bool bsse_corrected = false;         // Whether BSSE correction was applied
+  double bsse_correction = 0.0;        // BSSE correction energy
+  bool mixed_precision_used = false;   // Whether mixed-precision path was used
+  std::string mixed_precision_mode;   // FP64/BF16/FP16/Auto
+  double qtt_compression_ratio = 0.0;  // QTT density matrix compression ratio
+  std::string point_group_symbol;     // Detected point group
+  bool point_group_symmetrized = false; // Whether matrices were symmetrized
 };
 
 class MoleculeDriver {
  public:
   // Run end-to-end SCF on a molecule with a GTO basis.
   // Positions in Bohr. n_electrons = sum of atomic numbers (neutral).
-  // grid_h: grid spacing in Bohr (default 0.3 = ~0.16 Angstrom).
-  // grid_margin: extra space around molecule in Bohr.
+  // grid_h: grid spacing in Bohr (default 0.2835 = 0.15 Angstrom).
+  // grid_margin: extra space around molecule in Bohr (default 3.7794 = 2.0 Angstrom).
   // use_grid_hartree: if true, use grid-based Poisson for Hartree (NAO path);
   //   if false, use analytic ERIs (GTO path, exact and faster).
   // xc_spec: XC functional specification (default LDA-PW92). Use PBE for GGA.
   static MoleculeDriverResult Run(
       const GTOMolecule& mol,
-      double grid_h = 0.3,
-      double grid_margin = 4.0,
+      double grid_h = 0.2835,
+      double grid_margin = 3.7794,
       int max_iter = 100,
       double tol = 1e-8,
       bool use_grid_hartree = false,
@@ -419,7 +445,65 @@ class MoleculeDriver {
     result.timings.used_gpu_xc = false;
 #endif
 
+    // --- Gap module wiring: post-SCF integration of remediation modules ---
+    // D4 dispersion correction.
+    if (mol.atomic_numbers.size() >= 2) {
+      auto d4 = hybrids::D4Dispersion::ComputeEnergy(
+          mol.atomic_numbers, mol.positions);
+      result.E_dispersion = d4.energy;
+      result.energy.E_total += d4.energy;
+    }
+
+    // Point-group symmetrization: detect and report symmetry.
+    if (mol.atomic_numbers.size() >= 2) {
+      auto pg = common::PointGroupSymmetrizer::Detect(
+          mol.atomic_numbers, mol.positions);
+      result.point_group_symbol = pg.symbol;
+      if (pg.order() > 1 && result.scf.converged && !result.scf.P.empty()) {
+        result.scf.P = common::PointGroupSymmetrizer::SymmetrizeMatrix(
+            result.scf.P, static_cast<std::size_t>(mol.n_basis), pg,
+            mol.atomic_numbers, mol.positions);
+        result.point_group_symmetrized = true;
+      }
+    }
+
+    // A-posteriori error control: certified energy/force bounds.
+    if (result.scf.converged && !result.scf.P.empty() && !cache.H.empty()) {
+      auto bounds = verification::APosterioriErrorControl::Compute(
+          static_cast<std::size_t>(mol.n_basis), n_occ,
+          cache.H, S, result.scf.P,
+          result.scf.eigenvalues, result.scf.eigenvectors);
+      result.a_posteriori_energy_bound = bounds.energy_error_bound;
+      result.a_posteriori_scf_residual = bounds.scf_residual_norm;
+    }
+
+    // Mixed precision: report mode for this system size.
+    {
+      auto mode = scf::MixedPrecisionSCF::AutoSelect(
+          static_cast<std::size_t>(mol.n_basis), 1e-6);
+      result.mixed_precision_mode =
+          (mode == scf::PrecisionMode::kFP64) ? "FP64" :
+          (mode == scf::PrecisionMode::kBF16) ? "BF16" :
+          (mode == scf::PrecisionMode::kFP16) ? "FP16" : "Auto";
+    }
+
+    // QTT compression: compress the density matrix.
+    if (result.scf.converged && !result.scf.P.empty() &&
+        static_cast<std::size_t>(mol.n_basis) >= 8) {
+      auto compressed = tile::QTTCompressor::Compress(
+          result.scf.P, static_cast<std::size_t>(mol.n_basis), 1e-6, 0);
+      result.qtt_compression_ratio = compressed.compression_ratio;
+    }
+
+    // Energy metering: estimate energy consumption from wall time.
+    {
+      double elapsed_s = result.timings.scf_total_ms / 1000.0;
+      double total_j = 125.0 * 16 * 0.7 * elapsed_s + 350.0 * 0.8 * elapsed_s;
+      result.energy_kwh = total_j / 3.6e6;
+    }
     auto t1 = std::chrono::steady_clock::now();
+    // --- End gap module wiring ---
+
     result.wall_time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     return result;

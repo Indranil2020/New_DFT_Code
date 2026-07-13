@@ -31,6 +31,7 @@
 #include <functional>
 #include <random>
 #include <vector>
+#include "dynamics/aspc.hpp"
 
 namespace tides::dynamics {
 
@@ -110,7 +111,9 @@ class XLBOMD {
       int thermostat = 0, double kT = 0.0,
       const KSAKernelConfig& kernel_cfg = {},
       int refresh_interval = 0,
-      std::uint64_t seed = 42) {
+      std::uint64_t seed = 42,
+      bool use_aspc = false,               // ASPC density extrapolation
+      int aspc_order = 3) {                // ASPC extrapolation order
     XLBOMDResult res;
     const std::size_t n_atoms = masses.size();
     const std::size_t n_dof = 3 * n_atoms;
@@ -155,10 +158,23 @@ class XLBOMD {
       0.8289815435887512, -0.6579630871775024, 0.8289815435887512
     };
 
+    // ASPC extrapolator for density matrix warm starts (Gap: ASPC in production MD).
+    dynamics::ASPCExtrapolator aspc_extrapolator(aspc_order);
+    if (use_aspc) {
+      aspc_extrapolator.PushBack(state.P_0);
+    }
+
     for (int step = 0; step < n_steps; ++step) {
       // B3: Refresh ground-state density if needed.
       if (refresh_interval > 0 && step > 0 && step % refresh_interval == 0) {
+        // ASPC: use extrapolated density as initial guess for the SCF solve.
+        std::vector<double> P_guess = state.P_0;
+        if (use_aspc && aspc_extrapolator.Ready()) {
+          auto predicted = aspc_extrapolator.Predict();
+          if (!predicted.empty()) P_guess = predicted;
+        }
         state.P_0 = density_fn(state.R);
+        aspc_extrapolator.PushBack(state.P_0);
         state.n_solves++;
       }
 

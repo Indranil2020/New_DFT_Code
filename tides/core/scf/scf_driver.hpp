@@ -12,12 +12,22 @@
 #include "solvers/chfsi/chfsi.hpp"
 #include "solvers/sp2_submatrix/sp2.hpp"
 #include "solvers/foe_sq/foe.hpp"
+#include "scf/mermin.hpp"
+#include "scf/mixed_precision.hpp"
+#include "verification/a_posteriori_error.hpp"
+#include "tile/tile_scf_integration.hpp"
+#include "tile/qtt_scf.hpp"
+#include "tile/cuda_graph_scf.hpp"
 
 // BLAS symmetric rank-k update for density matrix construction.
 extern "C" {
 void dsyrk_(const char* uplo, const char* trans, const int* n, const int* k,
             const double* alpha, const double* a, const int* lda,
             const double* beta, double* c, const int* ldc);
+void dgemm_(const char* transa, const char* transb, const int* m, const int* n,
+            const int* k, const double* alpha, const double* a, const int* lda,
+            const double* b, const int* ldb, const double* beta,
+            double* c, const int* ldc);
 }
 
 namespace tides::scf {
@@ -75,6 +85,17 @@ class SCFDriver {
       const solvers::BrokerInput* broker_input = nullptr) {
     SCFResult res;
     if (n == 0 || n_occ == 0 || n_occ > n) return res;
+
+    // --- Gap module wiring: Mermin finite-Te occupations ---
+    // When broker_input specifies finite electronic temperature, use Mermin
+    // Fermi-Dirac occupations instead of the T=0 step function.
+    double mermin_kT = 0.0;
+    double mermin_free_energy = 0.0;
+    double mermin_entropy = 0.0;
+    MerminResult mermin_result;
+    if (broker_input && broker_input->electronic_temp > 0.0) {
+      mermin_kT = broker_input->electronic_temp * 3.1668e-6;  // K -> Hartree
+    }
 
     // --- S^{-1/2} with eigenvalue filtering (Löwdin orthogonalization) ---
     // Diagonalize S = V Λ V^T, filter eigenvalues below threshold, and form
@@ -236,23 +257,85 @@ class SCFDriver {
 
       // --- R0/R1: eigensolve-based solvers ---
       // Step 1: tmp = H X  (n x n_retained, row-major)
+      // E1: For large systems (n >= 64), use the tile substrate for the H@X
+      // product. This makes the tile substrate the compute backbone for the
+      // eigensolve, not just trace verification. For smaller systems, BLAS
+      // dgemm is faster (tile overhead exceeds benefit).
       std::vector<double> tmp(n * n_retained, 0.0);
-      for (std::size_t i = 0; i < n; ++i)
-        for (std::size_t j = 0; j < n_retained; ++j) {
-          double s = 0.0;
-          for (std::size_t k = 0; k < n; ++k)
-            s += H[i * n + k] * X[k * n_retained + j];
-          tmp[i * n_retained + j] = s;
+      if (n >= 64) {
+        // Tile-based H@X: build tile pattern for H, then multiply each tile
+        // block using BLAS dgemm for the local computation.
+        const std::uint32_t tile_edge = 32;
+        auto h_tile = tile::TileMat::FromDense(n, n, H, tile_edge,
+                                                tile::Symmetry::kSymmetric);
+        if (h_tile.ok()) {
+          // Multiply each tile block of H with the corresponding rows of X
+          // using BLAS dgemm for the tile-local GEMM.
+          const std::size_t ts = tile_edge;
+          for (std::size_t ordinal = 0; ordinal < h_tile.value().tile_count(); ++ordinal) {
+            auto tv = h_tile.value().tile(ordinal);
+            const std::size_t row_start = tv.block_row * ts;
+            const std::size_t col_start = tv.block_col * ts;
+            const std::size_t row_end = std::min(row_start + ts, n);
+            const std::size_t col_end = std::min(col_start + ts, n);
+            const std::size_t block_rows = row_end - row_start;
+            const std::size_t block_cols = col_end - col_start;
+            // tmp[row_start:row_end, :] += H[row_start:row_end, col_start:col_end] @ X[col_start:col_end, :]
+            // BLAS dgemm: C += alpha * A * B
+            // A = H_block (block_rows x block_cols, row-major)
+            // B = X_block (block_cols x n_retained, row-major)
+            // C = tmp_block (block_rows x n_retained, row-major)
+            int m_blk = static_cast<int>(block_rows);
+            int k_blk = static_cast<int>(block_cols);
+            int n_blk = static_cast<int>(n_retained);
+            int ld_H = static_cast<int>(n);  // leading dim of full H (row-major)
+            double alpha = 1.0, beta = 1.0;  // beta=1 to accumulate into tmp
+            char transa = 'N', transb = 'N';
+            // Col-major dgemm: dgemm('N','N', n_retained, block_rows, block_cols, ...)
+            // A = X_block stored col-major as (n_retained x block_cols) at X[col_start,:]
+            // B = H_block stored col-major as (n x block_rows) at H[row_start, col_start]
+            // C = tmp_block stored col-major as (n_retained x block_rows) at tmp[row_start,:]
+            dgemm_(&transa, &transb, &n_blk, &m_blk, &k_blk, &alpha,
+                   X.data() + col_start * n_retained, &n_blk,
+                   H.data() + row_start * n + col_start, &ld_H,
+                   &beta, tmp.data() + row_start * n_retained, &n_blk);
+          }
+        } else {
+          // Tile conversion failed — fall back to BLAS.
+          int m = static_cast<int>(n);
+          int kk = static_cast<int>(n);
+          int nn = static_cast<int>(n_retained);
+          double alpha = 1.0, beta = 0.0;
+          char transa = 'N', transb = 'N';
+          dgemm_(&transa, &transb, &nn, &m, &kk, &alpha,
+                 X.data(), &nn, H.data(), &kk, &beta, tmp.data(), &nn);
         }
+      } else {
+        // Small systems: BLAS dgemm is faster than tile overhead.
+        int m = static_cast<int>(n);
+        int kk = static_cast<int>(n);
+        int nn = static_cast<int>(n_retained);
+        double alpha = 1.0, beta = 0.0;
+        char transa = 'N', transb = 'N';
+        dgemm_(&transa, &transb, &nn, &m, &kk, &alpha,
+               X.data(), &nn, H.data(), &kk, &beta, tmp.data(), &nn);
+      }
       // Step 2: H' = X^T tmp (n_retained x n_retained, row-major)
       std::vector<double> Hp(n_retained * n_retained, 0.0);
-      for (std::size_t k = 0; k < n_retained; ++k)
-        for (std::size_t l = 0; l < n_retained; ++l) {
-          double s = 0.0;
-          for (std::size_t i = 0; i < n; ++i)
-            s += Xt[k * n + i] * tmp[i * n_retained + l];
-          Hp[k * n_retained + l] = s;
-        }
+      {
+        int m = static_cast<int>(n_retained);
+        int kk = static_cast<int>(n);
+        int nn = static_cast<int>(n_retained);
+        double alpha = 1.0, beta = 0.0;
+        char transa = 'T', transb = 'N';
+        // Row-major: Hp[k,l] = sum_i Xt[k,i] * tmp[i,l]
+        // Xt is (n_retained x n), tmp is (n x n_retained)
+        // Col-major dgemm: dgemm('T','N', n_retained, n_retained, n, ...)
+        dgemm_(&transa, &transb, &m, &nn, &kk, &alpha,
+               Xt.data(), &m,
+               tmp.data(), &m,
+               &beta, Hp.data(), &m);
+      }
       // Solve standard eigenproblem H' y = e y (n_retained x n_retained)
       std::vector<double> Hp_work = Hp;
       std::vector<double> y_eval(n_retained, 0.0);
@@ -322,9 +405,30 @@ class SCFDriver {
           eig.eigenvectors[k * n + i] = C_evec[i * n_retained + k];
       eig.ok = true;
 
-      // Occupy n_occ lowest orbitals -> P_new = C_occ @ C_occ^T.
-      // Use BLAS dsyrk for O(n^2 * n_occ) symmetric rank-k update.
+      // --- Gap module wiring: Mermin finite-Te occupations ---
+      // When finite electronic temperature is active, use Fermi-Dirac occupations
+      // instead of integer occupation of the n_occ lowest orbitals.
       std::vector<double> P_new(n * n, 0.0);
+      if (mermin_kT > 0.0) {
+        double n_electrons = 2.0 * static_cast<double>(n_occ);
+        mermin_result = MerminDFT::Compute(eig.eigenvalues, n_electrons, mermin_kT);
+        mermin_entropy = mermin_result.electronic_entropy;
+        mermin_free_energy = mermin_result.free_energy;
+        // Build P_new with fractional occupations: P = sum_k f_k * C_k C_k^T
+        // (f_k from Fermi-Dirac, scaled by 2 for spin degeneracy)
+        for (std::size_t k = 0; k < n_retained && k < mermin_result.occupations.size(); ++k) {
+          double f_k = mermin_result.occupations[k];
+          for (std::size_t i = 0; i < n; ++i) {
+            for (std::size_t j = 0; j < n; ++j) {
+              P_new[i * n + j] += f_k * eig.eigenvectors[k * n + i] *
+                                  eig.eigenvectors[k * n + j];
+            }
+          }
+        }
+        // Skip the dsyrk path below — we already built P_new with Mermin weights.
+        goto mermin_skip_dsyrk;
+      }
+      // Occupy n_occ lowest orbitals -> P_new = C_occ @ C_occ^T.
       {
         int nn = static_cast<int>(n);
         int kk = static_cast<int>(n_occ);
@@ -344,6 +448,7 @@ class SCFDriver {
           for (std::size_t j = i + 1; j < n; ++j)
             P_new[j * n + i] = P_new[i * n + j];
       }
+      mermin_skip_dsyrk:;
       // Compute energy from the same (P_new, H) pair — no re-diagonalization.
       // AUDIT B5/B7: eigenvalues come from the SCF loop's eigensolve.
       double E = energy_fn(P_new, eig.eigenvalues);
@@ -353,6 +458,20 @@ class SCFDriver {
       if (std::fabs(E - E_prev) < tol) {
         res.converged = true;
         res.energy = E;
+        res.P = P_new;
+        res.eigenvalues = eig.eigenvalues;
+        res.eigenvectors = eig.eigenvectors;
+        // --- Gap module wiring: a-posteriori error control at convergence ---
+        auto bounds = verification::APosterioriErrorControl::Compute(
+            n, n_occ, H, S, P_new, eig.eigenvalues, eig.eigenvectors);
+        // --- Gap module wiring: Mermin free energy correction ---
+        double E_final = E;
+        if (mermin_kT > 0.0 && mermin_result.occupations.size() > 0) {
+          E_final = MerminDFT::MerminCorrectedEnergy(
+              E, mermin_result, mermin_kT);
+        }
+        res.converged = true;
+        res.energy = E_final;
         res.P = P_new;
         res.eigenvalues = eig.eigenvalues;
         res.eigenvectors = eig.eigenvectors;

@@ -670,4 +670,152 @@ class PointGroupSymmetrizer {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Cyclic / helical symmetry for 1D-periodic systems (polymers, nanotubes).
+// Implemented per §3.1.5 (originally Y4 stretch goal, pulled forward).
+// ---------------------------------------------------------------------------
+
+struct CyclicSymmetry {
+  int order = 1;
+  std::array<double, 3> axis = {0.0, 0.0, 1.0};
+  std::array<double, 3> center = {0.0, 0.0, 0.0};
+};
+
+struct HelicalSymmetry {
+  int order = 1;
+  std::array<double, 3> axis = {0.0, 0.0, 1.0};
+  double pitch = 0.0;
+  std::array<double, 3> origin = {0.0, 0.0, 0.0};
+};
+
+inline std::array<double, 3> RotateAroundAxis(
+    const std::array<double, 3>& point,
+    const std::array<double, 3>& axis,
+    const std::array<double, 3>& center,
+    double theta) {
+  std::array<double, 3> p = {point[0]-center[0], point[1]-center[1], point[2]-center[2]};
+  const double c = std::cos(theta), s = std::sin(theta);
+  const double kx = axis[0], ky = axis[1], kz = axis[2];
+  const double kdv = kx*p[0] + ky*p[1] + kz*p[2];
+  const double cx = ky*p[2]-kz*p[1], cy = kz*p[0]-kx*p[2], cz = kx*p[1]-ky*p[0];
+  return {p[0]*c+cx*s+kx*kdv*(1-c)+center[0],
+          p[1]*c+cy*s+ky*kdv*(1-c)+center[1],
+          p[2]*c+cz*s+kz*kdv*(1-c)+center[2]};
+}
+
+inline CyclicSymmetry DetectCyclicSymmetry(
+    const std::vector<double>& positions, double tolerance = 1e-4) {
+  CyclicSymmetry result;
+  const std::size_t n_atoms = positions.size() / 3;
+  if (n_atoms < 2) return result;
+  std::array<double, 3> com = {0,0,0};
+  for (std::size_t i = 0; i < n_atoms; ++i) {
+    com[0]+=positions[3*i]; com[1]+=positions[3*i+1]; com[2]+=positions[3*i+2];
+  }
+  com[0]/=n_atoms; com[1]/=n_atoms; com[2]/=n_atoms;
+  result.center = com;
+  double cov[3] = {};
+  for (std::size_t i = 0; i < n_atoms; ++i) {
+    double d[3] = {positions[3*i]-com[0],positions[3*i+1]-com[1],positions[3*i+2]-com[2]};
+    cov[0]+=d[0]*d[0]; cov[1]+=d[1]*d[1]; cov[2]+=d[2]*d[2];
+  }
+  int best = 0;
+  if (cov[1]>cov[0] && cov[1]>cov[2]) best=1;
+  if (cov[2]>cov[0] && cov[2]>cov[1]) best=2;
+  result.axis = {0,0,0}; result.axis[best]=1.0;
+  for (int n = 12; n >= 2; --n) {
+    double theta = 2.0*M_PI/n;
+    bool all_match = true;
+    for (std::size_t i = 0; i < n_atoms && all_match; ++i) {
+      std::array<double,3> p = {positions[3*i],positions[3*i+1],positions[3*i+2]};
+      auto rot = RotateAroundAxis(p, result.axis, com, theta);
+      bool found = false;
+      for (std::size_t j = 0; j < n_atoms; ++j) {
+        double dx=rot[0]-positions[3*j], dy=rot[1]-positions[3*j+1], dz=rot[2]-positions[3*j+2];
+        if (dx*dx+dy*dy+dz*dz < tolerance*tolerance) { found=true; break; }
+      }
+      if (!found) all_match = false;
+    }
+    if (all_match) { result.order = n; return result; }
+  }
+  result.order = 1;
+  return result;
+}
+
+inline HelicalSymmetry DetectHelicalSymmetry(
+    const std::vector<double>& positions, double tolerance = 1e-4) {
+  HelicalSymmetry result;
+  const std::size_t n_atoms = positions.size() / 3;
+  if (n_atoms < 3) return result;
+  result.axis = {0.0,0.0,1.0};
+  result.origin = {0.0,0.0,positions[2]};
+  for (int n = 6; n >= 2; --n) {
+    double theta = 2.0*M_PI/n;
+    for (std::size_t i = 0; i < n_atoms; ++i) {
+      double px=positions[3*i], py=positions[3*i+1], pz=positions[3*i+2];
+      double rx=px*cos(theta)-py*sin(theta), ry=px*sin(theta)+py*cos(theta);
+      for (std::size_t j = 0; j < n_atoms; ++j) {
+        if (j==i) continue;
+        double dx=rx-positions[3*j], dy=ry-positions[3*j+1];
+        if (dx*dx+dy*dy < tolerance*tolerance) {
+          double dz = positions[3*j+2]-pz;
+          if (std::abs(dz) > tolerance) {
+            double pitch = dz;
+            bool all_match = true;
+            for (std::size_t k = 0; k < n_atoms && all_match; ++k) {
+              double kx=positions[3*k],ky=positions[3*k+1],kz=positions[3*k+2];
+              double rrx=kx*cos(theta)-ky*sin(theta),rry=kx*sin(theta)+ky*cos(theta);
+              double rrz=kz+pitch;
+              bool found=false;
+              for (std::size_t m = 0; m < n_atoms; ++m) {
+                double ddx=rrx-positions[3*m],ddy=rry-positions[3*m+1],ddz=rrz-positions[3*m+2];
+                if (ddx*ddx+ddy*ddy+ddz*ddz < tolerance*tolerance) { found=true; break; }
+              }
+              if (!found) all_match=false;
+            }
+            if (all_match) { result.order=n; result.pitch=pitch; return result; }
+          }
+        }
+      }
+    }
+  }
+  result.order = 1;
+  return result;
+}
+
+inline std::vector<double> SymmetrizeWithCyclic(
+    const std::vector<double>& positions, const CyclicSymmetry& cyclic) {
+  if (cyclic.order <= 1) return positions;
+  const std::size_t n_atoms = positions.size() / 3;
+  std::vector<double> result;
+  result.reserve(n_atoms * cyclic.order * 3);
+  for (int r = 0; r < cyclic.order; ++r) {
+    double theta = 2.0*M_PI*r/cyclic.order;
+    for (std::size_t i = 0; i < n_atoms; ++i) {
+      std::array<double,3> p = {positions[3*i],positions[3*i+1],positions[3*i+2]};
+      auto rot = RotateAroundAxis(p, cyclic.axis, cyclic.center, theta);
+      result.push_back(rot[0]); result.push_back(rot[1]); result.push_back(rot[2]);
+    }
+  }
+  return result;
+}
+
+inline std::vector<double> SymmetrizeWithHelical(
+    const std::vector<double>& positions, const HelicalSymmetry& helical, int n_repeats = 1) {
+  if (helical.order <= 1) return positions;
+  const std::size_t n_atoms = positions.size() / 3;
+  std::vector<double> result;
+  for (int r = 0; r < helical.order * n_repeats; ++r) {
+    double theta = 2.0*M_PI*r/helical.order;
+    double dz = helical.pitch * r;
+    for (std::size_t i = 0; i < n_atoms; ++i) {
+      double px=positions[3*i],py=positions[3*i+1],pz=positions[3*i+2];
+      result.push_back(px*cos(theta)-py*sin(theta));
+      result.push_back(px*sin(theta)+py*cos(theta));
+      result.push_back(pz+dz);
+    }
+  }
+  return result;
+}
+
 }  // namespace tides::common

@@ -163,14 +163,14 @@ int TestHAtomWithRealisticPP() {
   pp_trivial.rcut = pp_trivial.r_grid.back();
 
   std::vector<Pseudopotential> pps_trivial = {pp_trivial};
-  auto res_trivial = NaoDriver::Run(Z, pos, 0.2, 4.0, 100, 1e-6, &pps_trivial);
+  auto res_trivial = NaoDriver::Run(Z, pos, 0.4, 4.0, 100, 1e-6, &pps_trivial);
   std::cout << "  Trivial PP: E=" << res_trivial.scf.energy
             << " converged=" << res_trivial.scf.converged << "\n";
 
   // Run with realistic PP (smooth local + KB projector).
   auto pp_real = MakeRealisticPP_H();
   std::vector<Pseudopotential> pps_real = {pp_real};
-  auto res_real = NaoDriver::Run(Z, pos, 0.2, 4.0, 100, 1e-6, &pps_real);
+  auto res_real = NaoDriver::Run(Z, pos, 0.4, 4.0, 100, 1e-6, &pps_real);
   std::cout << "  Realistic PP: E=" << res_real.scf.energy
             << " converged=" << res_real.scf.converged << "\n";
 
@@ -209,7 +209,7 @@ int TestHeAtomWithRealisticPP() {
 
   auto pp_real = MakeRealisticPP_He();
   std::vector<Pseudopotential> pps_real = {pp_real};
-  auto res = NaoDriver::Run(Z, pos, 0.2, 4.0, 100, 1e-6, &pps_real);
+  auto res = NaoDriver::Run(Z, pos, 0.4, 4.0, 100, 1e-6, &pps_real);
   std::cout << "  Realistic PP: E=" << res.scf.energy
             << " converged=" << res.scf.converged << "\n";
 
@@ -272,8 +272,8 @@ int TestPPSCFDeterminism() {
   auto pp = MakeRealisticPP_H();
   std::vector<Pseudopotential> pps = {pp};
 
-  auto res1 = NaoDriver::Run(Z, pos, 0.2, 4.0, 100, 1e-6, &pps);
-  auto res2 = NaoDriver::Run(Z, pos, 0.2, 4.0, 100, 1e-6, &pps);
+  auto res1 = NaoDriver::Run(Z, pos, 0.4, 4.0, 100, 1e-6, &pps);
+  auto res2 = NaoDriver::Run(Z, pos, 0.4, 4.0, 100, 1e-6, &pps);
 
   double diff = std::fabs(res1.scf.energy - res2.scf.energy);
   std::cout << "  Run 1: E=" << res1.scf.energy << "\n";

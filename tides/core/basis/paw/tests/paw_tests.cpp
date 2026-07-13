@@ -154,12 +154,12 @@ int TestPAWSCFIntegration() {
   std::vector<double> pos = {0.0, 0.0, 0.0};
 
   // Run standard SCF (no PAW).
-  auto res_std = NaoDriver::Run(Z, pos, 0.2, 4.0, 100, 1e-6);
+  auto res_std = NaoDriver::Run(Z, pos, 0.4, 4.0, 100, 1e-6);
   std::cout << "  Standard: E=" << res_std.scf.energy
             << " converged=" << res_std.scf.converged << "\n";
 
   // Run with PAW correction.
-  auto res_paw = NaoDriver::Run(Z, pos, 0.2, 4.0, 100, 1e-6,
+  auto res_paw = NaoDriver::Run(Z, pos, 0.4, 4.0, 100, 1e-6,
                                 nullptr, {}, 1, 0, true, 0.0,
                                 false, false, false, false, false,
                                 false, false, false, false,

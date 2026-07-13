@@ -174,6 +174,101 @@ int TestPoissonLedger() {
   return 0;
 }
 
+int TestPoissonFreeVsCpu() {
+  // 16x16x16 free-space grid with Gaussian charge.
+  UniformGrid3D grid;
+  grid.n = {16, 16, 16};
+  grid.h = {0.4, 0.4, 0.4};
+  grid.origin = {0.0, 0.0, 0.0};
+  grid.bc = {BoundaryCondition::kFree, BoundaryCondition::kFree,
+             BoundaryCondition::kFree};
+
+  const double alpha = 2.0;
+  const double q = 1.0;
+  const auto [L0, L1, L2] = grid.cell_size();
+  const std::array<double, 3> center = {L0 / 2.0, L1 / 2.0, L2 / 2.0};
+  const auto rho = MakeGaussianCharge(grid, q, alpha, center);
+
+  auto cpu_V = PoissonSolver::SolveFree(grid, rho);
+  auto cpu_E = PoissonSolver::HartreeEnergy(grid, rho);
+
+  auto gpu_result = PoissonFreeCuda(grid, rho);
+  if (!gpu_result.ok()) {
+    std::cerr << "PoissonFreeCuda failed: " << gpu_result.status().message()
+              << '\n';
+    return 1;
+  }
+
+  const double max_diff = MaxAbsDifference(gpu_result.value().V, cpu_V);
+  const double energy_diff =
+      std::abs(gpu_result.value().hartree_energy - cpu_E);
+
+  std::cout << "poisson_free_vs_cpu: grid=16^3"
+            << " kernel_ms=" << gpu_result.value().kernel_ms
+            << " max_V_diff=" << max_diff
+            << " cpu_E=" << cpu_E
+            << " gpu_E=" << gpu_result.value().hartree_energy
+            << " energy_diff=" << energy_diff << '\n';
+
+  const double v_scale = *std::max_element(cpu_V.begin(), cpu_V.end(),
+      [](double a, double b) { return std::abs(a) < std::abs(b); });
+  const double rel_diff = max_diff / std::max(std::abs(v_scale), 1e-10);
+  if (rel_diff > 1e-8) {
+    std::cerr << "FAIL: free-space relative V diff=" << rel_diff
+              << " > 1e-8\n";
+    return 1;
+  }
+  if (energy_diff > std::abs(cpu_E) * 1e-8) {
+    std::cerr << "FAIL: free-space energy_diff=" << energy_diff << " > "
+              << std::abs(cpu_E) * 1e-8 << '\n';
+    return 1;
+  }
+  return 0;
+}
+
+int TestPoissonFreeAnalytic() {
+  // 64x64x64 free-space grid with tight Gaussian charge.
+  UniformGrid3D grid;
+  grid.n = {64, 64, 64};
+  grid.h = {0.15, 0.15, 0.15};
+  grid.origin = {0.0, 0.0, 0.0};
+  grid.bc = {BoundaryCondition::kFree, BoundaryCondition::kFree,
+             BoundaryCondition::kFree};
+
+  const double alpha = 8.0;
+  const double q = 1.0;
+  const auto [L0, L1, L2] = grid.cell_size();
+  const std::array<double, 3> center = {L0 / 2.0, L1 / 2.0, L2 / 2.0};
+  const auto rho = MakeGaussianCharge(grid, q, alpha, center);
+
+  auto gpu_result = PoissonFreeCuda(grid, rho);
+  if (!gpu_result.ok()) {
+    std::cerr << "PoissonFreeCuda failed: " << gpu_result.status().message()
+              << '\n';
+    return 1;
+  }
+
+  const double analytic_E =
+      PoissonSolver::AnalyticGaussianHartree(q, alpha);
+  const double energy_err =
+      std::abs(gpu_result.value().hartree_energy - analytic_E);
+
+  std::cout << "poisson_free_analytic: grid=64^3"
+            << " kernel_ms=" << gpu_result.value().kernel_ms
+            << " gpu_E=" << gpu_result.value().hartree_energy
+            << " analytic_E=" << analytic_E
+            << " energy_err=" << energy_err << '\n';
+
+  // Free-space Poisson should match analytic better than periodic
+  // (no periodic images). With h=0.15, alpha=8.0, tolerance ~0.5 Ha.
+  if (energy_err > 0.5) {
+    std::cerr << "FAIL: free-space energy_err=" << energy_err
+              << " > 0.5\n";
+    return 1;
+  }
+  return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -186,6 +281,8 @@ int main() {
   failures += TestPoissonVsCpu();
   failures += TestPoissonAnalytic();
   failures += TestPoissonLedger();
+  failures += TestPoissonFreeVsCpu();
+  failures += TestPoissonFreeAnalytic();
 
   if (failures == 0) {
     std::cout << "All GPU cuFFT Poisson tests passed.\n";

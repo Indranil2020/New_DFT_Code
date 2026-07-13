@@ -14,12 +14,13 @@
     },
     {
       "name": "cuda",
-      "displayName": "CUDA (RTX/A40)",
+      "displayName": "CUDA (RTX 5050 / A40)",
       "binaryDir": "${sourceDir}/../build-cuda",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "TIDES_ENABLE_CUDA": "ON",
-        "CMAKE_CUDA_ARCHITECTURES": "89;90",
+        "TIDES_ENABLE_METIS": "ON",
+        "CMAKE_CUDA_ARCHITECTURES": "90-virtual",
         "CMAKE_CXX_STANDARD": "20"
       }
     },

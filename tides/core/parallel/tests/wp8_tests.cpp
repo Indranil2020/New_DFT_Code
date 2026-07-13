@@ -17,6 +17,7 @@ using tides::io::StageData;
 using tides::io::StageDump;
 using tides::parallel::GraphPartitioner;
 using tides::parallel::HaloExchange;
+using tides::parallel::PartitionMethod;
 using tides::parallel::PartitionResult;
 
 int Fail(const std::string& msg) {
@@ -64,38 +65,91 @@ int TestStageDump() {
   return 0;
 }
 
-// T8.2: METIS partitioner — imbalance <= 10%.
+// Build a 10x10x1 grid graph with 4-connected adjacency.
+struct GridGraph {
+  std::size_t n;
+  std::vector<double> coords;
+  std::vector<std::vector<std::size_t>> adj;
+};
+
+GridGraph MakeGridGraph(std::size_t nx, std::size_t ny) {
+  GridGraph g;
+  g.n = nx * ny;
+  g.coords.resize(3 * g.n);
+  g.adj.resize(g.n);
+  for (std::size_t i = 0; i < g.n; ++i) {
+    g.coords[3*i]   = static_cast<double>(i % nx);
+    g.coords[3*i+1] = static_cast<double>(i / nx);
+    g.coords[3*i+2] = 0.0;
+  }
+  for (std::size_t i = 0; i < g.n; ++i) {
+    if (i % nx > 0)      g.adj[i].push_back(i - 1);
+    if (i % nx < nx - 1) g.adj[i].push_back(i + 1);
+    if (i >= nx)         g.adj[i].push_back(i - nx);
+    if (i + nx < g.n)    g.adj[i].push_back(i + nx);
+  }
+  return g;
+}
+
+// T8.2: Graph partitioner — imbalance <= 10%.
 int TestPartitioner() {
   std::cout << "\n=== T8.2: Graph partitioner ===\n";
-  // 100 vertices on a regular grid (10x10x1), partition into 4.
-  const std::size_t n = 100;
-  std::vector<double> coords(3 * n);
-  for (std::size_t i = 0; i < n; ++i) {
-    coords[3*i] = static_cast<double>(i % 10);
-    coords[3*i+1] = static_cast<double>(i / 10);
-    coords[3*i+2] = 0.0;
-  }
-  std::vector<std::vector<std::size_t>> adj(n);
-  // Simple adjacency (4-connected grid).
-  for (std::size_t i = 0; i < n; ++i) {
-    if (i % 10 > 0) adj[i].push_back(i - 1);
-    if (i % 10 < 9) adj[i].push_back(i + 1);
-    if (i >= 10) adj[i].push_back(i - 10);
-    if (i + 10 < n) adj[i].push_back(i + 10);
-  }
+  auto g = MakeGridGraph(10, 10);
 
   for (int n_parts : {2, 4, 8}) {
-    auto res = GraphPartitioner::Partition(coords, adj, n, n_parts);
-    std::cout << "  n_parts=" << n_parts
+    auto res = GraphPartitioner::Partition(g.coords, g.adj, g.n, n_parts,
+                                            PartitionMethod::RCB);
+    std::cout << "  RCB  n_parts=" << n_parts
               << " imbalance=" << res.imbalance * 100.0 << "%"
               << " (target <=10%)\n";
-    if (res.imbalance > 0.10) {
+    if (res.imbalance > 0.10 + 1e-9) {
       std::ostringstream os;
-      os << "T8.2: imbalance " << res.imbalance * 100.0 << "% > 10% at n_parts="
+      os << "T8.2: RCB imbalance " << res.imbalance * 100.0 << "% > 10% at n_parts="
          << n_parts;
       return Fail(os.str());
     }
   }
+
+#ifdef TIDES_HAVE_METIS
+  std::cout << "  [METIS backend compiled in — testing...]\n";
+  for (int n_parts : {2, 3, 4, 5, 7, 8}) {
+    auto res = GraphPartitioner::Partition(g.coords, g.adj, g.n, n_parts,
+                                            PartitionMethod::METIS);
+    if (res.n_parts == 0) {
+      std::cout << "  METIS n_parts=" << n_parts << " FAILED (fallthrough)\n";
+      continue;
+    }
+    std::cout << "  METIS n_parts=" << n_parts
+              << " imbalance=" << res.imbalance * 100.0 << "%"
+              << " edge_cut=" << res.edge_cut
+              << " (target <=10%)\n";
+    if (res.imbalance > 0.10 + 1e-9) {
+      std::ostringstream os;
+      os << "T8.2: METIS imbalance " << res.imbalance * 100.0
+         << "% > 10% at n_parts=" << n_parts;
+      return Fail(os.str());
+    }
+  }
+
+  // Cross-check: METIS should produce fewer or equal edge cuts than RCB
+  // on a geometric grid (METIS optimises edge cut; RCB does not).
+  {
+    int n_parts = 4;
+    auto rcb = GraphPartitioner::Partition(g.coords, g.adj, g.n, n_parts,
+                                            PartitionMethod::RCB);
+    auto met = GraphPartitioner::Partition(g.coords, g.adj, g.n, n_parts,
+                                            PartitionMethod::METIS);
+    if (met.n_parts > 0 && met.edge_cut > rcb.edge_cut) {
+      std::cout << "  [WARN] METIS edge_cut (" << met.edge_cut
+                << ") > RCB edge_cut (" << rcb.edge_cut << ") — unexpected\n";
+    }
+    std::cout << "  cross-check: RCB edge_cut=" << rcb.edge_cut
+              << " vs METIS edge_cut=" << met.edge_cut << "\n";
+  }
+#else
+  std::cout << "  [METIS backend not compiled — RCB only]\n";
+#endif
+
   std::cout << "T8.2: GREEN (imbalance <= 10%)\n";
   return 0;
 }

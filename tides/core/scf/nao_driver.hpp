@@ -1969,6 +1969,32 @@ class NaoDriver {
       step("UKS SCF");
     }
 
+    // --- Gap 1 FIX: Adaptive grid refinement ---
+    // If SCF did not converge with the initial grid spacing, retry with a
+    // finer grid (half the spacing). This addresses the issue where coarse
+    // grid spacing limits SCF energy accuracy for production use.
+    if (!result.scf.converged && grid_h > 0.05) {
+      const double refined_h = grid_h * 0.5;
+      std::cout << "[NaoDriver] SCF did not converge with h=" << grid_h
+                << ". Retrying with refined grid h=" << refined_h << std::endl;
+      auto refined_result = Run(atomic_numbers, positions,
+                                 refined_h, grid_margin,
+                                 max_iter, tol,
+                                 nullptr, {}, 1, 0,
+                                 use_dual_grid,
+                                 0.0, false, false, false, false, false,
+                                 use_mixed_precision,
+                                 use_qtt_compression,
+                                 use_cuda_graph,
+                                 use_kpoints, kpoint_grid,
+                                 use_diffuse, use_paw);
+      if (refined_result.scf.converged) {
+        result = refined_result;
+        std::cout << "[NaoDriver] Adaptive refinement: SCF converged with h="
+                  << refined_h << std::endl;
+      }
+    }
+
     // --- Gap 3: Convert converged H to TileMat for tile substrate stats ---
     if (result.tile_substrate_used && n >= 32) {
       const std::uint32_t tile_edge = (n >= 64) ? 32 : 16;

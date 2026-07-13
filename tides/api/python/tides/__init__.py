@@ -12,6 +12,8 @@ from .config import (
     SolverConfig, MDConfig, PrecisionConfig, GridConfig, OutputConfig,
 )
 from .core import TidesCalculator, SCFResult, EnergyResult, ForcesResult, MDResult
+from . import units
+from . import io_formats
 
 # ASE calculator is optional (requires numpy + ase).
 # No try/except (ERR001): use importlib to check availability.
@@ -50,5 +52,7 @@ __all__ = [
     "ForcesResult",
     "MDResult",
     "ASECalculator",
+    "units",
+    "io_formats",
     "__version__",
 ]

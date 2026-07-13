@@ -114,13 +114,13 @@ int TestSCFWithDiffuseBasis() {
   std::vector<double> pos = {0.0, 0.0, 0.0};
 
   // Run with standard DZP.
-  auto res_dzp = NaoDriver::Run(Z, pos, 0.35, 4.0, 100, 1e-6);
+  auto res_dzp = NaoDriver::Run(Z, pos, 0.4, 4.0, 100, 1e-6);
   std::cout << "  DZP: E=" << res_dzp.scf.energy
             << " converged=" << res_dzp.scf.converged
             << " n_basis=" << res_dzp.n_basis << "\n";
 
   // Run with augmented DZP (diffuse functions).
-  auto res_aug = NaoDriver::Run(Z, pos, 0.35, 6.0, 100, 1e-6,
+  auto res_aug = NaoDriver::Run(Z, pos, 0.4, 6.0, 100, 1e-6,
                                 nullptr, {}, 1, 0, true, 0.0,
                                 false, false, false, false, false,
                                 false, false, false, false,

@@ -65,7 +65,9 @@ class QTTCompressor {
       }
 
     // Eigendecompose G via Jacobi rotation.
-    auto [eigenvalues, eigenvectors] = JacobiEig(n, G);
+    auto jacobi_result = JacobiEig(n, G);
+    const auto& eigenvalues = jacobi_result.first;
+    const auto& eigenvectors = jacobi_result.second;
 
     // Sort eigenvalues in descending order.
     std::vector<std::size_t> indices(n);

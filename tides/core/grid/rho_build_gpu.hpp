@@ -56,4 +56,15 @@ struct RhoGradientDeviceIn {
 [[nodiscard]] Status BuildTauDevice(const RhoGradientDeviceIn& input,
                                      double* tau, cudaStream_t stream);
 
+// Build rho from a density matrix P (not orbitals). This is the R2/R3
+// linear-scaling path: purification produces P, not eigenvectors.
+// rho(r) = sum_{mu,nu} P_{mu,nu} * phi_mu(r) * phi_nu(r)
+// Uses GpuArena for device memory; CPU fallback for small sizes.
+[[nodiscard]] Result<RhoBuildGpuResult> RhoBuildFromDensityMatrixCuda(
+    const UniformGrid3D& grid,
+    const std::vector<double>& density_matrix,  // [n_basis][n_basis] row-major
+    const std::vector<std::vector<double>>& phi,  // [n_basis][n_points]
+    std::size_t n_basis);
+
+
 }  // namespace tides::grid

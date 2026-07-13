@@ -24,3 +24,9 @@ v1.0 + flagship paper + governance handoff M60.
 ## Standing rule
 Analytical model first (each WP states its model); measurement at every gate; deviation >2x forces a
 written model revision. This is the anti-(multiplicative-speedup-fallacy) discipline.
+
+## Deferred to Year 4 (Phase D)
+- **Cyclic/helical symmetry** (#20): C_n (arbitrary n), C_inf, D_inf (linear molecules),
+  and screw-axis operations for 1D-periodic systems (nanotubes, polymers). Current
+  implementation covers finite point groups C1–Oh only. See `core/common/point_group.hpp`
+  for the deferral note. Not needed for Phase A (molecular) or Phase B (3D PBC).

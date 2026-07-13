@@ -344,6 +344,101 @@ __global__ void RhoIntegralKernel(
   return result;
 }
 
+// --- Density-matrix-based rho build (R2/R3 path) ---
+// Standalone wrapper that builds rho from P instead of orbitals.
+// Uses GpuArena for device memory. CPU fallback for small sizes.
+[[nodiscard]] Result<RhoBuildGpuResult> RhoBuildFromDensityMatrixCuda(
+    const UniformGrid3D& grid,
+    const std::vector<double>& density_matrix,
+    const std::vector<std::vector<double>>& phi,
+    std::size_t n_basis) {
+  const std::size_t n_points = grid.total_points();
+  RhoBuildGpuResult result;
+  result.n_points = n_points;
+  result.n_orbitals = n_basis;
+  if (n_points == 0 || n_basis == 0) {
+    result.rho.assign(n_points, 0.0);
+    return result;
+  }
+  // CPU fallback for small sizes.
+  const std::size_t total_elements = n_points * n_basis;
+  if (total_elements < 5000000 || !RhoBuildCudaAvailable()) {
+    result.rho.assign(n_points, 0.0);
+    for (std::size_t mu = 0; mu < n_basis; ++mu)
+      for (std::size_t nu = 0; nu < n_basis; ++nu) {
+        const double p = density_matrix[mu * n_basis + nu];
+        if (std::abs(p) < 1e-30) continue;
+        for (std::size_t g = 0; g < n_points; ++g)
+          result.rho[g] += p * phi[mu][g] * phi[nu][g];
+      }
+    const auto [h0, h1, h2] = grid.h;
+    const double dv = h0 * h1 * h2;
+    result.integral = 0.0;
+    for (double r : result.rho) result.integral += r * dv;
+    result.kernel_ms = 0.0;
+    return result;
+  }
+  // GPU path: flatten phi, upload P and phi, launch RhoGradientDeviceKernel.
+  GpuArena& arena = GpuArena::Instance();
+  cudaStream_t stream = arena.Stream();
+  std::vector<double> phi_flat(n_basis * n_points);
+  for (std::size_t bi = 0; bi < n_basis; ++bi)
+    std::copy(phi[bi].begin(), phi[bi].end(), phi_flat.begin() + bi * n_points);
+  const std::size_t phi_bytes = n_basis * n_points * sizeof(double);
+  const std::size_t P_bytes = n_basis * n_basis * sizeof(double);
+  const std::size_t rho_bytes = n_points * sizeof(double);
+  double* d_phi = static_cast<double*>(arena.Alloc(phi_bytes));
+  double* d_P = static_cast<double*>(arena.Alloc(P_bytes));
+  double* d_rho = static_cast<double*>(arena.Alloc(rho_bytes));
+  double* d_grad_phi = static_cast<double*>(arena.Alloc(phi_bytes));
+  double* d_grad = static_cast<double*>(arena.Alloc(rho_bytes));
+  if (!d_phi || !d_P || !d_rho || !d_grad_phi || !d_grad) {
+    if (d_phi) arena.Free(d_phi);
+    if (d_P) arena.Free(d_P);
+    if (d_rho) arena.Free(d_rho);
+    if (d_grad_phi) arena.Free(d_grad_phi);
+    if (d_grad) arena.Free(d_grad);
+    return Status::IoError("arena.Alloc failed for rho-from-DM build");
+  }
+  arena.H2D(d_phi, phi_flat.data(), phi_bytes);
+  arena.H2D(d_P, density_matrix.data(), P_bytes);
+  cudaMemsetAsync(d_grad_phi, 0, phi_bytes, stream);
+  RhoGradientDeviceIn rho_in;
+  rho_in.density_matrix = d_P;
+  rho_in.phi = d_phi;
+  rho_in.grad_phi = d_grad_phi;
+  rho_in.nbasis = static_cast<std::int64_t>(n_basis);
+  rho_in.np = static_cast<std::int64_t>(n_points);
+  rho_in.point_stride = static_cast<std::int64_t>(n_points);
+  cudaEvent_t start_ev, stop_ev;
+  cudaEventCreate(&start_ev);
+  cudaEventCreate(&stop_ev);
+  cudaEventRecord(start_ev, stream);
+  auto status = BuildRhoGradientDevice(rho_in, d_rho, d_grad, stream);
+  cudaEventRecord(stop_ev, stream);
+  cudaEventSynchronize(stop_ev);
+  float ms = 0.0f;
+  cudaEventElapsedTime(&ms, start_ev, stop_ev);
+  cudaEventDestroy(start_ev);
+  cudaEventDestroy(stop_ev);
+  result.kernel_ms = static_cast<double>(ms);
+  result.rho.resize(n_points);
+  arena.D2H(result.rho.data(), d_rho, rho_bytes);
+  arena.Sync();
+  const auto [h0, h1, h2] = grid.h;
+  const double dv = h0 * h1 * h2;
+  result.integral = 0.0;
+  for (double r : result.rho) result.integral += r * dv;
+  arena.Free(d_phi);
+  arena.Free(d_P);
+  arena.Free(d_rho);
+  arena.Free(d_grad_phi);
+  arena.Free(d_grad);
+  if (!status.ok()) return status;
+  return result;
+}
+
+
 Status BuildRhoGradientDevice(const RhoGradientDeviceIn& input, double* rho,
                               double* grad, cudaStream_t stream) {
   if (input.nbasis <= 0 || input.np < 0 || input.point_stride < input.np) {
