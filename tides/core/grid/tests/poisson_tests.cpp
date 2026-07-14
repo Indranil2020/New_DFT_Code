@@ -101,7 +101,7 @@ int main() {
   // Free BC: Gaussian charge. With self-term regularization, the direct sum
   // reproduces the analytic Hartree energy to ~1e-3 on a 16^3 grid (h=0.5).
   // The 1e-10 target needs finer grid + cuFFT (GPU path).
-  if (CheckFreeBC(1.0, 5.0, 5e-3, "free_alpha5")) return 1;
+  if (CheckFreeBC(1.0, 5.0, 2e-3, "free_alpha5")) return 1;
 
   // Periodic BC: with a large box, the periodic result converges to the free
   // result (image charges are negligible at large L/width).
@@ -148,9 +148,9 @@ int main() {
     const double err = std::fabs(E - E_exact);
     std::cout << "wire_alpha5: E_H=" << E << " exact=" << E_exact
               << " err=" << err << '\n';
-    if (err > 5e-3) {
+    if (err > 2e-3) {
       std::ostringstream os;
-      os << "wire: err " << err << " > 5e-3";
+      os << "wire: err " << err << " > 2e-3";
       return Fail(os.str());
     }
   }
@@ -171,9 +171,9 @@ int main() {
     const double err = std::fabs(E - E_exact);
     std::cout << "slab_alpha5: E_H=" << E << " exact=" << E_exact
               << " err=" << err << '\n';
-    if (err > 5e-3) {
+    if (err > 2e-3) {
       std::ostringstream os;
-      os << "slab: err " << err << " > 5e-3";
+      os << "slab: err " << err << " > 2e-3";
       return Fail(os.str());
     }
   }
