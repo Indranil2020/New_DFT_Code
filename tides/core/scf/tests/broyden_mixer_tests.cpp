@@ -96,7 +96,7 @@ int TestLinearMapping() {
   double max_err = 0.0;
   for (int i = 0; i < n; ++i)
     max_err = std::max(max_err, std::fabs(result.P[i] - P_exact[i]));
-  if (max_err > 1e-6) return Fail("linear: wrong solution");
+  if (max_err > 1e-10) return Fail("linear: wrong solution");
 
   std::cout << "PASS\n";
   return 0;
@@ -139,7 +139,7 @@ int TestNonlinearMapping() {
   double max_err = 0.0;
   for (int i = 0; i < n; ++i)
     max_err = std::max(max_err, std::fabs(P_out[i] - result.P[i]));
-  if (max_err > 1e-6) return Fail("nonlinear: not a fixed point");
+  if (max_err > 1e-8) return Fail("nonlinear: not a fixed point");
 
   std::cout << "PASS\n";
   return 0;
@@ -236,8 +236,8 @@ int TestSmallAlpha() {
   if (!result.converged) return Fail("small alpha: did not converge");
 
   // Expected: P* = target (since P = 0.8*P + 0.2*target → 0.2*P = 0.2*target).
-  if (std::fabs(result.P[0] - 1.0) > 1e-4) return Fail("small alpha: wrong P[0]");
-  if (std::fabs(result.P[1] - 0.5) > 1e-4) return Fail("small alpha: wrong P[1]");
+  if (std::fabs(result.P[0] - 1.0) > 1e-10) return Fail("small alpha: wrong P[0]");
+  if (std::fabs(result.P[1] - 0.5) > 1e-10) return Fail("small alpha: wrong P[1]");
 
   std::cout << "PASS\n";
   return 0;
