@@ -17,6 +17,7 @@
 #include "scf/mixed_precision.hpp"
 #include "verification/a_posteriori_error.hpp"
 #include "tile/tile_scf_integration.hpp"
+#include "tile/gemm_grouped.hpp"
 #include "tile/qtt_scf.hpp"
 #include "tile/cuda_graph_scf.hpp"
 
@@ -266,41 +267,84 @@ class SCFDriver {
       std::vector<double> tmp(n * n_retained, 0.0);
       if (n >= 64) {
         // Tile-based H@X: build tile pattern for H, then multiply each tile
-        // block using BLAS dgemm for the local computation.
+        // block. B8: Use GPU grouped GEMM when CUDA is available; fall back
+        // to CPU per-tile BLAS dgemm otherwise.
         const std::uint32_t tile_edge = 32;
         auto h_tile = tile::TileMat::FromDense(n, n, H, tile_edge,
                                                 tile::Symmetry::kSymmetric);
         if (h_tile.ok()) {
-          // Multiply each tile block of H with the corresponding rows of X
-          // using BLAS dgemm for the tile-local GEMM.
           const std::size_t ts = tile_edge;
-          for (std::size_t ordinal = 0; ordinal < h_tile.value().tile_count(); ++ordinal) {
-            auto tv = h_tile.value().tile(ordinal);
-            const std::size_t row_start = tv.block_row * ts;
-            const std::size_t col_start = tv.block_col * ts;
-            const std::size_t row_end = std::min(row_start + ts, n);
-            const std::size_t col_end = std::min(col_start + ts, n);
-            const std::size_t block_rows = row_end - row_start;
-            const std::size_t block_cols = col_end - col_start;
-            // tmp[row_start:row_end, :] += H[row_start:row_end, col_start:col_end] @ X[col_start:col_end, :]
-            // BLAS dgemm: C += alpha * A * B
-            // A = H_block (block_rows x block_cols, row-major)
-            // B = X_block (block_cols x n_retained, row-major)
-            // C = tmp_block (block_rows x n_retained, row-major)
-            int m_blk = static_cast<int>(block_rows);
-            int k_blk = static_cast<int>(block_cols);
-            int n_blk = static_cast<int>(n_retained);
-            int ld_H = static_cast<int>(n);  // leading dim of full H (row-major)
-            double alpha = 1.0, beta = 1.0;  // beta=1 to accumulate into tmp
-            char transa = 'N', transb = 'N';
-            // Col-major dgemm: dgemm('N','N', n_retained, block_rows, block_cols, ...)
-            // A = X_block stored col-major as (n_retained x block_cols) at X[col_start,:]
-            // B = H_block stored col-major as (n x block_rows) at H[row_start, col_start]
-            // C = tmp_block stored col-major as (n_retained x block_rows) at tmp[row_start,:]
-            dgemm_(&transa, &transb, &n_blk, &m_blk, &k_blk, &alpha,
-                   X.data() + col_start * n_retained, &n_blk,
-                   H.data() + row_start * n + col_start, &ld_H,
-                   &beta, tmp.data() + row_start * n_retained, &n_blk);
+          const auto& tile_mat = h_tile.value();
+
+          // B8: Try GPU grouped GEMM first.
+          bool gpu_done = false;
+          if (tile::CudaRuntimeAvailable()) {
+            std::vector<tile::CudaGemmProblem> problems;
+            problems.reserve(tile_mat.tile_count());
+            for (std::size_t ordinal = 0; ordinal < tile_mat.tile_count(); ++ordinal) {
+              auto tv = tile_mat.tile(ordinal);
+              const std::size_t row_start = tv.block_row * ts;
+              const std::size_t col_start = tv.block_col * ts;
+              const std::size_t row_end = std::min(row_start + ts, n);
+              const std::size_t col_end = std::min(col_start + ts, n);
+              const std::size_t block_rows = row_end - row_start;
+              const std::size_t block_cols = col_end - col_start;
+
+              tile::CudaGemmProblem prob;
+              prob.m = static_cast<std::uint32_t>(block_rows);
+              prob.k = static_cast<std::uint32_t>(block_cols);
+              prob.n = static_cast<std::uint32_t>(n_retained);
+              // A = H_block (block_rows x block_cols, row-major)
+              prob.a.resize(block_rows * block_cols);
+              for (std::size_t i = 0; i < block_rows; ++i)
+                for (std::size_t j = 0; j < block_cols; ++j)
+                  prob.a[i * block_cols + j] = H[(row_start + i) * n + (col_start + j)];
+              // B = X_block (block_cols x n_retained, row-major)
+              prob.b.resize(block_cols * n_retained);
+              for (std::size_t i = 0; i < block_cols; ++i)
+                for (std::size_t j = 0; j < n_retained; ++j)
+                  prob.b[i * n_retained + j] = X[(col_start + i) * n_retained + j];
+              problems.push_back(std::move(prob));
+            }
+
+            auto gpu_result = tile::GroupedGemmFp64Cuda(problems);
+            if (gpu_result.ok()) {
+              // Accumulate tile results into tmp.
+              for (std::size_t ordinal = 0; ordinal < tile_mat.tile_count(); ++ordinal) {
+                auto tv = tile_mat.tile(ordinal);
+                const std::size_t row_start = tv.block_row * ts;
+                const std::size_t row_end = std::min(row_start + ts, n);
+                const std::size_t block_rows = row_end - row_start;
+                const auto& c_tile = gpu_result.value().c_tiles[ordinal];
+                for (std::size_t i = 0; i < block_rows; ++i)
+                  for (std::size_t j = 0; j < n_retained; ++j)
+                    tmp[(row_start + i) * n_retained + j] += c_tile[i * n_retained + j];
+              }
+              gpu_done = true;
+            }
+          }
+
+          if (!gpu_done) {
+            // CPU fallback: per-tile BLAS dgemm.
+            for (std::size_t ordinal = 0; ordinal < tile_mat.tile_count(); ++ordinal) {
+              auto tv = tile_mat.tile(ordinal);
+              const std::size_t row_start = tv.block_row * ts;
+              const std::size_t col_start = tv.block_col * ts;
+              const std::size_t row_end = std::min(row_start + ts, n);
+              const std::size_t col_end = std::min(col_start + ts, n);
+              const std::size_t block_rows = row_end - row_start;
+              const std::size_t block_cols = col_end - col_start;
+              int m_blk = static_cast<int>(block_rows);
+              int k_blk = static_cast<int>(block_cols);
+              int n_blk = static_cast<int>(n_retained);
+              int ld_H = static_cast<int>(n);
+              double alpha = 1.0, beta = 1.0;
+              char transa = 'N', transb = 'N';
+              dgemm_(&transa, &transb, &n_blk, &m_blk, &k_blk, &alpha,
+                     X.data() + col_start * n_retained, &n_blk,
+                     H.data() + row_start * n + col_start, &ld_H,
+                     &beta, tmp.data() + row_start * n_retained, &n_blk);
+            }
           }
         } else {
           // Tile conversion failed — fall back to BLAS.
