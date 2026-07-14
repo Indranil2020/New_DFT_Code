@@ -52,7 +52,7 @@ int TestQuadratic() {
   if (!result.converged) return Fail("quadratic: did not converge");
   if (result.final_energy > 1e-10) return Fail("quadratic: energy too high");
   for (double x : result.final_positions)
-    if (std::fabs(x) > 1e-4) return Fail("quadratic: position not at origin");
+    if (std::fabs(x) > 1e-8) return Fail("quadratic: position not at origin");
 
   std::cout << "PASS\n";
   return 0;
@@ -86,7 +86,7 @@ int TestMorse() {
   std::cout << "  Expected: " << r_eq << '\n';
 
   if (!result.converged) return Fail("Morse: did not converge");
-  if (std::fabs(result.final_positions[0] - r_eq) > 1e-4)
+  if (std::fabs(result.final_positions[0] - r_eq) > 1e-8)
     return Fail("Morse: position not at minimum");
 
   std::cout << "PASS\n";
