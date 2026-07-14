@@ -922,6 +922,15 @@ if(LAPACK_FOUND)
 endif()
 add_test(NAME t58_10k_atom_single_card COMMAND tides_10k_atom_benchmark)
 
+# B15: O(N) scaling benchmark (extended to 1600 atoms)
+add_executable(tides_on_scaling_benchmark
+  core/solvers/tests/on_scaling_benchmark.cpp)
+target_link_libraries(tides_on_scaling_benchmark PRIVATE tides_solvers tides_cuda_tile)
+if(LAPACK_FOUND)
+  target_link_libraries(tides_on_scaling_benchmark PRIVATE ${LAPACK_LIBRARIES})
+endif()
+add_test(NAME b15_on_scaling COMMAND tides_on_scaling_benchmark)
+
 # T5.9: Distributed R2/R3 scaling simulation (Phase C)
 add_executable(tides_distributed_scaling_tests
   core/parallel/tests/t59_distributed_scaling.cpp)

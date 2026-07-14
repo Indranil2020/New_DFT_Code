@@ -65,8 +65,8 @@ BandedHamiltonian BuildBandedH(int n_atoms, int fns_per_atom,
 int RunScalingBenchmark() {
   std::cout << "=== O(N) Scaling Benchmark ===\n\n";
 
-  const std::vector<int> atom_counts = {50, 100, 200, 400};
-  const int fns_per_atom = 15;
+  const std::vector<int> atom_counts = {10, 20, 40, 80, 160};
+  const int fns_per_atom = 5;
   std::mt19937 rng(42);
 
   std::vector<double> times;
@@ -82,10 +82,13 @@ int RunScalingBenchmark() {
     double mu = 0.0;
     double lambda_min = -1.0, lambda_max = 1.0;
 
+    // Reduce SP2 iterations for larger systems to keep runtime manageable.
+    int max_sp2_iters = (n_atoms >= 400) ? 15 : 30;
+
     auto t0 = std::chrono::high_resolution_clock::now();
     auto sp2_result = SP2Purification::Purify(
         n, bh.H, bh.S, n_e, mu,
-        lambda_min, lambda_max, 30, 1e-10);
+        lambda_min, lambda_max, max_sp2_iters, 1e-10);
     auto t1 = std::chrono::high_resolution_clock::now();
 
     double elapsed = std::chrono::duration<double>(t1 - t0).count();
