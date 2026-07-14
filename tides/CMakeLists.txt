@@ -329,6 +329,7 @@ if(TIDES_ENABLE_CUDA)
       core/grid/rho_build.cu
       core/grid/poisson_fft.cu
       core/grid/vmat_build.cu
+      core/grid/pp_build.cu
       core/grid/xc/xc_engine.cu
       core/grid/xc_gpu_compat.cu
       core/grid/xc/kernels/xc_lda_kernel.cu
@@ -375,6 +376,19 @@ if(TIDES_ENABLE_CUDA)
              COMMAND tides_cuda_poisson_fft_tests)
     set_tests_properties(cuda_poisson_fft_vs_cpu PROPERTIES
       SKIP_RETURN_CODE 77)
+
+    # PP-GPU Phase A: v_loc grid build + weighted v->H adjoint
+    add_executable(tides_cuda_pp_build_tests
+      core/grid/tests/cuda_pp_build_tests.cpp)
+    target_link_libraries(tides_cuda_pp_build_tests PRIVATE
+      tides_grid tides_cuda_grid)
+    set_target_properties(tides_cuda_pp_build_tests PROPERTIES
+      CUDA_RUNTIME_LIBRARY Shared)
+    add_test(NAME cuda_pp_build_vs_cpu
+             COMMAND tides_cuda_pp_build_tests)
+    set_tests_properties(cuda_pp_build_vs_cpu PROPERTIES
+      SKIP_RETURN_CODE 77
+      ENVIRONMENT "TIDES_PP_DIR=${CMAKE_CURRENT_SOURCE_DIR}/external/pseudopotentials/pseudodojo-pbe-sr")
 
     # WP3 T3.3: GPU v->H adjoint
     add_executable(tides_cuda_vmat_build_tests

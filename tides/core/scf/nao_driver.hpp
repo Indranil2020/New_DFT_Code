@@ -52,6 +52,8 @@
 #include "grid/rho_build_gpu.hpp"
 #include "grid/xc_gpu.hpp"
 #include "grid/poisson_fft_gpu.hpp"
+#include "grid/pp_build_gpu.hpp"
+#include "scf/pp_reference.hpp"
 #include "grid/gpu_arena.hpp"
 #include "grid/xc.hpp"
 #include "tile/layout.hpp"
@@ -639,6 +641,7 @@ class NaoDriver {
     double* d_P_up = nullptr;         // [n][n]
     double* d_P_down = nullptr;       // [n][n] (only for nspin=2)
     double* d_vmat = nullptr;         // [n][n]
+    double* d_vh_grid = nullptr;      // [np] grid potential staging (V_ext/V_H)
     std::size_t dev_stride = 0;
     grid::xc::XcSpec dev_xc_spec;
 
@@ -719,6 +722,9 @@ class NaoDriver {
         d_P_up = static_cast<double*>(gpu_arena.Alloc(n * n * sizeof(double)));
         if (nspin == 2) d_P_down = static_cast<double*>(gpu_arena.Alloc(n * n * sizeof(double)));
         d_vmat = static_cast<double*>(gpu_arena.Alloc(n * n * sizeof(double)));
+        // PP-GPU Phase A: staging buffer for grid potentials (V_ext once,
+        // V_H per iteration) consumed by BuildWeightedVmatDevice.
+        d_vh_grid = static_cast<double*>(gpu_arena.Alloc(np_total * sizeof(double)));
 
         // Build device XcSpec.
         dev_xc_spec.family = (is_gga) ? grid::xc::Family::kGga : grid::xc::Family::kLda;
@@ -752,6 +758,7 @@ class NaoDriver {
     void* d_P_up = nullptr;
     void* d_P_down = nullptr;
     void* d_vmat = nullptr;
+    void* d_vh_grid = nullptr;
     std::size_t dev_stride = 0;
     grid::xc::XcSpec dev_xc_spec;
 #endif
@@ -788,46 +795,69 @@ class NaoDriver {
     // Step 7: V_ext via grid (nuclear attraction).
     // When pseudopotentials are provided, use v_local(r) from the PP
     // (interpolated from the PP radial grid). Otherwise use all-electron -Z/r.
-    std::vector<double> v_ext_grid(n0 * n1 * n2, 0.0);
-    for (std::size_t ix = 0; ix < n0; ++ix) {
-      for (std::size_t iy = 0; iy < n1; ++iy) {
-        for (std::size_t iz = 0; iz < n2; ++iz) {
-          const std::size_t g = grid.flatten(ix, iy, iz);
-          auto [x, y, z] = grid.coord(ix, iy, iz);
-          double v = 0.0;
-          for (std::size_t a = 0; a < atoms.size(); ++a) {
-            const auto& atom = atoms[a];
-            const double dx = x - atom.position[0];
-            const double dy = y - atom.position[1];
-            const double dz = z - atom.position[2];
-            const double r = std::sqrt(dx * dx + dy * dy + dz * dz);
-            if (use_pp && a < pseudopotentials->size()) {
-              const auto& pp = (*pseudopotentials)[a];
-              if (r < 1e-10) {
-                v += pp.v_local.empty() ? 0.0 : pp.v_local[0];
-              } else if (r <= pp.r_grid.back() && !pp.v_local.empty()) {
-                // Linear interpolation of v_local on the PP radial grid.
-                const auto& rg = pp.r_grid;
-                const auto& vl = pp.v_local;
-                auto it = std::upper_bound(rg.begin(), rg.end(), r);
-                if (it != rg.begin() && it != rg.end()) {
-                  std::size_t j = static_cast<std::size_t>(it - rg.begin() - 1);
-                  double t = (r - rg[j]) / (rg[j + 1] - rg[j]);
-                  v += (1.0 - t) * vl[j] + t * vl[j + 1];
-                } else if (it == rg.end()) {
-                  v += vl.back();
-                }
-              }
-            } else {
-              if (r > 1e-10) v -= static_cast<double>(atom.Z) / r;
-            }
-          }
-          v_ext_grid[g] = v;
+    // PP-GPU Phase A: build v_loc(r) and its basis projection on device when
+    // the pipeline is up (d_phi resident); the CPU reference in
+    // scf/pp_reference.hpp is the fallback and A/B oracle (TIDES_PP_DEVICE=0).
+    std::vector<std::array<double, 3>> atom_positions_v(atoms.size());
+    std::vector<int> atom_charges_v(atoms.size());
+    for (std::size_t a = 0; a < atoms.size(); ++a) {
+      atom_positions_v[a] = {atoms[a].position[0], atoms[a].position[1],
+                             atoms[a].position[2]};
+      atom_charges_v[a] = atoms[a].Z;
+    }
+    std::vector<double> V_ext;
+    bool v_ext_on_device = false;
+#ifdef TIDES_HAVE_CUDA
+    if (device_pipeline_ready && grid::PpDeviceEnabled()) {
+      auto pp_tables_host = scf::FlattenVlocTables(
+          atom_positions_v, atom_charges_v,
+          use_pp ? pseudopotentials : nullptr);
+      grid::PpVlocTablesDevice pp_tables;
+      auto pp_status = grid::UploadPpVlocTables(pp_tables_host, &pp_tables,
+                                                dev_stream);
+      if (pp_status.ok()) {
+        grid::VlocDeviceIn vloc_in;
+        vloc_in.tables = &pp_tables;
+        vloc_in.n0 = static_cast<std::int64_t>(n0);
+        vloc_in.n1 = static_cast<std::int64_t>(n1);
+        vloc_in.n2 = static_cast<std::int64_t>(n2);
+        vloc_in.h0 = grid.h[0]; vloc_in.h1 = grid.h[1]; vloc_in.h2 = grid.h[2];
+        vloc_in.ox = grid.origin[0]; vloc_in.oy = grid.origin[1];
+        vloc_in.oz = grid.origin[2];
+        pp_status = grid::BuildVlocDevice(vloc_in, d_vh_grid, dev_stream);
+        if (pp_status.ok()) {
+          grid::WeightedVmatDeviceIn win;
+          win.phi = d_phi;
+          win.wv = d_vh_grid;
+          win.nbasis = static_cast<std::int64_t>(n);
+          win.np = static_cast<std::int64_t>(np_total);
+          win.point_stride = static_cast<std::int64_t>(dev_stride);
+          win.scale = dv;
+          pp_status = grid::BuildWeightedVmatDevice(win, d_vmat, dev_stream);
         }
+        if (pp_status.ok()) {
+          V_ext.resize(n * n);
+          cudaMemcpyAsync(V_ext.data(), d_vmat, n * n * sizeof(double),
+                          cudaMemcpyDeviceToHost, dev_stream);
+          cudaStreamSynchronize(dev_stream);
+          v_ext_on_device = true;
+          step("V_ext assembly (device)");
+        }
+        grid::FreePpVlocTables(&pp_tables);
+      }
+      if (!v_ext_on_device) {
+        std::cout << "[NaoDriver] V_ext device path unavailable ("
+                  << pp_status.message() << "); using CPU path" << std::endl;
       }
     }
-    auto V_ext = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_ext_grid);
-    step("V_ext assembly (GEMM)");
+#endif
+    if (!v_ext_on_device) {
+      auto v_ext_grid = scf::BuildVlocGridReference(
+          grid, atom_positions_v, atom_charges_v,
+          use_pp ? pseudopotentials : nullptr);
+      V_ext = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_ext_grid);
+      step("V_ext assembly (GEMM)");
+    }
 
     // Step 7b: KB nonlocal projectors (when pseudopotentials are provided).
     // V_nl = sum_{a,l,m} h_l^a |beta_l^a, Y_lm><beta_l^a, Y_lm|
@@ -1026,6 +1056,32 @@ class NaoDriver {
                           dev_stream);
           cudaStreamSynchronize(dev_stream);
 
+          // PP-GPU Phase A: project a grid potential to the basis on device
+          // (H2D the potential, weighted vmat with resident d_phi, D2H the
+          // n x n matrix). Replaces the per-iteration CPU BuildHmatGemm
+          // (host flatten + dgemm). Returns false to trigger the CPU path.
+          auto project_v_device = [&](const std::vector<double>& v_host,
+                                      std::vector<double>& out) -> bool {
+            if (!grid::PpDeviceEnabled() || d_vh_grid == nullptr) return false;
+            cudaMemcpyAsync(d_vh_grid, v_host.data(),
+                            np_total * sizeof(double), cudaMemcpyHostToDevice,
+                            dev_stream);
+            grid::WeightedVmatDeviceIn win;
+            win.phi = d_phi;
+            win.wv = d_vh_grid;
+            win.nbasis = static_cast<std::int64_t>(n);
+            win.np = static_cast<std::int64_t>(np_total);
+            win.point_stride = static_cast<std::int64_t>(dev_stride);
+            win.scale = dv;
+            if (!grid::BuildWeightedVmatDevice(win, d_vmat, dev_stream).ok())
+              return false;
+            out.resize(n * n);
+            cudaMemcpyAsync(out.data(), d_vmat, n * n * sizeof(double),
+                            cudaMemcpyDeviceToHost, dev_stream);
+            cudaStreamSynchronize(dev_stream);
+            return true;
+          };
+
           // --- Poisson solve (GPU for both periodic and free-space) ---
           bool is_periodic = (grid.bc[0] == grid::BoundaryCondition::kPeriodic &&
                               grid.bc[1] == grid::BoundaryCondition::kPeriodic &&
@@ -1034,21 +1090,25 @@ class NaoDriver {
           if (is_periodic && grid::PoissonFftCudaAvailable()) {
             auto gpu_res = grid::PoissonFftCuda(grid, cache.rho);
             if (gpu_res.ok()) {
-              cache.V_H = grid::VmatBuilder::BuildHmatGemm(
-                  grid, orbitals, gpu_res.value().V);
+              if (!project_v_device(gpu_res.value().V, cache.V_H))
+                cache.V_H = grid::VmatBuilder::BuildHmatGemm(
+                    grid, orbitals, gpu_res.value().V);
               gpu_poisson_ok = true;
             }
           } else if (!is_periodic && grid::PoissonFftCudaAvailable()) {
             auto gpu_res = grid::PoissonFreeCuda(grid, cache.rho);
             if (gpu_res.ok()) {
-              cache.V_H = grid::VmatBuilder::BuildHmatGemm(
-                  grid, orbitals, gpu_res.value().V);
+              if (!project_v_device(gpu_res.value().V, cache.V_H))
+                cache.V_H = grid::VmatBuilder::BuildHmatGemm(
+                    grid, orbitals, gpu_res.value().V);
               gpu_poisson_ok = true;
             }
           }
           if (!gpu_poisson_ok) {
             auto poisson_result = grid::PoissonSolver::Solve(grid, cache.rho);
-            cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, poisson_result);
+            if (!project_v_device(poisson_result, cache.V_H))
+              cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals,
+                                                           poisson_result);
           }
 
           // --- XC evaluation on device ---
@@ -1088,22 +1148,40 @@ class NaoDriver {
                 device_pipeline_ready = false;
               }
             } else {
-              // LDA: use BuildHmatGemm with downloaded wv_rho.
-              // The device vmat builder for LDA-only (no grad) is not available;
-              // download wv_rho and use CPU BuildHmatGemm.
-              std::vector<double> wv_rho(np_total, 0.0);
-              cudaMemcpyAsync(wv_rho.data(), dev_arena->wv_rho(),
-                              np_total * sizeof(double), cudaMemcpyDeviceToHost,
-                              dev_stream);
-              cudaStreamSynchronize(dev_stream);
-              // wv_rho already includes weights (dv * vxc), so pass directly.
-              // But BuildHmatGemm expects v(r) and multiplies by dv internally.
-              // XcEval outputs wv_rho = w * v_rho, so we need to divide by dv
-              // to get v_rho for BuildHmatGemm, OR use a direct integration.
-              // Simpler: just download and use BuildHmatGemm with v = wv_rho / dv.
-              for (std::size_t g = 0; g < np_total; ++g)
-                wv_rho[g] /= dv;
-              cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, wv_rho);
+              // LDA: PP-GPU Phase A — device weighted vmat on wv_rho (which
+              // already carries the quadrature weights, so scale = 1), then
+              // download V_xc. Fallback: download wv_rho, undo the weights,
+              // and use CPU BuildHmatGemm as before.
+              bool lda_vmat_on_device = false;
+              if (grid::PpDeviceEnabled()) {
+                grid::WeightedVmatDeviceIn win;
+                win.phi = d_phi;
+                win.wv = dev_arena->wv_rho();
+                win.nbasis = static_cast<std::int64_t>(n);
+                win.np = static_cast<std::int64_t>(np_total);
+                win.point_stride = static_cast<std::int64_t>(dev_stride);
+                win.scale = 1.0;
+                if (grid::BuildWeightedVmatDevice(win, d_vmat, dev_stream).ok()) {
+                  cache.V_xc.resize(n * n);
+                  cudaMemcpyAsync(cache.V_xc.data(), d_vmat,
+                                  n * n * sizeof(double),
+                                  cudaMemcpyDeviceToHost, dev_stream);
+                  cudaStreamSynchronize(dev_stream);
+                  lda_vmat_on_device = true;
+                }
+              }
+              if (!lda_vmat_on_device) {
+                std::vector<double> wv_rho(np_total, 0.0);
+                cudaMemcpyAsync(wv_rho.data(), dev_arena->wv_rho(),
+                                np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                                dev_stream);
+                cudaStreamSynchronize(dev_stream);
+                // XcEval outputs wv_rho = w * v_rho and BuildHmatGemm
+                // multiplies by dv internally, so undo the weights first.
+                for (std::size_t g = 0; g < np_total; ++g)
+                  wv_rho[g] /= dv;
+                cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, wv_rho);
+              }
             }
 
             if (device_pipeline_ready) {
@@ -2437,6 +2515,7 @@ class NaoDriver {
       if (d_P_up) gpu_arena.Free(d_P_up);
       if (d_P_down) gpu_arena.Free(d_P_down);
       if (d_vmat) gpu_arena.Free(d_vmat);
+      if (d_vh_grid) gpu_arena.Free(d_vh_grid);
       if (dev_arena) {
         dev_arena->Release(dev_stream);
         delete dev_arena;

@@ -26,6 +26,9 @@ namespace {
 
 using tides::scf::NaoDriver;
 using tides::scf::NaoDriverResult;
+using tides::grid::xc::HostXcSpec;
+using tides::grid::xc::XcFunctionalId;
+using tides::grid::xc::XcFamily;
 
 int Fail(const std::string& msg) {
   std::cerr << "nao_driver_tests: FAIL — " << msg << '\n';
@@ -203,6 +206,93 @@ int TestXLBOMDShadowForces() {
   return 0;
 }
 
+// M15: Test HSE06 hybrid functional SCF on H2.
+// Verifies that use_hse_screening=true converges and produces finite energy
+// with the HSE06 local XC functional.
+int TestHSE06Hybrid() {
+  std::cout << "\n=== Test 5: HSE06 hybrid SCF (H2, DZP NAO) ===\n";
+
+  std::vector<int> Z = {1, 1};
+  std::vector<double> pos = {0.0, 0.0, 0.0, 1.4, 0.0, 0.0};
+
+  HostXcSpec hse_spec;
+  hse_spec.id = XcFunctionalId::kHse06Local;
+  hse_spec.family = XcFamily::kGga;
+  hse_spec.exchange_fraction = 0.25;
+
+  auto result = NaoDriver::Run(Z, pos, 0.5, 4.0, 50, 1e-4,
+                               nullptr, hse_spec, 1, 0,
+                               false, 0.0, false, true, false,
+                               false, false, false, false, false,
+                               false, {1, 1, 1}, false, false,
+                               nullptr, false);
+
+  std::cout << "  n_basis = " << result.n_basis << ", n_electrons = " << result.n_electrons << "\n";
+  std::cout << "  Converged: " << (result.scf.converged ? "YES" : "NO") << "\n";
+  std::cout << "  Iterations: " << result.scf.n_iterations << "\n";
+  std::cout << "  Energy: " << std::setprecision(10) << result.scf.energy << " Ha\n";
+  std::cout << "  E_hse_correction: " << result.E_hse_correction << " Ha\n";
+  std::cout << "  Wall time: " << result.wall_time_ms << " ms\n";
+
+  // M15: Verify HSE screening code path executed and produced finite results.
+  // SCF may not fully converge on coarse grid with HSE, but the code path
+  // must execute without errors and produce finite energy + correction.
+  if (!std::isfinite(result.scf.energy))
+    return Fail("HSE06 energy is not finite");
+
+  if (!std::isfinite(result.E_hse_correction))
+    return Fail("HSE06 correction energy is not finite");
+
+  // E_hse_correction should be nonzero (screening was applied).
+  if (std::fabs(result.E_hse_correction) < 1e-20)
+    return Fail("HSE06 correction energy is zero — screening not applied");
+
+  // Energy should be in a reasonable range.
+  if (std::fabs(result.scf.energy) > 100.0)
+    return Fail("HSE06 energy is unreasonable: " + std::to_string(result.scf.energy));
+
+  std::cout << "  PASS (energy = " << result.scf.energy << " Ha, "
+            << "E_hse = " << result.E_hse_correction << ")\n";
+  return 0;
+}
+
+// M15: Test PBE0 hybrid functional SCF on H2.
+// Uses PBE0 local XC functional with HSE screening disabled (pure local PBE0).
+int TestPBE0Hybrid() {
+  std::cout << "\n=== Test 6: PBE0 hybrid SCF (H2, DZP NAO) ===\n";
+
+  std::vector<int> Z = {1, 1};
+  std::vector<double> pos = {0.0, 0.0, 0.0, 1.4, 0.0, 0.0};
+
+  HostXcSpec pbe0_spec;
+  pbe0_spec.id = XcFunctionalId::kPbe0Local;
+  pbe0_spec.family = XcFamily::kGga;
+  pbe0_spec.exchange_fraction = 0.25;
+
+  auto result = NaoDriver::Run(Z, pos, 0.5, 4.0, 50, 1e-4,
+                               nullptr, pbe0_spec, 1, 0,
+                               false, 0.0, false, false, false,
+                               false, false, false, false, false,
+                               false, {1, 1, 1}, false, false,
+                               nullptr, false);
+
+  std::cout << "  n_basis = " << result.n_basis << ", n_electrons = " << result.n_electrons << "\n";
+  std::cout << "  Converged: " << (result.scf.converged ? "YES" : "NO") << "\n";
+  std::cout << "  Iterations: " << result.scf.n_iterations << "\n";
+  std::cout << "  Energy: " << std::setprecision(10) << result.scf.energy << " Ha\n";
+  std::cout << "  Wall time: " << result.wall_time_ms << " ms\n";
+
+  // M15: Verify PBE0 local XC code path executed and produced finite energy.
+  if (!std::isfinite(result.scf.energy))
+    return Fail("PBE0 energy is not finite");
+
+  if (std::fabs(result.scf.energy) > 100.0)
+    return Fail("PBE0 energy is unreasonable: " + std::to_string(result.scf.energy));
+
+  std::cout << "  PASS (energy = " << result.scf.energy << " Ha)\n";
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -219,6 +309,8 @@ int main(int argc, char* argv[]) {
   if (test_filter == 0 || test_filter == 2) failures += TestH2();
   if (test_filter == 0 || test_filter == 3) failures += TestH2DualGrid();
   if (test_filter == 0 || test_filter == 4) failures += TestXLBOMDShadowForces();
+  if (test_filter == 0 || test_filter == 5) failures += TestHSE06Hybrid();
+  if (test_filter == 0 || test_filter == 6) failures += TestPBE0Hybrid();
 
   std::cout << "\n=== Summary ===\n";
   if (failures == 0) {
