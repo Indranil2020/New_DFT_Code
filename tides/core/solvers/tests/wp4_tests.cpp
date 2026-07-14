@@ -205,12 +205,12 @@ int TestOMM() {
   double err = std::fabs(omm.energy - E_exact);
   std::cout << "  OMM E=" << omm.energy << " exact=" << E_exact
             << " err=" << err << " iters=" << omm.n_iterations << '\n';
-  if (err > 1e-4) {
+  if (err > 1e-8) {
     std::ostringstream os;
-    os << "T4.5: energy error " << err << " > 1e-4";
+    os << "T4.5: energy error " << err << " > 1e-8";
     return Fail(os.str());
   }
-  std::cout << "T4.5: GREEN (energy vs diag <= 1e-4)\n";
+  std::cout << "T4.5: GREEN (energy vs diag <= 1e-8)\n";
   return 0;
 }
 

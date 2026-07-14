@@ -119,18 +119,18 @@ int TestSP2() {
               << " ||P^2-P||=" << idem_err
               << " |tr(PS)-Ne|=" << trace_err << '\n';
 
-    if (idem_err > 1e-8) {
+    if (idem_err > 1e-10) {
       std::ostringstream os;
-      os << "T5.1: idempotency " << idem_err << " > 1e-8 at n=" << n;
+      os << "T5.1: idempotency " << idem_err << " > 1e-10 at n=" << n;
       return Fail(os.str());
     }
-    if (trace_err > 1e-8) {
+    if (trace_err > 1e-10) {
       std::ostringstream os;
-      os << "T5.1: trace error " << trace_err << " > 1e-8 at n=" << n;
+      os << "T5.1: trace error " << trace_err << " > 1e-10 at n=" << n;
       return Fail(os.str());
     }
   }
-  std::cout << "T5.1: GREEN (||P^2-P|| <= 1e-8, |tr(PS)-Ne| <= 1e-8)\n";
+  std::cout << "T5.1: GREEN (||P^2-P|| <= 1e-10, |tr(PS)-Ne| <= 1e-10)\n";
   return 0;
 }
 
@@ -256,13 +256,13 @@ int TestFermiSearch() {
     double err = FermiLevelSearch::TraceError(evals, mu, kT, n_e);
 
     std::cout << "  n=" << n << " mu=" << mu << " |tr(PS)-Ne|=" << err << '\n';
-    if (err > 1e-10) {
+    if (err > 1e-12) {
       std::ostringstream os;
-      os << "T5.6: trace error " << err << " > 1e-10 at n=" << n;
+      os << "T5.6: trace error " << err << " > 1e-12 at n=" << n;
       return Fail(os.str());
     }
   }
-  std::cout << "T5.6: GREEN (N_e error <= 1e-10, robust bracketing)\n";
+  std::cout << "T5.6: GREEN (N_e error <= 1e-12, robust bracketing)\n";
   return 0;
 }
 
