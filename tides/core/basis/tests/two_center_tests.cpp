@@ -143,7 +143,7 @@ int CheckTwoCenterTraceInvariance() {
 // function (Gaussian overlap exp(-R^2)) to <= 1e-10 over the tabulated range.
 int CheckSplineAccuracy() {
   std::vector<double> R_tab, S_tab;
-  const int n_tab = 500;
+  const int n_tab = 5000;
   for (int i = 0; i <= n_tab; ++i) {
     const double R = (10.0 / n_tab) * i;  // 0..10, dense
     R_tab.push_back(R);
@@ -162,10 +162,10 @@ int CheckSplineAccuracy() {
     if (err > max_err) { max_err = err; max_err_R = R; }
   }
   std::cout << "spline_accuracy: max_err=" << max_err << " at R=" << max_err_R
-            << " (Gaussian exp(-R^2), 500 tabulated pts)\n";
-  if (max_err > 1e-5) {
+            << " (Gaussian exp(-R^2), 5000 tabulated pts)\n";
+  if (max_err > 1e-7) {
     std::ostringstream os;
-    os << "spline error " << max_err << " > 1e-5 at R=" << max_err_R;
+    os << "spline error " << max_err << " > 1e-7 at R=" << max_err_R;
     return Fail(os.str());
   }
   // Also check the derivative against the analytic d/dR exp(-R^2) = -2R exp(-R^2).
@@ -178,9 +178,9 @@ int CheckSplineAccuracy() {
     max_derr = std::max(max_derr, std::fabs(dval - exact_d));
   }
   std::cout << "spline_derivative_accuracy: max_err=" << max_derr << '\n';
-  if (max_derr > 1e-3) {
+  if (max_derr > 1e-5) {
     std::ostringstream os;
-    os << "spline derivative error " << max_derr << " > 1e-3";
+    os << "spline derivative error " << max_derr << " > 1e-5";
     return Fail(os.str());
   }
   return 0;
