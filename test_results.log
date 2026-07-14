@@ -1,0 +1,714 @@
+Test project /home/indranil/git/New_DFT_Code/tides/build
+        Start  24: xc_mgga_tpss_device_vs_libxc
+        Start  25: xc_mgga_scan_device_vs_libxc
+        Start  26: xc_mgga_r2scan_device_vs_libxc
+        Start  27: xc_mgga_m06_2x_device_vs_libxc
+  1/124 Test  #27: xc_mgga_m06_2x_device_vs_libxc .....................   Passed    0.52 sec
+        Start  28: xc_rsh_hse06_device_vs_libxc
+  2/124 Test  #25: xc_mgga_scan_device_vs_libxc .......................   Passed    0.61 sec
+        Start  29: xc_rsh_wb97x_device_vs_libxc
+  3/124 Test  #26: xc_mgga_r2scan_device_vs_libxc .....................   Passed    0.64 sec
+        Start  30: xc_rsh_pol_device_vs_libxc
+  4/124 Test  #24: xc_mgga_tpss_device_vs_libxc .......................   Passed    0.68 sec
+        Start  31: xc_mgga_pol_device_vs_libxc
+  5/124 Test  #29: xc_rsh_wb97x_device_vs_libxc .......................   Passed    0.90 sec
+        Start  34: xc_mgga_tau_pipeline
+  6/124 Test  #28: xc_rsh_hse06_device_vs_libxc .......................   Passed    1.10 sec
+        Start  36: xc_coverage_matrix
+  7/124 Test  #30: xc_rsh_pol_device_vs_libxc .........................   Passed    1.34 sec
+        Start  40: xc_bench_roofline
+  8/124 Test  #34: xc_mgga_tau_pipeline ...............................   Passed    0.51 sec
+        Start  84: nao_benchmark_vs_pyscf
+  9/124 Test  #36: xc_coverage_matrix .................................   Passed    0.45 sec
+        Start  85: nao_pseudo_scf_validation
+ 10/124 Test  #31: xc_mgga_pol_device_vs_libxc ........................   Passed    1.92 sec
+        Start  83: nao_driver_uks_scf
+ 11/124 Test  #40: xc_bench_roofline ..................................***Skipped   9.17 sec
+        Start  81: nao_driver_end_to_end_scf
+ 12/124 Test  #83: nao_driver_uks_scf .................................   Passed  131.35 sec
+        Start  95: wp6_scf_forces_xlbomd_optimizers_stress
+ 13/124 Test  #81: nao_driver_end_to_end_scf ..........................Subprocess killed***Exception: 988.60 sec
+╔══════════════════════════════════════════════════════════════╗
+║  NAO Driver Tests — End-to-End NAO SCF                      ║
+╚══════════════════════════════════════════════════════════════╝
+
+=== Test 1: H atom (DZP NAO) ===
+[NaoDriver] Starting Run (Z={ 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=747.054 ms, step=747.054 ms)
+[NaoDriver] grid basis evaluation (elapsed=1075.37 ms, step=328.317 ms)
+[NaoDriver] S/T assembly (elapsed=17124.9 ms, step=16049.5 ms)
+[NaoDriver] Dual grid: coarse 121x121x121 (h=0.2), fine 241x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=20337.5 ms, step=3212.64 ms)
+[NaoDriver] Device pipeline ready (stride=1772032, functional=LDA-PW92)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=20856.8 ms, step=519.286 ms)
+[NaoDriver] E_ion = 0
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -0.92803 -1.01256 -0.316832 -0.316832 -0.316832 -0.484095 -0.484095 -0.484095
+[NaoDriver] DIAG T eigenvalues: 0.00430107 0.108784 0.108784 0.108784 0.690762 0.690762 0.690762 0.950787
+[NaoDriver] DIAG S eigenvalues: 0.017813 0.266762 0.266762 0.266762 1.73324 1.73324 1.73324 1.98219
+[NaoDriver] DIAG H=T+Vext eigenvalues: -0.498281 -0.0878561 -0.0878561 -0.0878561 0.0455185 0.339019 0.339019 0.339019
+[NaoDriver] DIAG lowest eigvec: -0.69192 -0.311917 0 0 0 0 0 -0
+[NaoDriver] DIAG V_ext[0:2,0:2]: -0.92803 -0.964558 -0.964558 -1.01256
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=8, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=8); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=432699 ms, step=411842 ms)
+  n_basis = 8, n_electrons = 1
+  Converged: YES
+  Iterations: 10
+  Energy: -0.4451954661 Ha
+  E_kin:  0.4305288654
+  E_ne:   -0.9268006538
+  E_H:    0.2845378351
+  E_xc:   -0.2334615128
+  E_ion:  0
+  Wall time: 432698.9393 ms
+  Grid: 121x121x121
+  Basis: H(8fns) 
+  PASS (energy = -0.4451954661 Ha, ref = -0.5, err = 0.05480453389)
+
+=== Test 2: H2 molecule (DZP NAO, R=1.4 Bohr) ===
+[NaoDriver] Starting Run (Z={ 1 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=1464.598095 ms, step=1464.598095 ms)
+[NaoDriver] grid basis evaluation (elapsed=2088.438962 ms, step=623.840867 ms)
+[NaoDriver] S/T assembly (elapsed=10566.98916 ms, step=8478.550199 ms)
+[NaoDriver] Dual grid: coarse 129x121x121 (h=0.2), fine 257x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=16206.27475 ms, step=5639.285585 ms)
+[NaoDriver] Device pipeline ready (stride=1888768, functional=LDA-PW92)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=16944.7007 ms, step=738.425955 ms)
+[NaoDriver] E_ion = 0.7142857143
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.4316171266 0.5234707905 0.2304031906 0.2304031906 0.2304031906 0.5691428789 0.5691428789 0.5691428789 0.4316171266 0.5234707905 0.2304031906 0.2304031906 0.2304031906 0.5691428789 0.5691428789 0.5691428789
+[NaoDriver] DIAG V_ext diag: -1.512311114 -1.629917507 -0.6113487562 -0.6113487562 -0.662786667 -0.900903452 -0.900903452 -1.029358109 -1.512311114 -1.629917507 -0.6113487562 -0.6113487562 -0.662786667 -0.900903452 -0.900903452 -1.029358109
+[NaoDriver] DIAG T eigenvalues: 0.00131466921 0.006150892257 0.01697509082 0.01697509082 0.04240142086 0.1372551904 0.1661595675 0.1661595675 0.1947972917 0.1947972917 0.2688609655 0.2776193088 1.221160189 1.221160189 1.226568772 1.549096754
+[NaoDriver] DIAG S eigenvalues: 0.000670380988 0.02505397363 0.03910720587 0.03910720587 0.07433917795 0.09789262382 0.246265532 0.246265532 0.4223053129 0.4422483818 0.4763823445 0.4763823445 3.155668873 3.238244918 3.238244918 3.781821275
+[NaoDriver] DIAG H=T+Vext eigenvalues: -1.189921427 -0.6259195587 -0.4356414067 -0.4356414067 -0.2620066304 -0.1944505609 -0.1757736465 -0.1757736465 -0.1484284252 -0.01213289015 -0.01213289015 0.2250665064 0.2877336483 0.2877336483 0.3534473612 1.647609211
+[NaoDriver] DIAG lowest eigvec: 0.03734702703 -0.5820016874 -2.456315925e-16 -7.31902798e-16 0.1344106282 1.895883823e-16 4.395532816e-16 -0.09379828981 0.0166879634 -0.5502495018 3.08379337e-16 5.918444772e-16 -0.1320302054 -2.742597071e-16 -2.171777565e-16 0.08485065552
+[NaoDriver] DIAG V_ext[0:2,0:2]: -1.512311114 -1.560540592 -1.560540592 -1.629917507
+[NaoDriver] DIAG T[0:2,0:2]: 0.4316171266 0.4710090847 0.4710090847 0.5234707905
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.9821870014 0.9821870014 1
+[NaoDriver] launching SCF (n=16, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=16); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=541109.5075 ms, step=524164.8068 ms)
+  n_basis = 16, n_electrons = 2
+  Converged: YES
+  Iterations: 12
+  Energy: -1.075753234 Ha
+  Wall time: 541109.5268 ms
+  Grid: 129x121x121
+  PASS (energy = -1.075753234 Ha, ref = -1.1, err = 0.02424676576)
+
+=== Test 3: H2 molecule (DZP NAO, dual grid) ===
+[NaoDriver] Starting Run (Z={ 1 1 }, grid_h=0.3)
+[NaoDriver] basis generation (elapsed=1451.842938 ms, step=1451.842938 ms)
+[NaoDriver] grid basis evaluation (elapsed=1632.440493 ms, step=180.597555 ms)
+[NaoDriver] S/T assembly (elapsed=1784.212593 ms, step=151.7721 ms)
+[NaoDriver] Dual grid: coarse 89x81x81 (h=0.3), fine 177x161x161 (h=0.15)
+[NaoDriver] fine grid basis evaluation (elapsed=3337.486277 ms, step=1553.273684 ms)
+[NaoDriver] Device pipeline disabled: arena reserve failed (cudaMallocAsync xc grad: out of memory)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=3537.934648 ms, step=200.448371 ms)
+[NaoDriver] E_ion = 0.7142857143
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.4316171266 0.5234707905 0.2304031906 0.2304031906 0.2304031906 0.5691428789 0.5691428789 0.5691428789 0.4316171266 0.5234707905 0.2304031906 0.2304031906 0.2304031906 0.5691428789 0.5691428789 0.5691428789
+[NaoDriver] DIAG V_ext diag: -1.510954429 -1.628250397 -0.6113458957 -0.6113458957 -0.6636487761 -0.9008912553 -0.9008912553 -1.032850449 -1.512272312 -1.629950554 -0.6113463002 -0.6113463002 -0.6621351935 -0.9008929473 -0.9008929473 -1.02664618
+[NaoDriver] DIAG T eigenvalues: 0.00131466921 0.006150892257 0.01697509082 0.01697509082 0.04240142086 0.1372551904 0.1661595675 0.1661595675 0.1947972917 0.1947972917 0.2688609655 0.2776193088 1.221160189 1.221160189 1.226568772 1.549096754
+[NaoDriver] DIAG S eigenvalues: 0.000670380988 0.02505397363 0.03910720587 0.03910720587 0.07433917795 0.09789262382 0.246265532 0.246265532 0.4223053129 0.4422483818 0.4763823445 0.4763823445 3.155668873 3.238244918 3.238244918 3.781821275
+[NaoDriver] DIAG H=T+Vext eigenvalues: -1.190221527 -0.6256837243 -0.4356234912 -0.4356234912 -0.2626509958 -0.2144246511 -0.1758784917 -0.1758784917 -0.1359929431 -0.01211314548 -0.01211314548 0.2116768681 0.2876663628 0.2876663628 0.3953576249 1.661902435
+[NaoDriver] DIAG lowest eigvec: 0.09754430344 -0.6690840561 -2.357882504e-16 8.967951121e-16 0.1414978093 2.489063271e-16 -1.116600667e-16 -0.118094311 -0.04260101589 -0.4642225355 3.057641596e-16 -8.679298322e-16 -0.1252673107 -3.861366727e-16 1.315188939e-16 0.05989072713
+[NaoDriver] DIAG V_ext[0:2,0:2]: -1.510954429 -1.559035409 -1.559035409 -1.628250397
+[NaoDriver] DIAG T[0:2,0:2]: 0.4316171266 0.4710090847 0.4710090847 0.5234707905
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.9821870014 0.9821870014 1
+[NaoDriver] launching SCF (n=16, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=16); R0 batched dense -> regime R0
+
+        Start  68: t58_10k_atom_single_card
+ 14/124 Test  #68: t58_10k_atom_single_card ...........................   Passed   36.60 sec
+        Start  76: e2_basis_profile
+ 15/124 Test  #84: nao_benchmark_vs_pyscf .............................Subprocess killed***Exception: 1039.96 sec
+
+=== Benchmark 1: H atom vs PySCF ===
+[NaoDriver] Starting Run (Z={ 1 }, grid_h=0.3)
+[NaoDriver] basis generation (elapsed=781.627 ms, step=781.627 ms)
+[NaoDriver] grid basis evaluation (elapsed=927.625 ms, step=145.997 ms)
+[NaoDriver] S/T assembly (elapsed=17030.5 ms, step=16102.9 ms)
+[NaoDriver] Dual grid: coarse 81x81x81 (h=0.3), fine 161x161x161 (h=0.15)
+[NaoDriver] fine grid basis evaluation (elapsed=18120.7 ms, step=1090.18 ms)
+[NaoDriver] Device pipeline ready (stride=531456, functional=LDA-PW92)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=18328.7 ms, step=208.044 ms)
+[NaoDriver] E_ion = 0
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -0.92803 -1.01256 -0.316832 -0.316832 -0.316832 -0.484095 -0.484095 -0.484095
+[NaoDriver] DIAG T eigenvalues: 0.00430107 0.108784 0.108784 0.108784 0.690762 0.690762 0.690762 0.950787
+[NaoDriver] DIAG S eigenvalues: 0.017813 0.266762 0.266762 0.266762 1.73324 1.73324 1.73324 1.98219
+[NaoDriver] DIAG H=T+Vext eigenvalues: -0.498281 -0.0878561 -0.0878561 -0.0878561 0.0455185 0.339019 0.339019 0.339019
+[NaoDriver] DIAG lowest eigvec: -0.69192 -0.311917 0 0 0 0 0 -0
+[NaoDriver] DIAG V_ext[0:2,0:2]: -0.92803 -0.964558 -0.964558 -1.01256
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=8, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=8); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=48964.7 ms, step=30636 ms)
+  TIDES=-0.445543 PySCF=-0.454 diff=8.45746 meV
+  PASS
+
+=== Benchmark 2: H2 molecule vs PySCF ===
+[NaoDriver] Starting Run (Z={ 1 1 }, grid_h=0.3)
+[NaoDriver] basis generation (elapsed=1548.04 ms, step=1548.04 ms)
+[NaoDriver] grid basis evaluation (elapsed=1750.11 ms, step=202.073 ms)
+[NaoDriver] S/T assembly (elapsed=11086.3 ms, step=9336.17 ms)
+[NaoDriver] Dual grid: coarse 87x81x81 (h=0.3), fine 173x161x161 (h=0.15)
+[NaoDriver] fine grid basis evaluation (elapsed=12815.3 ms, step=1729.06 ms)
+[NaoDriver] Device pipeline disabled: arena reserve failed (cudaMallocAsync xc wv_grad: out of memory)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=12999.4 ms, step=184.092 ms)
+[NaoDriver] E_ion = 0.714286
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -1.51621 -1.63433 -0.611346 -0.611346 -0.663575 -0.900892 -0.900892 -1.03274 -1.51621 -1.63433 -0.611346 -0.611346 -0.663575 -0.900892 -0.900892 -1.03274
+[NaoDriver] DIAG T eigenvalues: 0.00131467 0.00615089 0.0169751 0.0169751 0.0424014 0.137255 0.16616 0.16616 0.194797 0.194797 0.268861 0.277619 1.22116 1.22116 1.22657 1.5491
+[NaoDriver] DIAG S eigenvalues: 0.000670381 0.025054 0.0391072 0.0391072 0.0743392 0.0978926 0.246266 0.246266 0.422305 0.442248 0.476382 0.476382 3.15567 3.23824 3.23824 3.78182
+[NaoDriver] DIAG H=T+Vext eigenvalues: -1.20869 -0.592661 -0.435623 -0.435623 -0.263357 -0.175885 -0.175885 -0.155036 -0.134326 -0.0121125 -0.0121125 0.230331 0.287663 0.287663 0.62448 1.99147
+[NaoDriver] DIAG lowest eigvec: 0.0433524 -0.582447 1.60293e-16 1.77563e-16 0.13486 -1.39336e-16 2.09428e-16 -0.102024 0.0229695 -0.555972 -1.48457e-16 -2.38269e-16 -0.13259 1.04019e-16 -1.83719e-16 0.094789
+[NaoDriver] DIAG V_ext[0:2,0:2]: -1.51621 -1.56469 -1.56469 -1.63433
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=16, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=16); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=156143 ms, step=143144 ms)
+  TIDES=-1.10888 PySCF=-1.0386 diff=70.2811 meV
+  PASS
+
+=== Benchmark 3: H2 forces Newton 3rd law ===
+[NaoDriver] Starting Run (Z={ 1 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=1491.54 ms, step=1491.54 ms)
+[NaoDriver] grid basis evaluation (elapsed=2306.42 ms, step=814.884 ms)
+[NaoDriver] S/T assembly (elapsed=3264.67 ms, step=958.243 ms)
+[NaoDriver] Dual grid: coarse 129x121x121 (h=0.2), fine 257x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=9731.84 ms, step=6467.17 ms)
+[NaoDriver] Device pipeline disabled: arena reserve failed (cudaMallocAsync xc grad: out of memory)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=10403.1 ms, step=671.31 ms)
+[NaoDriver] E_ion = 0.714796
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -1.51516 -1.63315 -0.611377 -0.611377 -0.663258 -0.900983 -0.900983 -1.03141 -1.51517 -1.63316 -0.611377 -0.611377 -0.663258 -0.900983 -0.900983 -1.03141
+[NaoDriver] DIAG T eigenvalues: 0.00131486 0.00615122 0.0169541 0.0169541 0.0423518 0.137324 0.165961 0.165961 0.194825 0.194825 0.268739 0.277372 1.22135 1.22135 1.22671 1.5493
+[NaoDriver] DIAG S eigenvalues: 0.000670039 0.0250546 0.0390559 0.0390559 0.0743101 0.0977748 0.245945 0.245945 0.421794 0.442333 0.476455 0.476455 3.15605 3.23854 3.23854 3.78201
+[NaoDriver] DIAG H=T+Vext eigenvalues: -1.2027 -0.600398 -0.435673 -0.435673 -0.262858 -0.175758 -0.175758 -0.163405 -0.136923 -0.0121476 -0.0121476 0.22982 0.287828 0.287828 0.552033 1.86607
+[NaoDriver] DIAG lowest eigvec: -0.0412512 0.581787 7.43494e-17 1.31869e-16 -0.134438 1.63939e-17 -4.07542e-16 0.0992758 -0.020901 0.554221 -6.63603e-17 -7.84832e-17 0.132153 -6.1588e-17 2.76569e-16 -0.0916746
+[NaoDriver] DIAG V_ext[0:2,0:2]: -1.51516 -1.56358 -1.56358 -1.63315
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=16, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=16); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=734866 ms, step=724463 ms)
+[NaoDriver] Starting Run (Z={ 1 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=1490.81 ms, step=1490.81 ms)
+[NaoDriver] grid basis evaluation (elapsed=2150.9 ms, step=660.091 ms)
+[NaoDriver] S/T assembly (elapsed=3021.12 ms, step=870.221 ms)
+[NaoDriver] Dual grid: coarse 129x121x121 (h=0.2), fine 257x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=8500.76 ms, step=5479.64 ms)
+[NaoDriver] Device pipeline disabled: arena reserve failed (cudaMallocAsync xc weights: out of memory)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=9089.29 ms, step=588.532 ms)
+[NaoDriver] E_ion = 0.713776
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -1.51468 -1.6326 -0.61132 -0.61132 -0.663304 -0.900823 -0.900823 -1.03142 -1.51468 -1.6326 -0.61132 -0.61132 -0.663304 -0.900823 -0.900823 -1.03143
+[NaoDriver] DIAG T eigenvalues: 0.00131454 0.00615051 0.0169961 0.0169961 0.042451 0.137186 0.166358 0.166358 0.19477 0.19477 0.268981 0.277869 1.22097 1.22097 1.22642 1.54889
+[NaoDriver] DIAG S eigenvalues: 0.000670722 0.0250534 0.0391585 0.0391585 0.0743682 0.0980105 0.246586 0.246586 0.422817 0.442163 0.476309 0.476309 3.15529 3.23795 3.23795 3.78163
+[NaoDriver] DIAG H=T+Vext eigenvalues: -1.2022 -0.600666 -0.435608 -0.435608 -0.26282 -0.175799 -0.175799 -0.163552 -0.136976 -0.0121167 -0.0121167 0.229542 0.287634 0.287634 0.550904 1.86382
+[NaoDriver] DIAG lowest eigvec: -0.0411581 0.581774 -2.27051e-16 9.53062e-16 -0.134133 1.48998e-16 -7.03015e-16 0.0992396 -0.020581 0.553924 2.93884e-16 -1.01402e-15 0.131826 -2.48411e-16 7.84285e-16 -0.0915771
+[NaoDriver] DIAG V_ext[0:2,0:2]: -1.51468 -1.56306 -1.56306 -1.6326
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=16, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=16); R0 batched dense -> regime R0
+
+        Start  70: t59_distributed_scaling
+ 16/124 Test  #76: e2_basis_profile ...................................   Passed    8.96 sec
+        Start  92: e7_parallel_profile
+ 17/124 Test  #92: e7_parallel_profile ................................   Passed    7.87 sec
+        Start  75: e1_tile_profile
+ 18/124 Test  #70: t59_distributed_scaling ............................   Passed   11.85 sec
+        Start  42: xc_batched_graph
+ 19/124 Test  #42: xc_batched_graph ...................................   Passed    0.69 sec
+        Start  80: molecule_driver_end_to_end_scf
+ 20/124 Test  #80: molecule_driver_end_to_end_scf .....................   Passed    1.22 sec
+        Start  78: e4_solvers_profile
+ 21/124 Test  #78: e4_solvers_profile .................................   Passed    2.60 sec
+        Start  45: wp2_atomgen_hydrogenic_eigenvalues
+ 22/124 Test  #75: e1_tile_profile ....................................   Passed    6.62 sec
+        Start  41: xc_rung1_molecules
+ 23/124 Test  #41: xc_rung1_molecules .................................   Passed    0.30 sec
+        Start  39: xc_hybrid_local_oracle
+ 24/124 Test  #39: xc_hybrid_local_oracle .............................   Passed    0.22 sec
+        Start  38: xc_stress_fxc
+ 25/124 Test  #38: xc_stress_fxc ......................................   Passed    0.18 sec
+        Start  23: xc_rung0_pbe_device_vs_libxc
+ 26/124 Test  #23: xc_rung0_pbe_device_vs_libxc .......................   Passed    0.18 sec
+        Start  32: xc_tier0_pol_device_vs_libxc
+ 27/124 Test  #32: xc_tier0_pol_device_vs_libxc .......................   Passed    0.25 sec
+        Start  47: wp2_atomic_lda_ne_total_energy
+ 28/124 Test  #47: wp2_atomic_lda_ne_total_energy .....................   Passed    3.45 sec
+        Start  37: xc_fp32_ab_precision
+ 29/124 Test  #37: xc_fp32_ab_precision ...............................   Passed    0.24 sec
+        Start  52: wp2_nao_generation
+ 30/124 Test  #52: wp2_nao_generation .................................   Passed    3.43 sec
+        Start  35: xc_tier2_cpu_fallback_gga
+ 31/124 Test  #35: xc_tier2_cpu_fallback_gga ..........................   Passed    0.17 sec
+        Start  22: xc_rung0_lda_device_vs_libxc
+ 32/124 Test  #22: xc_rung0_lda_device_vs_libxc .......................   Passed    0.16 sec
+        Start  33: xc_nao_device_rho_pbe_vmat_pipeline
+ 33/124 Test  #33: xc_nao_device_rho_pbe_vmat_pipeline ................   Passed    0.18 sec
+        Start  55: isf_poisson_nonperiodic_bcs
+ 34/124 Test  #55: isf_poisson_nonperiodic_bcs ........................   Passed    1.20 sec
+        Start  77: e3_grid_profile
+ 35/124 Test  #77: e3_grid_profile ....................................   Passed    0.69 sec
+        Start   2: tilemat_hdf5_stage_dump_schema
+ 36/124 Test   #2: tilemat_hdf5_stage_dump_schema .....................   Passed    0.80 sec
+        Start  15: cuda_ozaki_f64e_gemm_vs_fp64_oracle
+ 37/124 Test  #15: cuda_ozaki_f64e_gemm_vs_fp64_oracle ................   Passed    0.53 sec
+        Start  13: cuda_f64e_reduction_analytical_contracts
+ 38/124 Test  #13: cuda_f64e_reduction_analytical_contracts ...........   Passed    0.45 sec
+        Start  10: cuda_grouped_gemm_fp64_oracle
+ 39/124 Test  #10: cuda_grouped_gemm_fp64_oracle ......................   Passed    0.43 sec
+        Start  54: wp3_poisson_gaussian_charge_all_bcs
+ 40/124 Test  #45: wp2_atomgen_hydrogenic_eigenvalues .................   Passed   14.52 sec
+        Start  67: gpu_regression
+ 41/124 Test  #67: gpu_regression .....................................   Passed    0.36 sec
+        Start  14: cuda_filtered_spgemm_fp64_oracle
+ 42/124 Test  #54: wp3_poisson_gaussian_charge_all_bcs ................   Passed    0.77 sec
+        Start 108: broker_dispatch_r0_r1_r2
+ 43/124 Test  #14: cuda_filtered_spgemm_fp64_oracle ...................   Passed    0.32 sec
+        Start  79: e5_scf_profile
+ 44/124 Test  #79: e5_scf_profile .....................................   Passed    1.64 sec
+        Start  19: cuda_poisson_fft_vs_cpu
+ 45/124 Test #108: broker_dispatch_r0_r1_r2 ...........................   Passed    1.92 sec
+        Start  17: cuda_three_center_kb_assembly
+ 46/124 Test  #17: cuda_three_center_kb_assembly ......................   Passed    0.21 sec
+        Start  16: cuda_two_center_tile_assembly
+ 47/124 Test  #16: cuda_two_center_tile_assembly ......................   Passed    0.23 sec
+        Start  66: physics_validation
+ 48/124 Test  #19: cuda_poisson_fft_vs_cpu ............................   Passed    0.88 sec
+        Start  43: cuda_sp2_purification_vs_cpu
+ 49/124 Test  #66: physics_validation .................................   Passed    0.33 sec
+        Start  62: wp4_solvers_broker_chfsi_omm
+ 50/124 Test  #43: cuda_sp2_purification_vs_cpu .......................   Passed    0.16 sec
+        Start  60: qtt_rho_poisson_prototype
+ 51/124 Test  #60: qtt_rho_poisson_prototype ..........................   Passed    0.12 sec
+        Start 109: tile_production_gemm
+ 52/124 Test #109: tile_production_gemm ...............................   Passed    0.01 sec
+        Start  18: cuda_rho_build_vs_cpu
+ 53/124 Test  #62: wp4_solvers_broker_chfsi_omm .......................   Passed    0.27 sec
+        Start  21: cuda_vmat_build_vs_cpu
+ 54/124 Test  #18: cuda_rho_build_vs_cpu ..............................   Passed    0.07 sec
+        Start  65: gpu_foe_r3_dispatch
+ 55/124 Test  #65: gpu_foe_r3_dispatch ................................   Passed    0.02 sec
+        Start  58: xc_rung0_pbe_host_vs_libxc
+ 56/124 Test  #58: xc_rung0_pbe_host_vs_libxc .........................   Passed    0.01 sec
+        Start  64: wp5_sp2_submatrix_foe_fermi_truncation
+ 57/124 Test  #21: cuda_vmat_build_vs_cpu .............................   Passed    0.05 sec
+        Start   9: wp1_deterministic_substrate_gauntlet
+ 58/124 Test   #9: wp1_deterministic_substrate_gauntlet ...............   Passed    0.04 sec
+        Start  59: xc_rung1_pbe_gga_adjoint
+ 59/124 Test  #59: xc_rung1_pbe_gga_adjoint ...........................   Passed    0.00 sec
+        Start  57: xc_rung0_lda_host_vs_libxc
+ 60/124 Test  #57: xc_rung0_lda_host_vs_libxc .........................   Passed    0.00 sec
+        Start  93: e8_hybrids_profile
+ 61/124 Test  #64: wp5_sp2_submatrix_foe_fermi_truncation .............   Passed    0.05 sec
+        Start  63: cusolver_syevj_batched
+ 62/124 Test  #93: e8_hybrids_profile .................................   Passed    0.01 sec
+        Start  91: e6_dynamics_profile
+ 63/124 Test  #91: e6_dynamics_profile ................................***Failed    0.01 sec
+╔══════════════════════════════════════════════════════════════╗
+║   E6: Forces & Dynamics Engine — Test & Profile Suite        ║
+╚══════════════════════════════════════════════════════════════╝
+
+=== E6.1: Analytic Forces vs FD ===
+Kernel            Variant     Size            Time(ms)         Error  Status
+----------------------------------------------------------------------------------
+  Forces            analytic-vs-FD4 atoms            0.004     2.944e-13  PASS
+
+=== E6.2: XL-BOMD NVE Energy Conservation ===
+Kernel            Variant     Size            Time(ms)         Error  Status
+----------------------------------------------------------------------------------
+  XLBOMD            NVE-drift   2 atoms, 50000 steps, dt=0.2fs (10ps)     4.816     3.944e-02  PASS
+  XLBOMD            solves/step 2 atoms            0.000     1.000e+00  FAIL
+
+=== E6.3: Geometry Optimizers ===
+Kernel            Variant     Size            Time(ms)         Error  Status
+----------------------------------------------------------------------------------
+  Optimizer         FIRE        2 atoms            0.006     9.748e-07  PASS (86 steps)
+
+=== E6 Summary ===
+Total profile entries: 4
+1 E6 TEST(S) FAILED
+
+        Start   1: tilemat_analytical_invariants
+ 64/124 Test   #1: tilemat_analytical_invariants ......................   Passed    0.02 sec
+        Start  56: wp3_rho_adjoint_xc_grid_ops
+ 65/124 Test  #56: wp3_rho_adjoint_xc_grid_ops ........................   Passed    0.01 sec
+        Start   3: spgemm_filtered_analytical_bounds
+ 66/124 Test   #3: spgemm_filtered_analytical_bounds ..................   Passed    0.01 sec
+        Start  48: wp2_pseudo_validators_and_ghost_detector
+ 67/124 Test  #48: wp2_pseudo_validators_and_ghost_detector ...........   Passed    0.01 sec
+        Start   5: tile_ops_analytical_contracts
+ 68/124 Test   #5: tile_ops_analytical_contracts ......................   Passed    0.01 sec
+        Start  71: t86_mpi_nvshmem
+ 69/124 Test  #63: cusolver_syevj_batched .............................   Passed    0.37 sec
+        Start  96: ewald_periodic_ion_ion
+ 70/124 Test  #96: ewald_periodic_ion_ion .............................   Passed    0.00 sec
+        Start  73: broyden_mixer
+ 71/124 Test  #73: broyden_mixer ......................................   Passed    0.00 sec
+        Start  98: md_throughput_vs_anchors
+ 72/124 Test  #98: md_throughput_vs_anchors ...........................   Passed    0.01 sec
+        Start  72: lbfgs_optimizer
+ 73/124 Test  #72: lbfgs_optimizer ....................................   Passed    0.00 sec
+        Start  74: roofline_analysis
+ 74/124 Test  #74: roofline_analysis ..................................   Passed    0.00 sec
+        Start  94: e9_verification_profile
+ 75/124 Test  #94: e9_verification_profile ............................   Passed    0.00 sec
+        Start  51: wp2_pyscf_overlap_cross_check
+ 76/124 Test  #51: wp2_pyscf_overlap_cross_check ......................   Passed    0.01 sec
+        Start  61: t39_prolate_ewald_esp
+ 77/124 Test  #61: t39_prolate_ewald_esp ..............................   Passed    0.00 sec
+        Start 102: multi_gpu_nccl_data_model
+ 78/124 Test #102: multi_gpu_nccl_data_model ..........................   Passed    0.01 sec
+        Start  44: wp2_atomgen_eigensolver_analytical
+ 79/124 Test  #44: wp2_atomgen_eigensolver_analytical .................   Passed    0.00 sec
+        Start 105: competitor_farm_containers_parsers
+ 80/124 Test #105: competitor_farm_containers_parsers .................   Passed    0.00 sec
+        Start  46: wp2_lda_xc_vs_libxc
+ 81/124 Test  #46: wp2_lda_xc_vs_libxc ................................   Passed    0.00 sec
+        Start 107: campaign_runner_reproducibility_archiver
+ 82/124 Test #107: campaign_runner_reproducibility_archiver ...........   Passed    0.00 sec
+        Start  49: wp2_two_center_rotation_invariance_and_spline
+ 83/124 Test  #49: wp2_two_center_rotation_invariance_and_spline ......   Passed    0.00 sec
+        Start 106: regression_dashboard_energy_metering
+ 84/124 Test #106: regression_dashboard_energy_metering ...............   Passed    0.00 sec
+        Start  50: wp2_derivative_streams_fd_validation
+ 85/124 Test  #50: wp2_derivative_streams_fd_validation ...............   Passed    0.01 sec
+        Start  53: wp3_dual_grid_index_map_and_halo
+ 86/124 Test  #53: wp3_dual_grid_index_map_and_halo ...................   Passed    0.01 sec
+        Start   6: bloch_phase_periodic_tiles
+ 87/124 Test   #6: bloch_phase_periodic_tiles .........................   Passed    0.00 sec
+        Start   8: ozaki_fp16_slice_planning_contracts
+ 88/124 Test   #8: ozaki_fp16_slice_planning_contracts ................   Passed    0.00 sec
+        Start   4: precision_descriptor_and_ledger_contracts
+ 89/124 Test   #4: precision_descriptor_and_ledger_contracts ..........   Passed    0.00 sec
+        Start 104: ab_harness_nightly_automation
+ 90/124 Test #104: ab_harness_nightly_automation ......................   Passed    0.00 sec
+        Start 101: wp8_stage_dump_partitioner_halo_packaging
+ 91/124 Test #101: wp8_stage_dump_partitioner_halo_packaging ..........   Passed    0.01 sec
+        Start  97: neb_climbing_image
+ 92/124 Test  #97: neb_climbing_image .................................   Passed    0.00 sec
+        Start 100: hse_short_range_screening
+ 93/124 Test #100: hse_short_range_screening ..........................   Passed    0.00 sec
+        Start 103: wp9_ladder_runner_reference_data_ab_fd_dashboard
+ 94/124 Test #103: wp9_ladder_runner_reference_data_ab_fd_dashboard ...   Passed    0.01 sec
+        Start   7: f64e_reference_adversarial_numerics
+ 95/124 Test   #7: f64e_reference_adversarial_numerics ................   Passed    0.00 sec
+        Start  99: wp7_hybrids_d3_isdf_ace_paw
+ 96/124 Test  #99: wp7_hybrids_d3_isdf_ace_paw ........................   Passed    0.00 sec
+        Start  11: cuda_graph_replay_fp64_oracle
+ 97/124 Test  #71: t86_mpi_nvshmem ....................................   Passed    0.65 sec
+        Start  12: cuda_deterministic_substrate_gauntlet
+ 98/124 Test  #11: cuda_graph_replay_fp64_oracle ......................***Skipped   0.58 sec
+        Start  20: cuda_pp_build_vs_cpu
+ 99/124 Test  #20: cuda_pp_build_vs_cpu ...............................   Passed    0.23 sec
+        Start  69: b15_on_scaling
+100/124 Test  #85: nao_pseudo_scf_validation ..........................Subprocess killed***Exception: 1077.94 sec
+╔══════════════════════════════════════════════════════════════╗
+║  NAO Pseudopotential Tests — PP SCF Validation              ║
+╚══════════════════════════════════════════════════════════════╝
+
+=== Test 1: H atom with trivial PP ===
+[NaoDriver] Starting Run (Z={ 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=803.699 ms, step=803.699 ms)
+[NaoDriver] grid basis evaluation (elapsed=1200.58 ms, step=396.877 ms)
+[NaoDriver] S/T assembly (elapsed=17454.5 ms, step=16253.9 ms)
+[NaoDriver] Dual grid: coarse 121x121x121 (h=0.2), fine 241x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=20873 ms, step=3418.47 ms)
+[NaoDriver] Device pipeline ready (stride=1772032, functional=LDA-PW92)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=21588 ms, step=714.999 ms)
+[NaoDriver] E_ion = 0
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -0.92803 -1.01256 -0.316832 -0.316832 -0.316832 -0.484095 -0.484095 -0.484095
+[NaoDriver] DIAG T eigenvalues: 0.00430107 0.108784 0.108784 0.108784 0.690762 0.690762 0.690762 0.950787
+[NaoDriver] DIAG S eigenvalues: 0.017813 0.266762 0.266762 0.266762 1.73324 1.73324 1.73324 1.98219
+[NaoDriver] DIAG H=T+Vext eigenvalues: -0.498281 -0.0878561 -0.0878561 -0.0878561 0.0455185 0.339019 0.339019 0.339019
+[NaoDriver] DIAG lowest eigvec: -0.69192 -0.311917 0 0 0 0 0 -0
+[NaoDriver] DIAG V_ext[0:2,0:2]: -0.92803 -0.964558 -0.964558 -1.01256
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=8, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=8); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=356582 ms, step=334994 ms)
+  All-electron: E=-0.445194 converged=1
+[NaoDriver] Starting Run (Z={ 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=772.607 ms, step=772.607 ms)
+[NaoDriver] grid basis evaluation (elapsed=1093.3 ms, step=320.695 ms)
+[NaoDriver] S/T assembly (elapsed=1622.18 ms, step=528.884 ms)
+[NaoDriver] Dual grid: coarse 121x121x121 (h=0.2), fine 241x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=4892.18 ms, step=3269.99 ms)
+[NaoDriver] Device pipeline disabled: arena reserve failed (cudaMallocAsync xc wv_rho: out of memory)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=5093.97 ms, step=201.794 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=5093.99 ms, step=0.020634 ms)
+[NaoDriver] E_ion = 0
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -0.931721 -1.01682 -0.316849 -0.316849 -0.316849 -0.484152 -0.484152 -0.484152
+[NaoDriver] DIAG T eigenvalues: 0.00430107 0.108784 0.108784 0.108784 0.690762 0.690762 0.690762 0.950787
+[NaoDriver] DIAG S eigenvalues: 0.017813 0.266762 0.266762 0.266762 1.73324 1.73324 1.73324 1.98219
+[NaoDriver] DIAG H=T+Vext eigenvalues: -0.50218 -0.0878765 -0.0878765 -0.0878765 0.0448225 0.338972 0.338972 0.338972
+[NaoDriver] DIAG lowest eigvec: -0.676054 -0.327887 0 0 0 0 0 -0
+[NaoDriver] DIAG V_ext[0:2,0:2]: -0.931721 -0.968525 -0.968525 -1.01682
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=8, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=8); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=404246 ms, step=399152 ms)
+  With PP:      E=-0.448884 converged=1
+  |E_ae - E_pp| = 0.00368963 Ha
+  PASS (PP matches all-electron, diff=0.00368963)
+
+=== Test 2: H2 with trivial PP ===
+[NaoDriver] Starting Run (Z={ 1 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=1443.93 ms, step=1443.93 ms)
+[NaoDriver] grid basis evaluation (elapsed=2080.34 ms, step=636.418 ms)
+[NaoDriver] S/T assembly (elapsed=11037.4 ms, step=8957.08 ms)
+[NaoDriver] Dual grid: coarse 129x121x121 (h=0.2), fine 257x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=16414.9 ms, step=5377.43 ms)
+[NaoDriver] Device pipeline disabled: arena reserve failed (cudaMallocAsync xc rho: out of memory)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=16966.1 ms, step=551.235 ms)
+[NaoDriver] E_ion = 0.714286
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -1.51231 -1.62992 -0.611349 -0.611349 -0.662787 -0.900903 -0.900903 -1.02936 -1.51231 -1.62992 -0.611349 -0.611349 -0.662787 -0.900903 -0.900903 -1.02936
+[NaoDriver] DIAG T eigenvalues: 0.00131467 0.00615089 0.0169751 0.0169751 0.0424014 0.137255 0.16616 0.16616 0.194797 0.194797 0.268861 0.277619 1.22116 1.22116 1.22657 1.5491
+[NaoDriver] DIAG S eigenvalues: 0.000670381 0.025054 0.0391072 0.0391072 0.0743392 0.0978926 0.246266 0.246266 0.422305 0.442248 0.476382 0.476382 3.15567 3.23824 3.23824 3.78182
+[NaoDriver] DIAG H=T+Vext eigenvalues: -1.18992 -0.62592 -0.435641 -0.435641 -0.262007 -0.194451 -0.175774 -0.175774 -0.148428 -0.0121329 -0.0121329 0.225067 0.287734 0.287734 0.353447 1.64761
+[NaoDriver] DIAG lowest eigvec: 0.037347 -0.582002 -2.45632e-16 -7.31903e-16 0.134411 1.89588e-16 4.39553e-16 -0.0937983 0.016688 -0.55025 3.08379e-16 5.91844e-16 -0.13203 -2.7426e-16 -2.17178e-16 0.0848507
+[NaoDriver] DIAG V_ext[0:2,0:2]: -1.51231 -1.56054 -1.56054 -1.62992
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=16, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=16); R0 batched dense -> regime R0
+
+        Start  82: grid_convergence_study
+101/124 Test  #82: grid_convergence_study .............................***Failed    0.07 sec
+╔══════════════════════════════════════════════════════════════╗
+║  Grid Convergence Study — P0-1                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+=== H atom convergence ===
+  h (Bohr)         E (Ha)     dE vs prev      n_grid     conv?     wall_ms
+Failed to load H pseudopotential: Pseudopotential file not found: external/pseudopotentials/pseudodojo-pbe-sr/H_ONCV_PBE_SR.upf (element=H, dir=external/pseudopotentials/pseudodojo-pbe-sr)
+
+        Start  86: pp_scf_validation
+102/124 Test  #12: cuda_deterministic_substrate_gauntlet ..............***Skipped   4.09 sec
+        Start  87: paw_projector_augmented_wave
+103/124 Test  #87: paw_projector_augmented_wave .......................   Passed   24.28 sec
+        Start  88: diffuse_basis_augmentation
+104/124 Test  #69: b15_on_scaling .....................................   Passed   39.72 sec
+        Start  89: real_pp_scf_validation
+105/124 Test  #86: pp_scf_validation ..................................Subprocess killed***Exception: 100.24 sec
+╔══════════════════════════════════════════════════════════════╗
+║  PP SCF Validation Tests — Real Pseudopotential SCF         ║
+╚══════════════════════════════════════════════════════════════╝
+
+=== Test 1: H atom with PP (Z_valence=1) ===
+[NaoDriver] Starting Run (Z={ 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=740.002 ms, step=740.002 ms)
+[NaoDriver] grid basis evaluation (elapsed=1064.41 ms, step=324.412 ms)
+[NaoDriver] S/T assembly (elapsed=14277.3 ms, step=13212.9 ms)
+[NaoDriver] Dual grid: coarse 121x121x121 (h=0.2), fine 241x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=17012.7 ms, step=2735.36 ms)
+[NaoDriver] Device pipeline ready (stride=1772032, functional=LDA-PW92)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=17388.2 ms, step=375.547 ms)
+[NaoDriver] E_ion = 0
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -0.92803 -1.01256 -0.316832 -0.316832 -0.316832 -0.484095 -0.484095 -0.484095
+[NaoDriver] DIAG T eigenvalues: 0.00430107 0.108784 0.108784 0.108784 0.690762 0.690762 0.690762 0.950787
+[NaoDriver] DIAG S eigenvalues: 0.017813 0.266762 0.266762 0.266762 1.73324 1.73324 1.73324 1.98219
+[NaoDriver] DIAG H=T+Vext eigenvalues: -0.498281 -0.0878561 -0.0878561 -0.0878561 0.0455185 0.339019 0.339019 0.339019
+[NaoDriver] DIAG lowest eigvec: -0.69192 -0.311917 0 0 0 0 0 -0
+[NaoDriver] DIAG V_ext[0:2,0:2]: -0.92803 -0.964558 -0.964558 -1.01256
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=8, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=8); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=46699.3 ms, step=29311 ms)
+  All-electron: E=-0.446174 converged=1
+[NaoDriver] Starting Run (Z={ 1 }, grid_h=0.2)
+[NaoDriver] basis generation (elapsed=724.287 ms, step=724.287 ms)
+[NaoDriver] grid basis evaluation (elapsed=1021.59 ms, step=297.303 ms)
+[NaoDriver] S/T assembly (elapsed=1330.07 ms, step=308.476 ms)
+[NaoDriver] Dual grid: coarse 121x121x121 (h=0.2), fine 241x241x241 (h=0.1)
+[NaoDriver] fine grid basis evaluation (elapsed=4005.98 ms, step=2675.92 ms)
+[NaoDriver] Device pipeline ready (stride=1772032, functional=LDA-PW92)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=4259.07 ms, step=253.083 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=4259.09 ms, step=0.018085 ms)
+[NaoDriver] E_ion = 0
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -0.931721 -1.01682 -0.316849 -0.316849 -0.316849 -0.484152 -0.484152 -0.484152
+[NaoDriver] DIAG T eigenvalues: 0.00430107 0.108784 0.108784 0.108784 0.690762 0.690762 0.690762 0.950787
+[NaoDriver] DIAG S eigenvalues: 0.017813 0.266762 0.266762 0.266762 1.73324 1.73324 1.73324 1.98219
+[NaoDriver] DIAG H=T+Vext eigenvalues: -0.50218 -0.0878765 -0.0878765 -0.0878765 0.0448225 0.338972 0.338972 0.338972
+[NaoDriver] DIAG lowest eigvec: -0.676054 -0.327887 0 0 0 0 0 -0
+[NaoDriver] DIAG V_ext[0:2,0:2]: -0.931721 -0.968525 -0.968525 -1.01682
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=8, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=8); R0 batched dense -> regime R0
+
+        Start  90: real_pseudodojo_scf
+106/124 Test  #90: real_pseudodojo_scf ................................***Failed    0.07 sec
+╔══════════════════════════════════════════════════════════════╗
+║  Real PseudoDojo PP SCF Tests                                ║
+╚══════════════════════════════════════════════════════════════╝
+
+--- Test 4: Parse all available PseudoDojo PPs ---
+  Parsed: 0, Skipped: 18, Failed: 0
+real_pseudodojo_tests: SKIP — No PseudoDojo PP files found
+
+--- Test 1: H atom with real PseudoDojo PP ---
+real_pseudodojo_tests: SKIP — H_ONCV_PBE_SR.upf not found
+
+--- Test 2: Si atom with real PseudoDojo PP ---
+real_pseudodojo_tests: SKIP — Si_ONCV_PBE_SR.upf not found
+
+--- Test 3: H2 molecule with real PseudoDojo PPs ---
+real_pseudodojo_tests: SKIP — H_ONCV_PBE_SR.upf not found
+
+=== Summary ===
+ALL AVAILABLE TESTS PASSED (4 skipped — PP files not found)
+
+        Start 110: tile_scf_matrix_operations
+107/124 Test #110: tile_scf_matrix_operations .........................   Passed    0.00 sec
+        Start 111: xlbomd_extended_nve_nhc_ksa_shadow
+108/124 Test #111: xlbomd_extended_nve_nhc_ksa_shadow .................   Passed    0.01 sec
+        Start 112: d4_dispersion_charge_dependent
+109/124 Test #112: d4_dispersion_charge_dependent .....................   Passed    0.00 sec
+        Start 113: point_group_detection_symmetrize
+110/124 Test #113: point_group_detection_symmetrize ...................   Passed    0.01 sec
+        Start 114: bsse_counterpoise_correction
+111/124 Test #114: bsse_counterpoise_correction .......................   Passed    0.00 sec
+        Start 115: kpoints_monkhorst_pack_bloch_phase
+112/124 Test #115: kpoints_monkhorst_pack_bloch_phase .................   Passed    0.00 sec
+        Start 116: mermin_finite_temperature_occupations
+113/124 Test #116: mermin_finite_temperature_occupations ..............   Passed    0.00 sec
+        Start 117: a_posteriori_error_bounds
+114/124 Test #117: a_posteriori_error_bounds ..........................   Passed    0.00 sec
+        Start 118: energy_metering_kwh_logging
+115/124 Test #118: energy_metering_kwh_logging ........................   Passed    0.25 sec
+        Start 119: mixed_precision_ozaki_gemm
+116/124 Test #119: mixed_precision_ozaki_gemm .........................   Passed    0.00 sec
+        Start 120: cuda_graph_capture_replay
+117/124 Test #120: cuda_graph_capture_replay ..........................   Passed    0.00 sec
+        Start 121: qtt_compression_svd_gemm
+118/124 Test #121: qtt_compression_svd_gemm ...........................   Passed    0.00 sec
+        Start 122: aspc_extrapolation_predictor
+119/124 Test #122: aspc_extrapolation_predictor .......................   Passed    0.00 sec
+        Start 123: hse_screened_exchange_omega
+120/124 Test #123: hse_screened_exchange_omega ........................   Passed    0.00 sec
+        Start 124: gap_modules_wired_into_product_path
+121/124 Test #124: gap_modules_wired_into_product_path ................   Passed    0.36 sec
+122/124 Test  #89: real_pp_scf_validation .............................   Passed   79.58 sec
+123/124 Test  #95: wp6_scf_forces_xlbomd_optimizers_stress ............   Passed  1123.91 sec
+124/124 Test  #88: diffuse_basis_augmentation .........................Subprocess killed***Exception: 177.07 sec
+╔══════════════════════════════════════════════════════════════╗
+║  Diffuse Basis Augmentation Tests (M10)                    ║
+╚══════════════════════════════════════════════════════════════╝
+
+=== Test 1: Augmented DZP has more functions than DZP ===
+  DZP channels: 4 zeta values
+  Aug DZP channels: 6 zeta values
+  PASS (augmented has 6 > 4 zeta)
+
+=== Test 2: Diffuse functions have larger r_cut ===
+  l=0: valence r_cut=10, diffuse r_cut=25
+  l=1: valence r_cut=10, diffuse r_cut=25
+  PASS (diffuse functions have larger r_cut)
+
+=== Test 3: Augmented basis functions normalized ===
+  C augmented basis: 6 functions
+    fn 0: l=0 zeta=0 r_cut=4.08248 norm=1
+    fn 1: l=0 zeta=1 r_cut=2.44949 norm=1
+    fn 2: l=0 zeta=2 r_cut=10.2062 norm=1
+    fn 3: l=1 zeta=0 r_cut=4.08248 norm=1
+    fn 4: l=1 zeta=1 r_cut=2.44949 norm=1
+    fn 5: l=1 zeta=2 r_cut=10.2062 norm=1
+  PASS (all 6 functions normalized)
+
+=== Test 4: SCF with diffuse basis (H atom) ===
+[NaoDriver] Starting Run (Z={ 1 }, grid_h=0.4)
+[NaoDriver] basis generation (elapsed=738.249 ms, step=738.249 ms)
+[NaoDriver] grid basis evaluation (elapsed=777.303 ms, step=39.0545 ms)
+[NaoDriver] S/T assembly (elapsed=13668.2 ms, step=12890.9 ms)
+[NaoDriver] Dual grid: coarse 61x61x61 (h=0.4), fine 121x121x121 (h=0.2)
+[NaoDriver] fine grid basis evaluation (elapsed=13989.5 ms, step=321.269 ms)
+[NaoDriver] Device pipeline ready (stride=227328, functional=LDA-PW92)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=14185.3 ms, step=195.835 ms)
+[NaoDriver] E_ion = 0
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143
+[NaoDriver] DIAG V_ext diag: -0.92803 -1.01256 -0.316832 -0.316832 -0.316832 -0.484095 -0.484095 -0.484095
+[NaoDriver] DIAG T eigenvalues: 0.00430107 0.108784 0.108784 0.108784 0.690762 0.690762 0.690762 0.950787
+[NaoDriver] DIAG S eigenvalues: 0.017813 0.266762 0.266762 0.266762 1.73324 1.73324 1.73324 1.98219
+[NaoDriver] DIAG H=T+Vext eigenvalues: -0.498281 -0.0878561 -0.0878561 -0.0878561 0.0455185 0.339019 0.339019 0.339019
+[NaoDriver] DIAG lowest eigvec: -0.69192 -0.311917 0 0 0 0 0 -0
+[NaoDriver] DIAG V_ext[0:2,0:2]: -0.92803 -0.964558 -0.964558 -1.01256
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=8, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=8); R0 batched dense -> regime R0
+[NaoDriver] SCF (elapsed=18915.9 ms, step=4730.6 ms)
+  DZP: E=-0.451469 converged=1 n_basis=8
+[NaoDriver] Starting Run (Z={ 1 }, grid_h=0.4)
+[NaoDriver] Using augmented DZP basis (diffuse functions)
+[NaoDriver] basis generation (elapsed=1085.13 ms, step=1085.13 ms)
+[NaoDriver] grid basis evaluation (elapsed=1680.83 ms, step=595.693 ms)
+[NaoDriver] S/T assembly (elapsed=40956.7 ms, step=39275.8 ms)
+[NaoDriver] Dual grid: coarse 137x137x137 (h=0.4), fine 273x273x273 (h=0.2)
+[NaoDriver] fine grid basis evaluation (elapsed=46174.7 ms, step=5218.05 ms)
+[NaoDriver] Device pipeline disabled: arena reserve failed (cudaMallocAsync xc rho: out of memory)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=46512.4 ms, step=337.706 ms)
+[NaoDriver] E_ion = 0
+[NaoDriver] DIAG S diag: 1 1 1 1 1 1 1 1 1 1 1 1
+[NaoDriver] DIAG T diag: 0.431617 0.523471 0.424854 0.230403 0.230403 0.230403 0.569143 0.569143 0.569143 0.0525958 0.0525958 0.0525958
+[NaoDriver] DIAG V_ext diag: -0.92803 -1.01256 -0.920808 -0.316832 -0.316832 -0.316832 -0.484095 -0.484095 -0.484095 -0.158098 -0.158098 -0.158098
+[NaoDriver] DIAG T eigenvalues: 9.86945e-05 0.00565593 0.0286886 0.0286886 0.0286886 0.120625 0.120625 0.120625 0.702828 0.702828 0.702828 1.37419
+[NaoDriver] DIAG S eigenvalues: 0.000607628 0.0259629 0.205137 0.205137 0.205137 0.725815 0.725815 0.725815 2.06905 2.06905 2.06905 2.97343
+[NaoDriver] DIAG H=T+Vext eigenvalues: -0.498393 -0.119027 -0.119027 -0.119027 -0.0801378 -0.0250099 -0.0250099 -0.0250099 0.225766 0.366162 0.366162 0.366162
+[NaoDriver] DIAG lowest eigvec: -0.293799 -0.32126 -0.389366 0 0 0 0 0 -0 0 0 -0
+[NaoDriver] DIAG V_ext[0:2,0:2]: -0.92803 -0.964558 -0.964558 -1.01256
+[NaoDriver] DIAG T[0:2,0:2]: 0.431617 0.471009 0.471009 0.523471
+[NaoDriver] DIAG S[0:2,0:2]: 1 0.982187 0.982187 1
+[NaoDriver] launching SCF (n=12, n_occ=1)
+[SCFDriver] broker: small molecular system (n_basis=12); R0 batched dense -> regime R0
+
+
+94% tests passed, 8 tests failed out of 124
+
+Total Test time (real) = 1282.68 sec
+
+The following tests did not run:
+	 11 - cuda_graph_replay_fp64_oracle (Skipped)
+	 12 - cuda_deterministic_substrate_gauntlet (Skipped)
+	 40 - xc_bench_roofline (Skipped)
+
+The following tests FAILED:
+	 81 - nao_driver_end_to_end_scf (Subprocess killed)
+	 82 - grid_convergence_study (Failed)
+	 84 - nao_benchmark_vs_pyscf (Subprocess killed)
+	 85 - nao_pseudo_scf_validation (Subprocess killed)
+	 86 - pp_scf_validation (Subprocess killed)
+	 88 - diffuse_basis_augmentation (Subprocess killed)
+	 90 - real_pseudodojo_scf (Failed)
+	 91 - e6_dynamics_profile (Failed)
+Errors while running CTest
