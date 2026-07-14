@@ -63,11 +63,10 @@ int TestHAtom() {
   if (result.n_basis < 4)
     return Fail("H atom DZP basis has too few functions: " + std::to_string(result.n_basis));
 
-  // H atom LDA energy should be close to -0.5 Ha (exact H LDA is ~-0.4789 Ha).
-  // D1: Target was 0.05 but actual error ≈ 0.081 Ha (grid-based XC).
-  // Kept at 0.10: actual * 1.2 = 0.097 — cannot tighten further.
+  // H atom LDA energy: exact H LDA is ~-0.4789 Ha; with DZP NAO + grid XC, we
+  // get ~-0.446. Reference -0.5 with tolerance 0.07 (actual err ~0.054).
   const double H_REF = -0.5;
-  const double H_TOL = 0.10;
+  const double H_TOL = 0.07;
   double h_err = std::fabs(result.scf.energy - H_REF);
   if (h_err > H_TOL)
     return Fail("H energy " + std::to_string(result.scf.energy) +
@@ -98,9 +97,9 @@ int TestH2() {
     return Fail("H2 SCF did not converge");
 
   // PP-LDA H2 at R=1.4 Bohr with DZP NAO basis. Reference ≈ -1.1 Ha.
-  // Tolerance 0.15 accounts for basis-set and grid discretization error.
+  // Tolerance 0.05 (actual err ~0.021, 2.4x margin).
   const double H2_REF = -1.1;
-  const double H2_TOL = 0.15;
+  const double H2_TOL = 0.05;
   double h2_err = std::fabs(result.scf.energy - H2_REF);
   if (h2_err > H2_TOL)
     return Fail("H2 energy " + std::to_string(result.scf.energy) +
