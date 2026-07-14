@@ -67,6 +67,7 @@
 #include "verification/energy_metering.hpp"
 #include "scf/mixed_precision.hpp"
 #include "tile/mixed_precision_scf.hpp"
+#include "tile/ozaki.hpp"
 #include "tile/qtt_scf.hpp"
 #include "tile/tile_scf_integration.hpp"
 #include "tile/cuda_graph_scf.hpp"
@@ -1517,8 +1518,21 @@ class NaoDriver {
       auto trace = [&](const std::vector<double>& A,
                        const std::vector<double>& B) -> double {
         if (use_mp) {
-          // Ozaki error-compensated GEMM: quantize A to FP16/BF16,
-          // compute A_quant @ B in FP64, add error feedback.
+          // B11: Try GPU Ozaki FP16-slice GEMM first when CUDA available.
+          // This uses tensor-core FP16 storage with FP64-emulated reductions
+          // via the Ozaki error-free slicing scheme.
+#ifdef TIDES_HAVE_CUDA
+          if (tile::CudaRuntimeAvailable() && !use_bf16) {
+            auto gpu_res = tile::GemmOzakiFp16Cuda(n, n, n, A, B);
+            if (gpu_res.ok()) {
+              double tr = 0.0;
+              for (std::size_t i = 0; i < n; ++i)
+                tr += gpu_res.value().values[i * n + i];
+              return tr;
+            }
+          }
+#endif
+          // CPU fallback: Ozaki error-compensated GEMM.
           std::vector<double> feedback;
           auto C = tile::MixedPrecisionSCF::OzakiGEMM(
               n, A, B, use_bf16, &feedback);
