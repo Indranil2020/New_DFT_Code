@@ -50,7 +50,7 @@ int TestHAtomDoublet() {
     return Fail("H atom doublet SCF did not converge");
 
   const double H_REF = -0.5;
-  const double H_TOL = 0.15;
+  const double H_TOL = 0.07;
   double h_err = std::fabs(result.scf.energy - H_REF);
   if (h_err > H_TOL)
     return Fail("H doublet energy " + std::to_string(result.scf.energy) +
