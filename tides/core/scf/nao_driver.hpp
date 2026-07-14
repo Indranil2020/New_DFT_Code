@@ -39,6 +39,7 @@
 #include "basis/two_center_integrals.hpp"
 #include "basis/two_center_builder.hpp"
 #include "basis/pseudo/pseudopotential.hpp"
+#include "basis/pseudo/pp_loader.hpp"
 #include "scf/scf_driver.hpp"
 #include "scf/energy_assembly.hpp"
 #include "scf/stress.hpp"
@@ -834,6 +835,9 @@ class NaoDriver {
       for (int c = 0; c < 3; ++c)
         extent[c] = std::max(extent[c], std::fabs(atom.position[c] - center[c]));
     for (int c = 0; c < 3; ++c) {
+      // Snap extent up to next multiple of grid_h so small atom displacements
+      // don't change grid dimensions (preserves FD force translational invariance).
+      extent[c] = std::ceil(extent[c] / grid_h) * grid_h;
       double half = extent[c] + grid_margin;
       // Snap center to nearest multiple of grid_h.
       double snapped_center = std::round(center[c] / grid_h) * grid_h;
@@ -3053,7 +3057,7 @@ class NaoDriver {
     return result;
   }
 
-  // Compute forces on all atoms via 5-point finite differences on the total
+  // Compute forces on all atoms via central finite differences on the total
   // energy. This is the reference-grade force validation path (Audit T6.3).
   //   atomic_numbers, positions: same as Run (positions in Bohr).
   //   h: finite-difference step (default 0.001 Bohr).
@@ -3067,24 +3071,49 @@ class NaoDriver {
     const std::size_t n_atoms = atomic_numbers.size();
     std::vector<double> forces(3 * n_atoms, 0.0);
 
-    // FD5 coefficients for first derivative: f'(x) ≈ (f(-2h) - 8f(-h) + 8f(h) - f(2h)) / (12h)
-    const double fd5_coeffs[] = {1.0, -8.0, 0.0, 8.0, -1.0};
-    const double fd5_offsets[] = {-2.0, -1.0, 0.0, 1.0, 2.0};
-    const double fd5_denom = 12.0 * h;
+    // Central difference: f'(x) ≈ (f(x+h) - f(x-h)) / (2h)
+    const double fd_denom = 2.0 * h;
+
+    // Load pseudopotentials for each atom type (same as production Run).
+    std::string pp_err;
+    auto pps = tides::basis::PpLoader::LoadByAtomicNumbers(
+        atomic_numbers, "", &pp_err);
+    const bool have_pps = (pps.size() == n_atoms);
+
+    // Use tighter SCF tolerance for FD forces to reduce numerical noise.
+    const double fd_tol = std::max(tol, 1e-8);
 
     for (std::size_t a = 0; a < n_atoms; ++a) {
       for (int c = 0; c < 3; ++c) {
-        double force = 0.0;
-        for (int s = 0; s < 5; ++s) {
-          if (s == 2) continue;  // zero coefficient
-          std::vector<double> pos_perturbed = positions;
-          pos_perturbed[3 * a + c] += fd5_offsets[s] * h;
-          auto res = Run(atomic_numbers, pos_perturbed,
-                          grid_h, grid_margin, max_iter, tol);
-          force += fd5_coeffs[s] * res.energy.E_total;
+        std::vector<double> pos_plus = positions;
+        pos_plus[3 * a + c] += h;
+        std::vector<double> pos_minus = positions;
+        pos_minus[3 * a + c] -= h;
+
+        NaoDriverResult res_plus, res_minus;
+        if (have_pps) {
+          res_plus = Run(atomic_numbers, pos_plus,
+                         grid_h, grid_margin, max_iter, fd_tol,
+                         &pps, {}, 1, 0, true,
+                         0.0, false, false, false, false, false,
+                         false, false, false, false,
+                         std::array<int, 3>{1, 1, 1}, false, false,
+                         nullptr, false);
+          res_minus = Run(atomic_numbers, pos_minus,
+                          grid_h, grid_margin, max_iter, fd_tol,
+                          &pps, {}, 1, 0, true,
+                          0.0, false, false, false, false, false,
+                          false, false, false, false,
+                          std::array<int, 3>{1, 1, 1}, false, false,
+                          nullptr, false);
+        } else {
+          res_plus = Run(atomic_numbers, pos_plus,
+                         grid_h, grid_margin, max_iter, fd_tol);
+          res_minus = Run(atomic_numbers, pos_minus,
+                          grid_h, grid_margin, max_iter, fd_tol);
         }
-        // Force = -dE/dR
-        forces[3 * a + c] = -force / fd5_denom;
+        // Force = -dE/dR = -(E_plus - E_minus) / (2h)
+        forces[3 * a + c] = -(res_plus.energy.E_total - res_minus.energy.E_total) / fd_denom;
       }
     }
     return forces;
@@ -3249,7 +3278,21 @@ class NaoDriver {
     // B6 FIX: Use fixed_density=true so SCF builds H from P_aux and computes
     // energy from P_aux (not from a new SCF solution). This is the shadow
     // dynamics force — forces from the auxiliary density matrix.
+    // Load PPs for consistent PP-based energy evaluation.
+    std::string pp_err_fd;
+    auto pps_fd = tides::basis::PpLoader::LoadByAtomicNumbers(
+        atomic_numbers, "", &pp_err_fd);
+    const bool have_pps_fd = (pps_fd.size() == n_atoms);
+
     auto band_energy = [&](const std::vector<double>& R) -> double {
+      if (have_pps_fd) {
+        auto res = Run(atomic_numbers, R, grid_h, grid_margin, 1, 1e-3,
+                       &pps_fd, {}, 1, 0, false, 0.0, false, false, false,
+                       false, false, false, false, false, false,
+                       std::array<int, 3>{1, 1, 1}, false, false,
+                       &P_aux, true);
+        return res.energy.E_total;
+      }
       auto res = Run(atomic_numbers, R, grid_h, grid_margin, 1, 1e-3,
                      nullptr, {}, 1, 0, false, 0.0, false, false, false,
                      false, false, false, false, false, false,

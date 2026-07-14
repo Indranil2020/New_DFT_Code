@@ -8,7 +8,9 @@ api/python/tides/ase_calculator.py
 api/python/tides/cli.py
 api/python/tides/config.py
 api/python/tides/core.py
+api/python/tides/io_formats.py
 api/python/tides/status.py
+api/python/tides/units.py
 api/python/tides_dft.egg-info/PKG-INFO
 api/python/tides_dft.egg-info/SOURCES.txt
 api/python/tides_dft.egg-info/dependency_links.txt

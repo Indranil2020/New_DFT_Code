@@ -158,6 +158,22 @@ static scf::NaoDriverResult NaoDriver_run(
     bool use_cuda_graph,
     bool use_kpoints,
     std::array<int, 3> kpoint_grid) {
+    // Load pseudopotentials for each atom type (same as C++ tests).
+    std::string pp_err;
+    auto pps = basis::PpLoader::LoadByAtomicNumbers(atomic_numbers, "", &pp_err);
+    const bool have_pps = (pps.size() == atomic_numbers.size());
+    if (have_pps) {
+        return scf::NaoDriver::Run(atomic_numbers, positions,
+                                    grid_h, grid_margin, max_iter, tol,
+                                    &pps, {}, 1, 0,
+                                    use_dual_grid,
+                                    0.0, false, false, false, false, false,
+                                    use_mixed_precision,
+                                    use_qtt_compression,
+                                    use_cuda_graph,
+                                    use_kpoints, kpoint_grid);
+    }
+    // Fallback: all-electron path (no PPs available).
     return scf::NaoDriver::Run(atomic_numbers, positions,
                                 grid_h, grid_margin, max_iter, tol,
                                 nullptr, {}, 1, 0,
@@ -183,7 +199,7 @@ static std::vector<double> Tile_gemm(
     auto result = tile::SpGemmFilteredFp64(a_tile.value(), b_tile.value(),
                                             eps_filter);
     if (!result.ok()) return A;
-    return tile::TileMat::ToDense(result.value().product);
+    return result.value().product.ToDense();
 }
 
 // Tile substrate trace: Tr(P @ H) via tile SpGEMM + TraceFp64.

@@ -326,7 +326,7 @@ class TidesCalculator:
                 use_kpoints=(self._config.solver.kpoint_grid[0] > 1
                              or self._config.solver.kpoint_grid[1] > 1
                              or self._config.solver.kpoint_grid[2] > 1),
-                kpoint_grid=self._config.solver.kpoint_grid,
+                kpoint_grid=tuple(self._config.solver.kpoint_grid),
             )
 
             e = cpp_result.energy
@@ -543,7 +543,7 @@ class TidesCalculator:
             use_kpoints=(self._config.solver.kpoint_grid[0] > 1
                          or self._config.solver.kpoint_grid[1] > 1
                          or self._config.solver.kpoint_grid[2] > 1),
-            kpoint_grid=self._config.solver.kpoint_grid,
+            kpoint_grid=tuple(self._config.solver.kpoint_grid),
         )
 
         e = cpp_result.energy

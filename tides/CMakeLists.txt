@@ -143,7 +143,8 @@ if(TIDES_ENABLE_CUDA)
     target_compile_options(tides_cuda_tile PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
     set_target_properties(tides_cuda_tile PROPERTIES
-      CUDA_RUNTIME_LIBRARY Shared)
+      CUDA_RUNTIME_LIBRARY Shared
+      POSITION_INDEPENDENT_CODE TRUE)
 
     add_executable(tides_cuda_gemm_tests core/tile/tests/cuda_gemm_tests.cpp)
     target_link_libraries(tides_cuda_gemm_tests PRIVATE tides_core tides_cuda_tile)
@@ -245,7 +246,8 @@ if(TIDES_ENABLE_CUDA)
     target_compile_options(tides_cuda_basis PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr --allow-unsupported-compiler>)
     set_target_properties(tides_cuda_basis PROPERTIES
-      CUDA_RUNTIME_LIBRARY Shared)
+      CUDA_RUNTIME_LIBRARY Shared
+      POSITION_INDEPENDENT_CODE TRUE)
 
     add_executable(tides_cuda_two_center_tests
       core/basis/tests/cuda_two_center_tests.cpp)
