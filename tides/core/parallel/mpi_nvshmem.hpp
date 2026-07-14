@@ -12,6 +12,10 @@
 //
 // This prototype validates the interface with a CPU-only simulation.
 
+#ifdef TIDES_HAVE_MPI
+#include <mpi.h>
+#endif
+
 #include <cmath>
 #include <cstddef>
 #include <iostream>
@@ -61,6 +65,7 @@ class NVSHMEMHaloExchange {
   // Exchange halo data between partitions.
   // In NVSHMEM, this uses nvshmem_put_nbi (non-blocking) for each
   // neighbor partition, then nvshmem_quiet to wait.
+  // With MPI, uses MPI_Sendrecv for each neighbor pair.
   static void Exchange(std::vector<double>& halo_data,
                         const std::vector<int>& neighbors,
                         const DistributedConfig& cfg) {
@@ -68,10 +73,31 @@ class NVSHMEMHaloExchange {
     // Actual implementation:
     // for each neighbor: nvshmem_double_put_nbi(target, source, count, pe);
     // nvshmem_quiet();
-#else
-    // Stub: just copy data locally (no-op for single partition).
     if (cfg.n_partitions == 1) return;
-    // In a real implementation, this would use MPI_Sendrecv as fallback.
+#elif defined(TIDES_HAVE_MPI)
+    // M6: MPI fallback for halo exchange.
+    // For each neighbor, use MPI_Sendrecv to exchange boundary data.
+    if (cfg.n_partitions == 1) return;
+    const int rank = cfg.rank;
+    for (std::size_t i = 0; i < neighbors.size(); ++i) {
+      const int neighbor = neighbors[i];
+      if (neighbor < 0 || neighbor == rank) continue;
+      // Pack send buffer (first half of halo_data is send, second half is recv).
+      const std::size_t half = halo_data.size() / 2;
+      std::vector<double> send_buf(halo_data.begin(), halo_data.begin() + half);
+      std::vector<double> recv_buf(half, 0.0);
+      MPI_Sendrecv(send_buf.data(), static_cast<int>(half), MPI_DOUBLE,
+                   neighbor, 0,
+                   recv_buf.data(), static_cast<int>(half), MPI_DOUBLE,
+                   neighbor, 0,
+                   MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      // Unpack into second half of halo_data.
+      for (std::size_t j = 0; j < half; ++j)
+        halo_data[half + j] = recv_buf[j];
+    }
+#else
+    // Stub: no communication available.
+    if (cfg.n_partitions == 1) return;
 #endif
   }
 
@@ -80,6 +106,10 @@ class NVSHMEMHaloExchange {
 #ifdef TIDES_HAVE_NVSHMEM
     // nvshmem_double_allreduce_sum
     return local_value;  // placeholder
+#elif defined(TIDES_HAVE_MPI)
+    double global = 0.0;
+    MPI_Allreduce(&local_value, &global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    return global;
 #else
     // Single-partition: no reduction needed.
     return local_value;
@@ -97,10 +127,17 @@ class NVSHMEMHaloExchange {
 // MPI-backed orchestration interface.
 class MPIOrchestrator {
  public:
-  // Initialize MPI.
+  // Initialize MPI. Returns true if MPI is available (or already initialized).
   static bool Init() {
 #ifdef TIDES_HAVE_MPI
-    // MPI_Init(nullptr, nullptr);
+    int provided = 0;
+    int mpi_init_flag = 0;
+    MPI_Initialized(&mpi_init_flag);
+    if (!mpi_init_flag) {
+      // Request MPI_THREAD_SINGLE — we don't use threaded MPI.
+      int err = MPI_Init_thread(nullptr, nullptr, MPI_THREAD_SINGLE, &provided);
+      if (err != MPI_SUCCESS) return false;
+    }
     return true;
 #else
     return false;
@@ -110,8 +147,8 @@ class MPIOrchestrator {
   // Get rank and size.
   static void GetRank(int& rank, int& size) {
 #ifdef TIDES_HAVE_MPI
-    // MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
 #else
     rank = 0;
     size = 1;
@@ -121,36 +158,67 @@ class MPIOrchestrator {
   // Barrier.
   static void Barrier() {
 #ifdef TIDES_HAVE_MPI
-    // MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
 #endif
   }
 
-  // All-reduce sum.
+  // All-reduce sum (scalar double).
   static double AllReduceSum(double local) {
 #ifdef TIDES_HAVE_MPI
-    // double global;
-    // MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    // return global;
-    return local;
+    double global = 0.0;
+    MPI_Allreduce(&local, &global, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    return global;
 #else
     return local;
 #endif
   }
 
-  // All-reduce vector.
+  // All-reduce sum (vector of doubles, in-place).
   static void AllReduceSum(std::vector<double>& local) {
 #ifdef TIDES_HAVE_MPI
-    // std::vector<double> global(local.size());
-    // MPI_Allreduce(local.data(), global.data(), local.size(),
-    //               MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    // local = global;
+    if (local.empty()) return;
+    std::vector<double> global(local.size(), 0.0);
+    MPI_Allreduce(local.data(), global.data(),
+                  static_cast<int>(local.size()),
+                  MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    local = global;
+#endif
+  }
+
+  // Sendrecv: exchange data with a neighbor rank.
+  // Sends sendbuf to dst, receives into recvbuf from src.
+  static bool SendRecv(const std::vector<double>& sendbuf, int dst,
+                       std::vector<double>& recvbuf, int src) {
+#ifdef TIDES_HAVE_MPI
+    if (sendbuf.size() != recvbuf.size()) return false;
+    MPI_Sendrecv(const_cast<double*>(sendbuf.data()),
+                 static_cast<int>(sendbuf.size()), MPI_DOUBLE, dst, 0,
+                 recvbuf.data(),
+                 static_cast<int>(recvbuf.size()), MPI_DOUBLE, src, 0,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    return true;
+#else
+    return false;
+#endif
+  }
+
+  // Bcast: broadcast data from root to all ranks.
+  static void Bcast(std::vector<double>& data, int root) {
+#ifdef TIDES_HAVE_MPI
+    if (data.empty()) return;
+    MPI_Bcast(data.data(), static_cast<int>(data.size()),
+              MPI_DOUBLE, root, MPI_COMM_WORLD);
 #endif
   }
 
   // Finalize.
   static void Finalize() {
 #ifdef TIDES_HAVE_MPI
-    // MPI_Finalize();
+    int mpi_finalized = 0;
+    MPI_Finalized(&mpi_finalized);
+    if (!mpi_finalized) {
+      MPI_Finalize();
+    }
 #endif
   }
 };
@@ -201,9 +269,8 @@ class DistributedSCFDriver {
 
     result.converged = true;
 
-    // Finalize.
+    // Finalize NVSHMEM (MPI is finalized by the caller).
     NVSHMEMHaloExchange::Finalize();
-    MPIOrchestrator::Finalize();
 
     return result;
   }

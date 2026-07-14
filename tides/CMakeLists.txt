@@ -9,6 +9,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(TIDES_ENABLE_CUDA "Build CUDA WP1 substrate probes when CUDA is available" ON)
 option(TIDES_ENABLE_HIP "Build HIP/ROCm backend when available" OFF)
 option(TIDES_ENABLE_METIS "Link METIS for high-quality graph partitioning" ON)
+option(TIDES_ENABLE_MPI "Enable MPI for distributed/multi-node execution" ON)
+
+# M6: Detect MPI for distributed execution.
+if(TIDES_ENABLE_MPI)
+  find_package(MPI COMPONENTS CXX)
+  if(MPI_FOUND)
+    set(TIDES_HAVE_MPI ON CACHE BOOL "MPI is available")
+    add_compile_definitions(TIDES_HAVE_MPI=1)
+    message(STATUS "MPI found: ${MPI_CXX_COMPILER} (${MPI_CXX_LIBRARY_VERSION_STRING})")
+  else()
+    message(STATUS "MPI not found — distributed features disabled (stubs only)")
+  endif()
+endif()
 
 add_library(tides_core INTERFACE)
 target_include_directories(tides_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
@@ -955,6 +968,9 @@ add_test(NAME t59_distributed_scaling COMMAND tides_distributed_scaling_tests)
 add_executable(tides_mpi_nvshmem_tests
   core/parallel/tests/t86_mpi_nvshmem_tests.cpp)
 target_link_libraries(tides_mpi_nvshmem_tests PRIVATE tides_core)
+if(TIDES_HAVE_MPI)
+  target_link_libraries(tides_mpi_nvshmem_tests PRIVATE MPI::MPI_CXX)
+endif()
 add_test(NAME t86_mpi_nvshmem COMMAND tides_mpi_nvshmem_tests)
 
 # L-BFGS optimizer tests
