@@ -221,12 +221,26 @@ int TestHSE06Hybrid() {
   hse_spec.family = XcFamily::kGga;
   hse_spec.exchange_fraction = 0.25;
 
-  auto result = NaoDriver::Run(Z, pos, 0.5, 4.0, 50, 1e-4,
-                               nullptr, hse_spec, 1, 0,
-                               false, 0.0, false, true, false,
-                               false, false, false, false, false,
-                               false, {1, 1, 1}, false, false,
-                               nullptr, false);
+  std::string pp_err;
+  auto pps = tides::basis::PpLoader::LoadByAtomicNumbers(Z, "", &pp_err);
+  const bool have_pps = (pps.size() == Z.size());
+
+  NaoDriverResult result;
+  if (have_pps) {
+    result = NaoDriver::Run(Z, pos, 0.3, 4.0, 50, 1e-4,
+                             &pps, hse_spec, 1, 0,
+                             false, 0.0, false, true, false,
+                             false, false, false, false, false,
+                             false, {1, 1, 1}, false, false,
+                             nullptr, false);
+  } else {
+    result = NaoDriver::Run(Z, pos, 0.3, 4.0, 50, 1e-4,
+                             nullptr, hse_spec, 1, 0,
+                             false, 0.0, false, true, false,
+                             false, false, false, false, false,
+                             false, {1, 1, 1}, false, false,
+                             nullptr, false);
+  }
 
   std::cout << "  n_basis = " << result.n_basis << ", n_electrons = " << result.n_electrons << "\n";
   std::cout << "  Converged: " << (result.scf.converged ? "YES" : "NO") << "\n";
