@@ -47,6 +47,14 @@
 #include "grid/poisson.hpp"
 #include "grid/vmat_build.hpp"
 #include "grid/xc/xc_engine.hpp"
+
+extern "C" {
+void dsyev_(const char* jobz, const char* uplo, const int* n, double* a,
+            const int* lda, double* w, double* work, const int* lwork, int* info);
+void dsygv_(const int* itype, const char* jobz, const char* uplo,
+            const int* n, double* a, const int* lda, double* b, const int* ldb,
+            double* w, double* work, const int* lwork, int* info);
+}
 #include "grid/xc/xc_arena.hpp"
 #include "grid/vmat_build_gpu.hpp"
 #include "grid/rho_build_gpu.hpp"
@@ -343,6 +351,349 @@ class NaoDriver {
                         ? (1.0 / std::sqrt(4.0 * M_PI))
                         : basis::RealSphericalHarmonics::Eval(bf.l, m, theta, phi);
     return R_val * angular;
+  }
+
+  // Compute V_ext (nuclear attraction) with analytic on-site + grid off-site.
+  //
+  // For each nucleus A:
+  //   - Compute -Z_A/|r-R_A| on the grid (regularized at r=0)
+  //   - Project to get V_A matrix (includes on-site, off-site, cross terms)
+  //   - Replace the on-site block (i,j both on atom A) with analytic values
+  //   - Accumulate V_A into V_ext
+  //
+  // This preserves smooth cross-nucleus contributions to on-site blocks
+  // (e.g., <phi_i^A | (-Z_B/r_B) | phi_j^A> from nucleus B) while using
+  // exact analytic values for the singular on-site terms.
+  static std::vector<double> BuildAnalyticVext(
+      const std::vector<NaoAtom>& atoms,
+      const std::vector<std::size_t>& basis_atom_map,
+      const std::vector<int>& basis_l,
+      const std::vector<int>& basis_m,
+      const std::vector<std::size_t>& basis_fn_map,
+      std::size_t n_basis,
+      const grid::UniformGrid3D& grid,
+      const std::vector<std::vector<double>>& orbitals) {
+    std::vector<double> V_ext(n_basis * n_basis, 0.0);
+    const std::size_t np = grid.total_points();
+    const double sigma = grid.h[0];
+
+    for (std::size_t a_idx = 0; a_idx < atoms.size(); ++a_idx) {
+      const auto& atom = atoms[a_idx];
+      const double Z = static_cast<double>(atom.Z);
+      const double ax = atom.position[0];
+      const double ay = atom.position[1];
+      const double az = atom.position[2];
+
+      // Step 1: Compute -Z_A/|r-R_A| on the grid.
+      std::vector<double> v_a_grid(np, 0.0);
+      for (std::size_t ix = 0; ix < grid.n[0]; ++ix) {
+        for (std::size_t iy = 0; iy < grid.n[1]; ++iy) {
+          for (std::size_t iz = 0; iz < grid.n[2]; ++iz) {
+            const std::size_t g = grid.flatten(ix, iy, iz);
+            auto [x, y, z] = grid.coord(ix, iy, iz);
+            double dx = x - ax, dy = y - ay, dz = z - az;
+            double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-10) {
+              v_a_grid[g] = -Z * 2.0 / (std::sqrt(M_PI) * sigma);
+            } else {
+              v_a_grid[g] = -Z / r;
+            }
+          }
+        }
+      }
+
+      // Step 2: Project to get V_A matrix (all terms from nucleus A).
+      auto V_A = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_a_grid);
+
+      // Step 3: Replace on-site block (i,j both on atom A) with analytic values.
+      for (std::size_t i = 0; i < n_basis; ++i) {
+        if (basis_atom_map[i] != a_idx) continue;
+        for (std::size_t j = 0; j < n_basis; ++j) {
+          if (basis_atom_map[j] != a_idx) continue;
+          V_A[i * n_basis + j] = 0.0;
+        }
+      }
+
+      for (std::size_t i = 0; i < n_basis; ++i) {
+        if (basis_atom_map[i] != a_idx) continue;
+        for (std::size_t j = i; j < n_basis; ++j) {
+          if (basis_atom_map[j] != a_idx) continue;
+          if (basis_l[i] != basis_l[j]) continue;
+          if (basis_m[i] != basis_m[j]) continue;
+
+          const auto& fn_i = atom.basis.functions[basis_fn_map[i]];
+          const auto& fn_j = atom.basis.functions[basis_fn_map[j]];
+
+          const auto& r_grid = fn_i.r;
+          const auto& Ri_vals = fn_i.R;
+          const auto& Rj_vals = fn_j.R;
+          std::size_t n_r = std::min(Ri_vals.size(), Rj_vals.size());
+          if (n_r < 2) continue;
+
+          double dr = r_grid[1] - r_grid[0];
+          double integral = 0.0;
+          for (std::size_t k = 0; k < n_r; ++k) {
+            double r = r_grid[k];
+            double ri = Ri_vals[k];
+            double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
+            double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
+            integral += w * ri * rj * r * dr;
+          }
+
+          double v = -Z * integral;
+          V_A[i * n_basis + j] += v;
+          if (j != i) V_A[j * n_basis + i] += v;
+        }
+      }
+
+      // Step 4: Accumulate.
+      for (std::size_t i = 0; i < n_basis * n_basis; ++i)
+        V_ext[i] += V_A[i];
+    }
+
+    return V_ext;
+  }
+
+  // Build V_ext for pseudopotential case using hybrid analytic + grid approach.
+  // On-site blocks <phi_i^A | V_loc^A | phi_j^A> are computed via radial
+  // quadrature on the NAO radial grid with V_loc interpolated from the PP
+  // radial grid. Cross-atom terms use the Cartesian grid projection.
+  // This avoids the deep V_loc well near r=0 that the Cartesian grid
+  // cannot resolve, giving much faster grid convergence.
+  static std::vector<double> BuildAnalyticVextPP(
+      const std::vector<NaoAtom>& atoms,
+      const std::vector<std::size_t>& basis_atom_map,
+      const std::vector<int>& basis_l,
+      const std::vector<int>& basis_m,
+      const std::vector<std::size_t>& basis_fn_map,
+      std::size_t n_basis,
+      const grid::UniformGrid3D& grid,
+      const std::vector<std::vector<double>>& orbitals,
+      const std::vector<basis::Pseudopotential>* pseudopotentials) {
+    std::vector<double> V_ext(n_basis * n_basis, 0.0);
+    const std::size_t np = grid.total_points();
+
+    for (std::size_t a_idx = 0; a_idx < atoms.size(); ++a_idx) {
+      const auto& atom = atoms[a_idx];
+      const double ax = atom.position[0];
+      const double ay = atom.position[1];
+      const double az = atom.position[2];
+
+      // Get PP for this atom
+      const basis::Pseudopotential* pp = nullptr;
+      if (pseudopotentials && a_idx < pseudopotentials->size())
+        pp = &(*pseudopotentials)[a_idx];
+      if (!pp || pp->v_local.empty() || pp->r_grid.empty()) continue;
+
+      // Step 1: Compute V_loc^A(|r-R_A|) on the Cartesian grid (for cross-atom).
+      std::vector<double> v_a_grid(np, 0.0);
+      const auto& pp_rg = pp->r_grid;
+      const auto& pp_vl = pp->v_local;
+      for (std::size_t ix = 0; ix < grid.n[0]; ++ix) {
+        for (std::size_t iy = 0; iy < grid.n[1]; ++iy) {
+          for (std::size_t iz = 0; iz < grid.n[2]; ++iz) {
+            const std::size_t g = grid.flatten(ix, iy, iz);
+            auto [x, y, z] = grid.coord(ix, iy, iz);
+            double dx = x - ax, dy = y - ay, dz = z - az;
+            double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-10) {
+              v_a_grid[g] = pp_vl[0];
+            } else if (r <= pp_rg.back()) {
+              auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r);
+              if (it != pp_rg.begin() && it != pp_rg.end()) {
+                std::size_t j = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+                double t = (r - pp_rg[j]) / (pp_rg[j + 1] - pp_rg[j]);
+                v_a_grid[g] = (1.0 - t) * pp_vl[j] + t * pp_vl[j + 1];
+              } else if (it == pp_rg.end()) {
+                v_a_grid[g] = pp_vl.back();
+              }
+            }
+          }
+        }
+      }
+
+      // Step 2: Project to get V_A matrix (all terms from atom A's V_loc).
+      auto V_A = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_a_grid);
+
+      // Step 3: Zero out on-site block, then fill with analytic radial integrals.
+      for (std::size_t i = 0; i < n_basis; ++i) {
+        if (basis_atom_map[i] != a_idx) continue;
+        for (std::size_t j = 0; j < n_basis; ++j) {
+          if (basis_atom_map[j] != a_idx) continue;
+          V_A[i * n_basis + j] = 0.0;
+        }
+      }
+
+      // Semi-on-site correction: for same-l, same-m terms (i,j on atom B ≠ A,
+      // V_loc from atom A), replace grid values with analytic ones.
+      for (std::size_t b_idx = 0; b_idx < atoms.size(); ++b_idx) {
+        if (b_idx == a_idx) continue;
+        const auto& atom_b = atoms[b_idx];
+        double bx = atom_b.position[0];
+        double by = atom_b.position[1];
+        double bz = atom_b.position[2];
+        double R_AB = std::sqrt((ax-bx)*(ax-bx) + (ay-by)*(ay-by) + (az-bz)*(az-bz));
+        if (R_AB < 1e-10) continue;
+
+        for (std::size_t i = 0; i < n_basis; ++i) {
+          if (basis_atom_map[i] != b_idx) continue;
+          for (std::size_t j = i; j < n_basis; ++j) {
+            if (basis_atom_map[j] != b_idx) continue;
+            if (basis_l[i] != basis_l[j]) continue;
+            if (basis_m[i] != basis_m[j]) continue;
+
+            const auto& fn_i = atom_b.basis.functions[basis_fn_map[i]];
+            const auto& fn_j = atom_b.basis.functions[basis_fn_map[j]];
+            const auto& nao_rg = fn_i.r;
+            const auto& Ri_vals = fn_i.R;
+            const auto& Rj_vals = fn_j.R;
+            std::size_t n_r = std::min(Ri_vals.size(), Rj_vals.size());
+            if (n_r < 2) continue;
+
+            double dr = nao_rg[1] - nao_rg[0];
+            double integral = 0.0;
+
+            if (basis_l[i] == 0 && basis_l[j] == 0) {
+              static const double gl_x[] = {-0.861136, -0.339981, 0.339981, 0.861136};
+              static const double gl_w[] = {0.347855, 0.652145, 0.652145, 0.347855};
+              const int n_gl = 4;
+
+              for (std::size_t k = 0; k < n_r; ++k) {
+                double r = nao_rg[k];
+                double ri = Ri_vals[k];
+                double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
+                double v_avg = 0.0;
+                for (int q = 0; q < n_gl; ++q) {
+                  double x = gl_x[q];
+                  double r_prime = std::sqrt(r*r + R_AB*R_AB - 2.0*r*R_AB*x);
+                  double v_loc_r = 0.0;
+                  if (r_prime < 1e-10) {
+                    v_loc_r = pp_vl[0];
+                  } else if (r_prime <= pp_rg.back()) {
+                    auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r_prime);
+                    if (it != pp_rg.begin() && it != pp_rg.end()) {
+                      std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+                      double t = (r_prime - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
+                      v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
+                    } else if (it == pp_rg.end()) {
+                      v_loc_r = pp_vl.back();
+                    }
+                  }
+                  v_avg += gl_w[q] * v_loc_r;
+                }
+                v_avg *= 0.5;
+                double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
+                integral += w * ri * rj * v_avg * r * r * dr;
+              }
+            } else {
+              // For higher l, the phi integration of |Y_lm|^2 gives:
+              //   m=0: 2π * |Y_l0|^2 (phi-independent)
+              //   m≠0: π * N^2 * (P_l^|m|)^2 (from cos^2 or sin^2 averaged)
+              // We evaluate Y_{l,|m|}(θ, 0) = N * P_l^|m| * cos(0) = N * P_l^|m|
+              // and use phi_factor = (m == 0) ? 2π : π.
+              static const double gl8_x[] = {
+                -0.96029, -0.796666, -0.525532, -0.183435,
+                0.183435, 0.525532, 0.796666, 0.96029
+              };
+              static const double gl8_w[] = {
+                0.101228, 0.222381, 0.313707, 0.362684,
+                0.362684, 0.313707, 0.222381, 0.101228
+              };
+              const int n_gl = 8;
+              int l_i = basis_l[i];
+              int m_i = basis_m[i];
+              int am_i = std::abs(m_i);
+              double phi_factor = (m_i == 0) ? 2.0 * M_PI : M_PI;
+
+              for (std::size_t k = 0; k < n_r; ++k) {
+                double r = nao_rg[k];
+                double ri = Ri_vals[k];
+                double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
+                double angular_integral = 0.0;
+                for (int q = 0; q < n_gl; ++q) {
+                  double x = gl8_x[q];
+                  double r_prime = std::sqrt(r*r + R_AB*R_AB - 2.0*r*R_AB*x);
+                  double v_loc_r = 0.0;
+                  if (r_prime < 1e-10) {
+                    v_loc_r = pp_vl[0];
+                  } else if (r_prime <= pp_rg.back()) {
+                    auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r_prime);
+                    if (it != pp_rg.begin() && it != pp_rg.end()) {
+                      std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+                      double t = (r_prime - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
+                      v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
+                    } else if (it == pp_rg.end()) {
+                      v_loc_r = pp_vl.back();
+                    }
+                  }
+                  double theta = std::acos(x);
+                  double y_lm = basis::RealSphericalHarmonics::Eval(l_i, am_i, theta, 0.0);
+                  angular_integral += gl8_w[q] * y_lm * y_lm * v_loc_r;
+                }
+                double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
+                integral += w * ri * rj * phi_factor * angular_integral * r * r * dr;
+              }
+            }
+
+            // Replace grid value with analytic value.
+            V_A[i * n_basis + j] = integral;
+            if (j != i) V_A[j * n_basis + i] = integral;
+          }
+        }
+      }
+
+      // Analytic on-site: <phi_i^A | V_loc^A | phi_j^A>
+      // = delta_{l_i,l_j} delta_{m_i,m_j} * integral R_i(r) V_loc(r) R_j(r) r^2 dr
+      for (std::size_t i = 0; i < n_basis; ++i) {
+        if (basis_atom_map[i] != a_idx) continue;
+        for (std::size_t j = i; j < n_basis; ++j) {
+          if (basis_atom_map[j] != a_idx) continue;
+          if (basis_l[i] != basis_l[j]) continue;
+          if (basis_m[i] != basis_m[j]) continue;
+
+          const auto& fn_i = atom.basis.functions[basis_fn_map[i]];
+          const auto& fn_j = atom.basis.functions[basis_fn_map[j]];
+          const auto& nao_rg = fn_i.r;
+          const auto& Ri_vals = fn_i.R;
+          const auto& Rj_vals = fn_j.R;
+          std::size_t n_r = std::min(Ri_vals.size(), Rj_vals.size());
+          if (n_r < 2) continue;
+
+          double dr = nao_rg[1] - nao_rg[0];
+          double integral = 0.0;
+          for (std::size_t k = 0; k < n_r; ++k) {
+            double r = nao_rg[k];
+            double ri = Ri_vals[k];
+            double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
+            // Interpolate V_loc from PP radial grid at r
+            double v_loc_r = 0.0;
+            if (r < 1e-10) {
+              v_loc_r = pp_vl[0];
+            } else if (r <= pp_rg.back()) {
+              auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r);
+              if (it != pp_rg.begin() && it != pp_rg.end()) {
+                std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+                double t = (r - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
+                v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
+              } else if (it == pp_rg.end()) {
+                v_loc_r = pp_vl.back();
+              }
+            }
+            double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
+            integral += w * ri * rj * v_loc_r * r * r * dr;
+          }
+
+          V_A[i * n_basis + j] += integral;
+          if (j != i) V_A[j * n_basis + i] += integral;
+        }
+      }
+
+      // Step 4: Accumulate.
+      for (std::size_t i = 0; i < n_basis * n_basis; ++i)
+        V_ext[i] += V_A[i];
+    }
+
+    return V_ext;
   }
 
   // Run end-to-end SCF with NAO basis.
@@ -807,8 +1158,12 @@ class NaoDriver {
     }
     std::vector<double> V_ext;
     bool v_ext_on_device = false;
+    // For all-electron (no pseudopotentials), always use the analytic on-site
+    // + erf-regularized grid path. The raw -Z/r grid approach has a singularity
+    // that causes poor convergence. The erf split removes the singularity.
+    // For pseudopotential calculations, use the device path (v_local is smooth).
 #ifdef TIDES_HAVE_CUDA
-    if (device_pipeline_ready && grid::PpDeviceEnabled()) {
+    if (use_pp && device_pipeline_ready && grid::PpDeviceEnabled()) {
       auto pp_tables_host = scf::FlattenVlocTables(
           atom_positions_v, atom_charges_v,
           use_pp ? pseudopotentials : nullptr);
@@ -852,11 +1207,39 @@ class NaoDriver {
     }
 #endif
     if (!v_ext_on_device) {
-      auto v_ext_grid = scf::BuildVlocGridReference(
-          grid, atom_positions_v, atom_charges_v,
-          use_pp ? pseudopotentials : nullptr);
-      V_ext = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_ext_grid);
-      step("V_ext assembly (GEMM)");
+      if (!use_pp) {
+        // All-electron: use analytic on-site + erf-regularized grid.
+        // This avoids the 1/r singularity that causes poor grid convergence.
+        std::vector<std::size_t> basis_atom_map(n);
+        std::vector<int> basis_l_vec(n);
+        std::vector<int> basis_m_vec(n);
+        std::vector<std::size_t> basis_fn_vec(n);
+        for (std::size_t bi = 0; bi < n; ++bi) {
+          basis_atom_map[bi] = basis_map[bi].atom;
+          basis_l_vec[bi] = basis_map[bi].l;
+          basis_m_vec[bi] = basis_map[bi].m;
+          basis_fn_vec[bi] = basis_map[bi].fn;
+        }
+        V_ext = BuildAnalyticVext(atoms, basis_atom_map, basis_l_vec,
+                                   basis_m_vec, basis_fn_vec, n, grid, orbitals);
+        step("V_ext assembly (analytic on-site + erf grid)");
+      } else {
+        // PP: use analytic on-site + grid cross-atom for fast convergence.
+        std::vector<std::size_t> basis_atom_map(n);
+        std::vector<int> basis_l_vec(n);
+        std::vector<int> basis_m_vec(n);
+        std::vector<std::size_t> basis_fn_vec(n);
+        for (std::size_t bi = 0; bi < n; ++bi) {
+          basis_atom_map[bi] = basis_map[bi].atom;
+          basis_l_vec[bi] = basis_map[bi].l;
+          basis_m_vec[bi] = basis_map[bi].m;
+          basis_fn_vec[bi] = basis_map[bi].fn;
+        }
+        V_ext = BuildAnalyticVextPP(atoms, basis_atom_map, basis_l_vec,
+                                     basis_m_vec, basis_fn_vec, n, grid,
+                                     orbitals, pseudopotentials);
+        step("V_ext assembly (analytic on-site PP + grid)");
+      }
     }
 
     // Step 7b: KB nonlocal projectors (when pseudopotentials are provided).
@@ -933,6 +1316,9 @@ class NaoDriver {
             }
 
             // <phi_i|p_m> = integral phi_i * p_m.
+            // On-site terms (basis function and projector on same atom) are
+            // replaced with analytic radial integrals to avoid grid-dependent
+            // oscillations from peaked KB projectors.
             std::vector<double> proj_mat(n * n_m, 0.0);
             for (std::size_t bi = 0; bi < n; ++bi) {
               for (int m_idx = 0; m_idx < n_m; ++m_idx) {
@@ -941,6 +1327,50 @@ class NaoDriver {
                   s += orbitals[bi][g] * proj_grid[m_idx][g] * dv;
                 proj_mat[bi * n_m + m_idx] = s;
               }
+            }
+            // Replace on-site entries with analytic radial integrals.
+            for (std::size_t bi = 0; bi < n; ++bi) {
+              if (basis_map[bi].atom != a) continue;
+              // Zero out all m entries for this on-site basis function.
+              for (int m_idx = 0; m_idx < n_m; ++m_idx)
+                proj_mat[bi * n_m + m_idx] = 0.0;
+              // Only non-zero when l_i == l and m_i == m.
+              if (basis_map[bi].l != l) continue;
+              const auto& fn = atom.basis.functions[basis_map[bi].fn];
+              const auto& nao_rg = fn.r;
+              const auto& Ri = fn.R;
+              if (nao_rg.size() < 2) continue;
+              double dr = nao_rg[1] - nao_rg[0];
+              double radial_integral = 0.0;
+              for (std::size_t k = 0; k < nao_rg.size(); ++k) {
+                double r = nao_rg[k];
+                double ri = Ri[k];
+                // Interpolate beta(r) from PP radial grid.
+                double beta_r = 0.0;
+                if (r < 1e-12) {
+                  beta_r = beta[0];
+                } else if (r <= rg.back()) {
+                  auto it = std::upper_bound(rg.begin(), rg.end(), r);
+                  if (it != rg.begin() && it != rg.end()) {
+                    std::size_t j = static_cast<std::size_t>(it - rg.begin() - 1);
+                    double t = (r - rg[j]) / (rg[j + 1] - rg[j]);
+                    beta_r = (1.0 - t) * beta[j] + t * beta[j + 1];
+                  }
+                }
+                double w = (k == 0 || k == nao_rg.size() - 1) ? 0.5 : 1.0;
+                radial_integral += w * ri * beta_r * r * r * dr;
+              }
+              // Y_lm normalization: <Y_lm|Y_lm> = 1, so the angular part
+              // gives 1/sqrt(4pi) for l=0 or 1 for real Y_lm.
+              // The grid integral includes the angular part, so we need to
+              // match it. For on-site: phi_i = R_i * Y_{l_i,m_i},
+              // p_m = beta * Y_{l,m}. The integral is:
+              // delta_{l_i,l} delta_{m_i,m} * integral R_i * beta * r^2 dr
+              // (since <Y_{l_i,m_i}|Y_{l,m}> = delta).
+              int m_i = basis_map[bi].m;
+              int m_idx_match = m_i + l;  // m_idx = m + l
+              if (m_idx_match >= 0 && m_idx_match < n_m)
+                proj_mat[bi * n_m + m_idx_match] = radial_integral;
             }
             proj_mats.push_back(std::move(proj_mat));
           }
@@ -984,6 +1414,83 @@ class NaoDriver {
 
     // Step 9: SCF loop.
     // V_H via grid Poisson (no ERIs for NAO).
+    // Diagnostic: print S, T, V_ext for small systems.
+    if (n <= 16) {
+      std::cout << "[NaoDriver] DIAG S diag:";
+      for (std::size_t i = 0; i < n; ++i) std::cout << " " << S[i * n + i];
+      std::cout << "\n[NaoDriver] DIAG T diag:";
+      for (std::size_t i = 0; i < n; ++i) std::cout << " " << T[i * n + i];
+      std::cout << "\n[NaoDriver] DIAG V_ext diag:";
+      for (std::size_t i = 0; i < n; ++i) std::cout << " " << V_ext[i * n + i];
+      std::cout << "\n";
+      // Print T eigenvalues to check positive-definiteness.
+      {
+        std::vector<double> T_copy = T;
+        std::vector<double> T_eval(n, 0.0);
+        char jobz = 'N'; char uplo = 'U';
+        int nn = static_cast<int>(n); int lda = nn;
+        int lwork = -1; double wkopt = 0.0; int info = 0;
+        dsyev_(&jobz, &uplo, &nn, T_copy.data(), &lda, T_eval.data(), &wkopt, &lwork, &info);
+        if (info == 0) {
+          lwork = static_cast<int>(wkopt);
+          std::vector<double> work(static_cast<std::size_t>(lwork));
+          dsyev_(&jobz, &uplo, &nn, T_copy.data(), &lda, T_eval.data(), work.data(), &lwork, &info);
+        }
+        std::cout << "[NaoDriver] DIAG T eigenvalues:";
+        for (std::size_t i = 0; i < n; ++i) std::cout << " " << T_eval[i];
+        std::cout << "\n";
+      }
+      // Print S eigenvalues to check for linear dependence.
+      {
+        std::vector<double> S_copy = S;
+        std::vector<double> S_eval(n, 0.0);
+        char jobz = 'N'; char uplo = 'U';
+        int nn = static_cast<int>(n); int lda = nn;
+        int lwork = -1; double wkopt = 0.0; int info = 0;
+        dsyev_(&jobz, &uplo, &nn, S_copy.data(), &lda, S_eval.data(), &wkopt, &lwork, &info);
+        if (info == 0) {
+          lwork = static_cast<int>(wkopt);
+          std::vector<double> work(static_cast<std::size_t>(lwork));
+          dsyev_(&jobz, &uplo, &nn, S_copy.data(), &lda, S_eval.data(), work.data(), &lwork, &info);
+        }
+        std::cout << "[NaoDriver] DIAG S eigenvalues:";
+        for (std::size_t i = 0; i < n; ++i) std::cout << " " << S_eval[i];
+        std::cout << "\n";
+      }
+      // Print H = T + V_ext generalized eigenvalues for diagnostics.
+      {
+        std::vector<double> H0(n * n, 0.0);
+        for (std::size_t i = 0; i < n * n; ++i) H0[i] = T[i] + V_ext[i];
+        std::vector<double> S_copy2 = S;
+        std::vector<double> eval0(n, 0.0);
+        int itype = 1; char jobz = 'V'; char uplo = 'U';
+        int nn = static_cast<int>(n); int lda = nn; int ldb = nn;
+        int lwork = -1; double wkopt = 0.0; int info = 0;
+        dsygv_(&itype, &jobz, &uplo, &nn, H0.data(), &lda, S_copy2.data(), &ldb, eval0.data(), &wkopt, &lwork, &info);
+        if (info == 0) {
+          lwork = static_cast<int>(wkopt);
+          std::vector<double> work(static_cast<std::size_t>(lwork));
+          dsygv_(&itype, &jobz, &uplo, &nn, H0.data(), &lda, S_copy2.data(), &ldb, eval0.data(), work.data(), &lwork, &info);
+        }
+        std::cout << "[NaoDriver] DIAG H=T+Vext eigenvalues:";
+        for (std::size_t i = 0; i < n; ++i) std::cout << " " << eval0[i];
+        std::cout << "\n";
+        // Print lowest eigenvector (column 0 of H0 in col-major = H0[0..n-1])
+        std::cout << "[NaoDriver] DIAG lowest eigvec:";
+        for (std::size_t i = 0; i < n; ++i) std::cout << " " << H0[i];
+        std::cout << "\n";
+        // Print V_ext s-s block (2x2)
+        std::cout << "[NaoDriver] DIAG V_ext[0:2,0:2]: "
+                  << V_ext[0] << " " << V_ext[1] << " "
+                  << V_ext[n] << " " << V_ext[n+1] << "\n";
+        std::cout << "[NaoDriver] DIAG T[0:2,0:2]: "
+                  << T[0] << " " << T[1] << " "
+                  << T[n] << " " << T[n+1] << "\n";
+        std::cout << "[NaoDriver] DIAG S[0:2,0:2]: "
+                  << S[0] << " " << S[1] << " "
+                  << S[n] << " " << S[n+1] << "\n";
+      }
+    }
     // B12: Energy meter — start before SCF loop, stop after.
     verification::EnergyMeter energy_meter;
     if (use_energy_metering) energy_meter.Start();
@@ -1650,10 +2157,21 @@ class NaoDriver {
         return s;
       };
 
-      double E_ne = trace(cache.P2, V_ext);
-      double E_nl = V_nl.empty() ? 0.0 : trace(cache.P2, V_nl);
-      double E_H = 0.5 * trace(cache.P2, cache.V_H);
-      double E_kin = sum_eps - E_ne - E_nl - 2.0 * E_H - trace(cache.P2, cache.V_xc);
+      // Compute P2_eff = occ_factor * P (the NEW density matrix from the
+      // eigenvectors). The energy must use P_new for the traces, not
+      // cache.P2 (which is occ_factor * P_old from build_H). This gives
+      // the correct Roothaan energy:
+      //   E = Tr(P_new, H_old) - 0.5*Tr(P_new, V_H(P_old))
+      //       - Tr(P_new, V_xc(P_old)) + E_xc[rho(P_old)] + E_ion
+      std::vector<double> P2_eff(n * n, 0.0);
+      for (std::size_t i = 0; i < n * n; ++i) P2_eff[i] = occ_factor * P[i];
+
+      double E_ne = trace(P2_eff, V_ext);
+      double E_nl = V_nl.empty() ? 0.0 : trace(P2_eff, V_nl);
+      double tr_P2_VH = trace(P2_eff, cache.V_H);
+      double tr_P2_Vxc = trace(P2_eff, cache.V_xc);
+      double E_H = 0.5 * tr_P2_VH;
+      double E_kin = sum_eps - E_ne - E_nl - 2.0 * E_H - tr_P2_Vxc;
       double E_total = E_kin + E_ne + E_nl + E_H + E_xc_grid + E_ion;
 
       // F64E compensated summation for total energy components.

@@ -257,11 +257,12 @@ static bool RunGpuSyevjBatched(
       er.eigenvalues[i] = h_W_out[b * n + i];
 
     // Eigenvectors: column-major in A_out, evec j is column j.
-    // Convert to row-major: evec[i * n + j] = A_out_colmajor[i + j * n].
+    // h_A_out[i + j*n] = component i of eigenvector j.
+    // Convert to standard row-major: evec[k*n + i] = component i of eigenvector k.
     er.eigenvectors.resize(n * n);
-    for (std::size_t j = 0; j < n; ++j)
+    for (std::size_t k = 0; k < n; ++k)
       for (std::size_t i = 0; i < n; ++i)
-        er.eigenvectors[i * n + j] = h_A_out[b * n * n + i + j * n];
+        er.eigenvectors[k * n + i] = h_A_out[b * n * n + i + k * n];
     er.ok = true;
   }
 
@@ -459,15 +460,15 @@ class CuSolverBatched {
                 Sinv_ht[i * n + j] = s;
               }
 
-            // x = S^{-1/2} * y (row-major y from gpu_results).
+            // x = S^{-1/2} * y (standard row-major: evec[k*n + i] = comp i of evec k).
             std::vector<double> y_evec = gpu_results[b].eigenvectors;
             std::vector<double> x_evec(n * n, 0.0);
-            for (std::size_t i = 0; i < n; ++i)
-              for (std::size_t j = 0; j < n; ++j) {
+            for (std::size_t j = 0; j < n; ++j)
+              for (std::size_t i = 0; i < n; ++i) {
                 double s = 0.0;
                 for (std::size_t l = 0; l < n; ++l)
-                  s += Sinv_ht[i * n + l] * y_evec[l * n + j];
-                x_evec[i * n + j] = s;
+                  s += Sinv_ht[i * n + l] * y_evec[j * n + l];
+                x_evec[j * n + i] = s;
               }
             gpu_results[b].eigenvectors = x_evec;
           }

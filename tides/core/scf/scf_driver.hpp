@@ -373,10 +373,11 @@ class SCFDriver {
         int kk = static_cast<int>(n);
         int nn = static_cast<int>(n_retained);
         double alpha = 1.0, beta = 0.0;
-        char transa = 'T', transb = 'N';
+        char transa = 'T', transb = 'T';
         // Row-major: Hp[k,l] = sum_i Xt[k,i] * tmp[i,l]
-        // Xt is (n_retained x n), tmp is (n x n_retained)
-        // Col-major dgemm: dgemm('T','N', n_retained, n_retained, n, ...)
+        // Xt is (n_retained x n) row-major = n x n_retained col-major.
+        // tmp is (n x n_retained) row-major = n_retained x n col-major.
+        // dgemm('T','T'): A^T (n_retained x n) * B^T (n x n_retained) = Hp (n_retained x n_retained)
         dgemm_(&transa, &transb, &m, &nn, &kk, &alpha,
                Xt.data(), &m,
                tmp.data(), &m,

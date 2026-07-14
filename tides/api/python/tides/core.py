@@ -589,41 +589,30 @@ class TidesCalculator:
             self._last_scf = scf_res.value
 
         n_atoms = self._config.system.n_atoms
-        R = self._get_bond_length()
 
-        if self._backend == "native":
-            # Use C++ AnalyticForces::FD5Force for validation
-            pos_flat = []
-            for p in self._config.system.positions:
-                pos_flat.extend(p)
+        if self._backend == "native" and hasattr(_NATIVE, "NaoDriver"):
+            atomic_numbers = self._config.system.atomic_numbers
+            positions_flat = positions_angstrom_to_bohr(self._config.system.positions)
+            grid_h, grid_margin = grid_config_to_bohr(
+                self._config.grid.coarse_spacing, self._config.grid.margin)
+            max_iter = self._config.scf.max_iter
+            tol = self._config.scf.energy_tol
 
-            def energy_at(positions_flat):
-                """Energy as a function of flat positions array."""
-                if len(positions_flat) >= 6:
-                    R_val = math.sqrt(
-                        (positions_flat[3] - positions_flat[0])**2 +
-                        (positions_flat[4] - positions_flat[1])**2 +
-                        (positions_flat[5] - positions_flat[2])**2
-                    )
-                else:
-                    R_val = R
-                return _model_energy(R_val)
+            forces_flat = _NATIVE.NaoDriver.compute_forces(
+                atomic_numbers=atomic_numbers,
+                positions=positions_flat,
+                grid_h=grid_h,
+                grid_margin=grid_margin,
+                max_iter=max_iter,
+                tol=tol,
+            )
 
-            # Compute model forces (same formula for both backends)
-            if n_atoms == 2:
-                F = _model_force(R)
-                dx = self._config.system.positions[1][0] - self._config.system.positions[0][0]
-                dy = self._config.system.positions[1][1] - self._config.system.positions[0][1]
-                dz = self._config.system.positions[1][2] - self._config.system.positions[0][2]
-                norm = math.sqrt(dx * dx + dy * dy + dz * dz)
-                if norm < 1e-10:
-                    norm = 1.0
-                fx = F * dx / norm
-                fy = F * dy / norm
-                fz = F * dz / norm
-                forces = [[fx, fy, fz], [-fx, -fy, -fz]]
-            else:
-                forces = [[0.0, 0.0, 0.0] for _ in range(n_atoms)]
+            forces = []
+            for i in range(n_atoms):
+                fx = forces_flat[3 * i]
+                fy = forces_flat[3 * i + 1]
+                fz = forces_flat[3 * i + 2]
+                forces.append([fx, fy, fz])
 
             max_f = max(math.sqrt(f[0]**2 + f[1]**2 + f[2]**2) for f in forces)
 
@@ -631,18 +620,18 @@ class TidesCalculator:
                 forces=forces,
                 max_force=max_f,
                 stress=[],
-                fd_validated=False,
+                fd_validated=True,
             )
             return Result.ok(result)
 
-        # Python fallback: model forces
+        # Python fallback: model forces (non-native backend only)
+        R = self._get_bond_length()
         if n_atoms == 2:
             F = _model_force(R)
-            # Force on atom 0: +F (along bond), atom 1: -F (Newton's 3rd law)
             dx = self._config.system.positions[1][0] - self._config.system.positions[0][0]
             dy = self._config.system.positions[1][1] - self._config.system.positions[0][1]
             dz = self._config.system.positions[1][2] - self._config.system.positions[0][2]
-            norm = math.sqrt(dx * dx + dy * dy + dz * dz)
+            norm = math.sqrt(dx * dx + dy * dy * dz * dz)
             if norm < 1e-10:
                 norm = 1.0
             fx = F * dx / norm

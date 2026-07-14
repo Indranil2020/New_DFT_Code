@@ -97,8 +97,9 @@ int TestH2() {
   if (!result.scf.converged)
     return Fail("H2 SCF did not converge");
 
-  // D1: Tightened from 0.3 to 0.15. Actual err ≈ 0.143 Ha, 0.15 gives ≈5% margin.
-  const double H2_REF = -0.9;
+  // PP-LDA H2 at R=1.4 Bohr with DZP NAO basis. Reference ≈ -1.1 Ha.
+  // Tolerance 0.15 accounts for basis-set and grid discretization error.
+  const double H2_REF = -1.1;
   const double H2_TOL = 0.15;
   double h2_err = std::fabs(result.scf.energy - H2_REF);
   if (h2_err > H2_TOL)
@@ -129,8 +130,8 @@ int TestH2DualGrid() {
   if (!result.scf.converged)
     return Fail("H2 dual grid SCF did not converge");
 
-  // D1: Tightened from 0.3 to 0.15 (same as single-grid H2 test).
-  const double H2_REF = -0.9;
+  // PP-LDA H2 at R=1.4 Bohr with DZP NAO basis (dual grid).
+  const double H2_REF = -1.1;
   const double H2_TOL = 0.15;
   double h2_err = std::fabs(result.scf.energy - H2_REF);
   if (h2_err > H2_TOL)
