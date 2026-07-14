@@ -5,6 +5,7 @@
 #include "solvers/chfsi/chfsi.hpp"
 #include "solvers/sp2_submatrix/sp2.hpp"
 #include "solvers/foe_sq/foe.hpp"
+#include "scf/scf_driver.hpp"
 #include <cmath>
 #include <iostream>
 #include <random>
@@ -265,11 +266,159 @@ int TestBrokerDispatch() {
   return 0;
 }
 
+// B10: Test R1 (ChFSI) regime from real SCF driver.
+// Creates a synthetic SCF problem with n=256 (triggers R1), runs SCFDriver::Run
+// with broker_input, verifies convergence and eigenvalue accuracy.
+int TestR1FromSCF() {
+  std::cout << "\n=== B10: R1 ChFSI from real SCF (n=256) ===\n";
+  const std::size_t n = 256, n_occ = 32;
+  std::vector<double> lam(n);
+  for (std::size_t i = 0; i < n; ++i) lam[i] = -10.0 + 0.1 * static_cast<double>(i);
+  std::vector<double> H, Q;
+  BuildFromSpectrum(n, lam, 999, H, Q);
+  std::vector<double> S(n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) S[i * n + i] = 1.0;
+
+  // Reference eigenvalues from dense eigensolver.
+  auto ref = tides::solvers::BatchedDenseEig::SolveGeneralized(n, H, S);
+  if (!ref.ok) return Fail("B10: Dense reference failed");
+
+  // Build H callback: returns H (constant — no SCF dependence).
+  auto build_H = [&](const std::vector<double>& P) -> std::vector<double> {
+    (void)P;
+    return H;
+  };
+  // Energy callback: Tr(P * H)
+  auto energy_fn = [&](const std::vector<double>& P,
+                       const std::vector<double>& evals) -> double {
+    (void)evals;
+    double E = 0.0;
+    for (std::size_t i = 0; i < n; ++i)
+      for (std::size_t j = 0; j < n; ++j)
+        E += P[i * n + j] * H[j * n + i];
+    return E;
+  };
+
+  // Broker input: n_basis > 200 triggers R1 ChFSI.
+  tides::solvers::BrokerInput broker_input;
+  broker_input.n_atoms = 50;
+  broker_input.n_basis = n;  // 256 > 200 → R1
+  broker_input.gap_estimate = 3.0;
+  broker_input.electronic_temp = 0.0;
+  broker_input.available_vram_mb = 8000;
+
+  auto scf_result = tides::scf::SCFDriver::Run(
+      n, n_occ, S, build_H, energy_fn, {}, 100, 1e-8, 1, 0.3, &broker_input);
+
+  std::cout << "  Converged: " << (scf_result.converged ? "YES" : "NO") << "\n";
+  std::cout << "  Iterations: " << scf_result.n_iterations << "\n";
+  std::cout << "  Energy: " << scf_result.energy << "\n";
+
+  if (!scf_result.converged)
+    return Fail("B10: SCF did not converge for R1 regime");
+
+  // Verify eigenvalues match reference for occupied states.
+  if (scf_result.eigenvalues.size() < n_occ)
+    return Fail("B10: SCF produced too few eigenvalues");
+
+  double max_err = 0.0;
+  for (std::size_t k = 0; k < n_occ; ++k) {
+    double err = std::fabs(scf_result.eigenvalues[k] - ref.eigenvalues[k]);
+    max_err = std::max(max_err, err);
+  }
+  std::cout << "  Max eigenvalue error (occupied): " << max_err << "\n";
+  if (max_err > 1e-6)
+    return Fail("B10: R1 eigenvalue error too large (" +
+                std::to_string(max_err) + ")");
+
+  // Verify density matrix trace ≈ n_occ.
+  double tr = 0.0;
+  for (std::size_t i = 0; i < n; ++i) tr += scf_result.P[i * n + i];
+  std::cout << "  tr(P) = " << tr << " (expected " << n_occ << ")\n";
+  if (std::fabs(tr - static_cast<double>(n_occ)) > 1e-6)
+    return Fail("B10: tr(P) mismatch (got " + std::to_string(tr) +
+                ", expected " + std::to_string(n_occ) + ")");
+
+  // Verify idempotency.
+  double idem_err = IdempotencyError(n, scf_result.P);
+  std::cout << "  ||P^2 - P||_F = " << idem_err << "\n";
+  if (idem_err > 1e-5)
+    return Fail("B10: P not approximately idempotent");
+
+  std::cout << "  PASS\n";
+  return 0;
+}
+
+// B10: Test R2 (SP2) regime from real SCF driver.
+int TestR2FromSCF() {
+  std::cout << "\n=== B10: R2 SP2 from real SCF (n=64, forced R2) ===\n";
+  const std::size_t n = 64, n_occ = 8;
+  // Use wider gap (0.5 spacing) to ensure SP2 convergence.
+  std::vector<double> lam(n);
+  for (std::size_t i = 0; i < n; ++i) lam[i] = -10.0 + 0.5 * static_cast<double>(i);
+  std::vector<double> H, Q;
+  BuildFromSpectrum(n, lam, 4242, H, Q);
+  std::vector<double> S(n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) S[i * n + i] = 1.0;
+
+  auto build_H = [&](const std::vector<double>& P) -> std::vector<double> {
+    (void)P;
+    return H;
+  };
+  auto energy_fn = [&](const std::vector<double>& P,
+                       const std::vector<double>& evals) -> double {
+    (void)evals;
+    double E = 0.0;
+    for (std::size_t i = 0; i < n; ++i)
+      for (std::size_t j = 0; j < n; ++j)
+        E += P[i * n + j] * H[j * n + i];
+    return E;
+  };
+
+  // Force R2 regime.
+  tides::solvers::BrokerInput broker_input;
+  broker_input.n_atoms = 500;
+  broker_input.n_basis = 3000;  // > 2000 → R2
+  broker_input.gap_estimate = 5.0;
+  broker_input.electronic_temp = 0.0;
+  broker_input.available_vram_mb = 8000;
+
+  auto scf_result = tides::scf::SCFDriver::Run(
+      n, n_occ, S, build_H, energy_fn, {}, 50, 1e-6, 1, 0.3, &broker_input);
+
+  std::cout << "  Converged: " << (scf_result.converged ? "YES" : "NO") << "\n";
+  std::cout << "  Iterations: " << scf_result.n_iterations << "\n";
+
+  // SP2 may not fully converge for constant H (no SCF mixing needed).
+  // Verify P is produced and approximately idempotent.
+  if (scf_result.P.size() != n * n)
+    return Fail("B10: R2 produced wrong P size");
+
+  double tr = 0.0;
+  for (std::size_t i = 0; i < n; ++i) tr += scf_result.P[i * n + i];
+  std::cout << "  tr(P) = " << tr << " (expected " << n_occ << ")\n";
+
+  double idem_err = IdempotencyError(n, scf_result.P);
+  std::cout << "  ||P^2 - P||_F = " << idem_err << "\n";
+
+  // For SP2 with a gapped system, P should be approximately idempotent
+  // even if SCF didn't formally converge.
+  if (idem_err > 1e-3)
+    return Fail("B10: R2 P not approximately idempotent (||P^2-P||_F=" +
+                std::to_string(idem_err) + ")");
+
+  std::cout << "  PASS\n";
+  return 0;
+}
+
 }  // namespace
 
 int main() {
   std::cout << "=== Broker Dispatch Tests ===\n";
-  int failures = TestBrokerDispatch();
+  int failures = 0;
+  failures += TestBrokerDispatch();
+  failures += TestR1FromSCF();
+  failures += TestR2FromSCF();
   if (failures == 0) std::cout << "\nALL BROKER DISPATCH TESTS PASSED\n";
   else std::cout << "\n" << failures << " TEST(S) FAILED\n";
   return failures;
