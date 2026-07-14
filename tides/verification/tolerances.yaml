@@ -35,8 +35,8 @@ wp2:
   # T2.4: two-center integrals
   two_center:
     rotation_invariance: 1.0e-12   # addition theorem + trace invariance
-    spline_value: 1.0e-5           # cubic spline on 500 pts, Gaussian model
-    spline_derivative: 1.0e-3
+    spline_value: 1.0e-7           # cubic spline on 5000 pts, Gaussian model
+    spline_derivative: 1.0e-5
     pyscf_overlap: 1.0e-8          # when PySCF available
   # T2.6: derivative streams
   derivatives:
@@ -54,9 +54,9 @@ wp3:
     halo_spec: "documented (periodic, n_halo, owned ranges)"
   # T3.4: Poisson Gaussian-charge Hartree energy
   poisson:
-    free_bc: 5.0e-3               # 16^3 direct sum with self-term reg
-    wire_bc: 5.0e-3
-    slab_bc: 5.0e-3
+    free_bc: 2.0e-3               # 16^3 direct sum with self-term reg
+    wire_bc: 2.0e-3
+    slab_bc: 2.0e-3
     periodic_bc: 5.0e-2            # naive DFT; cuFFT reaches 1e-10
     target: 1.0e-10                # with cuFFT + finer grid (GPU path)
   # T3.2: rho builder
@@ -89,7 +89,7 @@ wp4:
     subspace_reuse: ">=2x"
   # T4.5: OMM direct minimization
   omm:
-    energy_vs_diag: 1.0e-6    # MET: 3e-10
+    energy_vs_diag: 1.0e-8    # MET: 1.1e-11
     target: 1.0e-8
   # T4.6: broker + tides tune
   broker:
@@ -100,8 +100,8 @@ wp4:
 wp5:
   # T5.1: SP2 purification (R2, gapped)
   sp2:
-    idempotency: 1.0e-8       # MET: ~3.6e-15 (||P^2-P||_F)
-    trace_ne: 1.0e-8          # MET: ~3.6e-15 (|tr(PS)-Ne|)
+    idempotency: 1.0e-10      # MET: ~1.2e-13 (||P^2-P||_F)
+    trace_ne: 1.0e-10          # MET: ~1.6e-13 (|tr(PS)-Ne|)
   # T5.2: Submatrix construction
   submatrix:
     block_idempotency: 1.0e-6  # MET: ~3.3e-13
@@ -111,7 +111,7 @@ wp5:
     order_scaling: "linear in beta (p ~ beta * DeltaH)"
   # T5.6: Fermi-level search
   fermi_search:
-    ne_error: 1.0e-10         # MET: 0 (n=1000), 7e-15 (n=100)
+    ne_error: 1.0e-12         # MET: 0 (n=1000), 7e-15 (n=100)
   # T5.4: Truncation compensation
   truncation:
     trace_correction: "<1e-8 after"
