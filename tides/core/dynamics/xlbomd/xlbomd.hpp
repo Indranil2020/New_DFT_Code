@@ -222,19 +222,106 @@ class XLBOMD {
               P_new[i] = P_new[i] * damp + state.P[i] * state.kernel_cfg.damping;
           }
         } else {
-          // K = low-rank correction.
-          // Apply the top low_rank_dim modes of the curvature as a correction.
-          // For the CPU reference, this is approximated by projecting the
-          // residual onto the largest-magnitude components of P.
-          (void)std::min(state.kernel_cfg.low_rank_dim, np);  // lr_dim reserved for future rank projection
-          // Simple low-rank: apply a softened scaling to the largest residuals.
-          for (std::size_t i = 0; i < np; ++i) {
-            double residual = state.P_0[i] - state.P[i];
-            double p_mag = std::fabs(state.P[i]) + 1e-12;
-            double lr_scale = kappa / (kappa + p_mag * 0.005);
-            P_new[i] = 2.0 * state.P[i] - state.P_prev[i] +
-                       dt2 * kappa * lr_scale * residual;
+          // K = low-rank correction (kernel_order >= 2).
+          // Approximate the inverse Jacobian via rank-k SVD of the residual
+          // matrix R = P_0 - P_aux. The dominant singular directions capture
+          // the most important correction channels; each mode is scaled by
+          // kappa / (kappa + sigma_j^2), which approximates the inverse
+          // curvature along that direction.
+          const std::size_t n_basis = static_cast<std::size_t>(
+              std::round(std::sqrt(static_cast<double>(np))));
+          const std::size_t k_rank = std::min(state.kernel_cfg.low_rank_dim, np);
+
+          if (n_basis * n_basis != np || k_rank == 0) {
+            // Fallback to diagonal if P is not square or rank is zero.
+            for (std::size_t i = 0; i < np; ++i) {
+              double residual = state.P_0[i] - state.P[i];
+              double p_mag = std::fabs(state.P[i]) + 1e-12;
+              double scale = std::min(kappa / (kappa + p_mag * 0.01), 1.0);
+              P_new[i] = 2.0 * state.P[i] - state.P_prev[i] +
+                         dt2 * kappa * scale * residual;
+            }
+          } else {
+            // Build residual matrix R[n_basis][n_basis] (row-major).
+            std::vector<double> R_mat(np);
+            for (std::size_t i = 0; i < np; ++i)
+              R_mat[i] = state.P_0[i] - state.P[i];
+
+            // Power iteration to find top-k rank-1 components of R.
+            // Each iteration: find dominant eigenvector of R*R^T, deflate.
+            std::vector<double> corrected_residual(np, 0.0);
+
+            for (std::size_t k = 0; k < k_rank; ++k) {
+              // Random initial vector for power iteration.
+              std::vector<double> u(n_basis, 1.0 / std::sqrt(static_cast<double>(n_basis)));
+              std::vector<double> RtR(n_basis * n_basis, 0.0);
+
+              // Compute R*R^T (n_basis x n_basis).
+              for (std::size_t i = 0; i < n_basis; ++i)
+                for (std::size_t j = 0; j < n_basis; ++j) {
+                  double s = 0.0;
+                  for (std::size_t l = 0; l < n_basis; ++l)
+                    s += R_mat[i * n_basis + l] * R_mat[j * n_basis + l];
+                  RtR[i * n_basis + j] = s;
+                }
+
+              // Power iteration (10 steps sufficient for small matrices).
+              for (int iter = 0; iter < 10; ++iter) {
+                std::vector<double> u_new(n_basis, 0.0);
+                for (std::size_t i = 0; i < n_basis; ++i) {
+                  double s = 0.0;
+                  for (std::size_t j = 0; j < n_basis; ++j)
+                    s += RtR[i * n_basis + j] * u[j];
+                  u_new[i] = s;
+                }
+                double norm = 0.0;
+                for (double v : u_new) norm += v * v;
+                norm = std::sqrt(norm) + 1e-30;
+                for (std::size_t i = 0; i < n_basis; ++i)
+                  u[i] = u_new[i] / norm;
+              }
+
+              // Eigenvalue lambda = u^T * R*R^T * u = ||R^T * u||^2.
+              std::vector<double> Ru(n_basis, 0.0);
+              for (std::size_t i = 0; i < n_basis; ++i) {
+                double s = 0.0;
+                for (std::size_t j = 0; j < n_basis; ++j)
+                  s += R_mat[i * n_basis + j] * u[j];
+                Ru[i] = s;
+              }
+              double lambda = 0.0;
+              for (double v : Ru) lambda += v * v;
+              double sigma = std::sqrt(lambda);  // singular value
+
+              // Rank-1 component: sigma * u * u^T applied to residual.
+              // Inverse curvature scaling: kappa / (kappa + sigma^2).
+              double scale = kappa / (kappa + lambda);
+
+              // Add rank-1 correction: scale * sigma * (u ⊗ u) * r
+              // where r is the vectorized residual. Since u ⊗ u applied
+              // to the residual matrix R gives sigma * u * u^T,
+              // the corrected residual gets scale * sigma * u * u^T.
+              for (std::size_t i = 0; i < n_basis; ++i)
+                for (std::size_t j = 0; j < n_basis; ++j)
+                  corrected_residual[i * n_basis + j] +=
+                      scale * sigma * u[i] * u[j];
+
+              // Deflate R: R -= sigma * u * u^T * R (remove this component).
+              for (std::size_t i = 0; i < n_basis; ++i) {
+                double ui_sigma = u[i] * sigma;
+                for (std::size_t j = 0; j < n_basis; ++j)
+                  R_mat[i * n_basis + j] -= ui_sigma * u[j];
+              }
+            }
+
+            // Apply the low-rank corrected kernel.
+            for (std::size_t i = 0; i < np; ++i) {
+              P_new[i] = 2.0 * state.P[i] - state.P_prev[i] +
+                         dt2 * kappa * corrected_residual[i];
+            }
           }
+
+          // Apply damping if configured.
           if (state.kernel_cfg.damping > 0) {
             double damp = 1.0 - state.kernel_cfg.damping;
             for (std::size_t i = 0; i < np; ++i)

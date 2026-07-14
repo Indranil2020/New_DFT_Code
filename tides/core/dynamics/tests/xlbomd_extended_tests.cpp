@@ -135,7 +135,97 @@ int TestKSAKernel() {
   // KSA should be at least as good (not necessarily better for simple models).
   if (res1.total_drift > res0.total_drift * 5.0)
     return Fail("KSA kernel is much worse than K=I");
-  std::cout << "  PASS\n";
+  std::cout << "  PASS (K=I vs diagonal)\n";
+
+  // Test low-rank kernel (kernel_order=2) with a non-trivial density matrix.
+  // The density must depend on R so that P_0 (computed once at init) differs
+  // from the ground state at later positions, creating a non-zero residual
+  // that the kernel must correct. The force also depends on P so that
+  // different kernels produce different trajectories.
+  struct DensityModel {
+    double k = 0.0001;
+    double coupling = 0.0001;  // small P-dependent force coupling
+
+    std::vector<double> force(const std::vector<double>& R,
+                               const std::vector<double>& P) {
+      std::vector<double> F(R.size(), 0.0);
+      for (std::size_t i = 0; i < R.size(); ++i)
+        F[i] = -k * R[i];
+      if (!P.empty()) {
+        std::size_t n = static_cast<std::size_t>(
+            std::round(std::sqrt(static_cast<double>(P.size()))));
+        if (n * n == P.size()) {
+          double tr_P = 0.0;
+          for (std::size_t j = 0; j < n; ++j) tr_P += P[j * n + j];
+          for (std::size_t i = 0; i < R.size(); ++i)
+            F[i] += coupling * tr_P * 0.01;
+        }
+      }
+      return F;
+    }
+    double energy(const std::vector<double>& R) {
+      double E = 0.0;
+      for (double r : R) E += 0.5 * k * r * r;
+      return E;
+    }
+    std::vector<double> density(const std::vector<double>& R) {
+      double r0 = R.size() > 0 ? R[0] : 0.0;
+      double r1 = R.size() > 3 ? R[3] : 0.0;
+      return {0.8 + 0.01 * r0, 0.1, 0.05,
+              0.1, 0.7 + 0.01 * r1, 0.08,
+              0.05, 0.08, 0.6};
+    }
+  } dmodel;
+
+  std::vector<double> dR0 = {1.0, 0.0, 0.0, -1.0, 0.0, 0.0};
+  auto dforce_fn = [&](const std::vector<double>& r, const std::vector<double>& p) {
+    return dmodel.force(r, p);
+  };
+  auto denergy_fn = [&](const std::vector<double>& r) { return dmodel.energy(r); };
+  auto ddensity_fn = [&](const std::vector<double>& r) { return dmodel.density(r); };
+
+  // Run with diagonal kernel (kernel_order=1).
+  // refresh_interval=10 so P_0 updates as nuclei move, creating non-zero
+  // residual between P_0 and P_aux that the kernel must correct.
+  KSAKernelConfig kcfg_diag;
+  kcfg_diag.kernel_order = 1;
+  kcfg_diag.kappa = 2.0;
+  auto res_diag = XLBOMD::Run(dR0, masses, 0.3, 200, dforce_fn, denergy_fn,
+                               ddensity_fn, 0, 0.0, kcfg_diag, 10, 42);
+
+  // Run with low-rank kernel (kernel_order=2).
+  KSAKernelConfig kcfg_lr;
+  kcfg_lr.kernel_order = 2;
+  kcfg_lr.kappa = 2.0;
+  kcfg_lr.low_rank_dim = 3;
+  auto res_lr = XLBOMD::Run(dR0, masses, 0.3, 200, dforce_fn, denergy_fn,
+                             ddensity_fn, 0, 0.0, kcfg_lr, 10, 42);
+
+  std::cout << "  Diagonal drift: " << res_diag.total_drift << " uHa/atom/ps\n";
+  std::cout << "  Low-rank drift: " << res_lr.total_drift << " uHa/atom/ps\n";
+
+  // Verify low-rank kernel ran and produced a finite result.
+  if (!std::isfinite(res_lr.total_drift))
+    return Fail("Low-rank kernel produced non-finite drift");
+
+  // Verify the low-rank kernel actually differs from diagonal
+  // (proving it's doing something different, not just a copy).
+  double drift_diff = std::fabs(res_lr.total_drift - res_diag.total_drift);
+  std::cout << "  Drift difference: " << drift_diff << "\n";
+  if (drift_diff < 1e-15)
+    return Fail("Low-rank kernel produces identical result to diagonal — "
+                "not a genuine low-rank implementation");
+
+  // Also verify the final P_aux differs (different kernel → different trajectory).
+  double p_diff = 0.0;
+  for (std::size_t i = 0; i < res_lr.final_state.P.size() &&
+                          i < res_diag.final_state.P.size(); ++i)
+    p_diff += std::fabs(res_lr.final_state.P[i] - res_diag.final_state.P[i]);
+  std::cout << "  ||P_lr - P_diag||_1: " << p_diff << "\n";
+  if (p_diff < 1e-15)
+    return Fail("Low-rank kernel produces identical density to diagonal");
+
+  std::cout << "  PASS (diagonal vs low-rank)\n";
   return 0;
 }
 

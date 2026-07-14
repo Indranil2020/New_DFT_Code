@@ -194,6 +194,51 @@ int TestEmptyBatch() {
   return 0;
 }
 
+// Test 6: GPU path correctness (when CUDA is available).
+int TestGpuPath() {
+  std::cout << "\n=== cuSOLVER: GPU path ===\n";
+  const std::size_t n = 30;
+  const std::size_t k = 3;
+  std::vector<double> A_batch(k * n * n, 0.0);
+  std::vector<std::vector<double>> expected_evals(k);
+
+  for (std::size_t b = 0; b < k; ++b) {
+    std::vector<double> lam(n);
+    for (std::size_t i = 0; i < n; ++i)
+      lam[i] = -5.0 + 0.1 * static_cast<double>(i) + 0.01 * static_cast<double>(b);
+    expected_evals[b] = lam;
+    std::vector<double> A;
+    BuildSymmetric(n, lam, 42 + b, A);
+    for (std::size_t i = 0; i < n * n; ++i)
+      A_batch[b * n * n + i] = A[i];
+  }
+
+  CuSolverBatchedConfig config;
+  config.use_gpu = true;
+  auto result = CuSolverBatched::SolveStandard(n, A_batch, k, config);
+
+  if (!result.ok) return Fail("GPU path: solve failed");
+  if (result.results.size() != k) return Fail("GPU path: wrong count");
+
+  if (result.used_gpu) {
+    std::cout << "  GPU path was used\n";
+    double max_err = 0.0;
+    for (std::size_t b = 0; b < k; ++b) {
+      if (!result.results[b].ok) return Fail("GPU path: batch " + std::to_string(b) + " failed");
+      for (std::size_t i = 0; i < n; ++i)
+        max_err = std::max(max_err,
+            std::fabs(result.results[b].eigenvalues[i] - expected_evals[b][i]));
+    }
+    std::cout << "  n=" << n << " k=" << k << " max_eigval_err=" << max_err << '\n';
+    if (max_err > 1e-9) return Fail("GPU path: eigenvalue error > 1e-9");
+  } else {
+    std::cout << "  GPU not available — CPU fallback used (acceptable)\n";
+  }
+
+  std::cout << "PASS\n";
+  return 0;
+}
+
 }  // namespace
 
 int main() {
@@ -202,6 +247,7 @@ int main() {
   if (TestVariableSizes()) return 1;
   if (TestConfig()) return 1;
   if (TestEmptyBatch()) return 1;
+  if (TestGpuPath()) return 1;
   std::cout << "\ncusolver_batched_tests: ALL GREEN\n";
   return 0;
 }

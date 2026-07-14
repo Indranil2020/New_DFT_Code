@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "solvers/dense/batched_eig.hpp"
+#include "solvers/dense/cusolver_batched.hpp"
 #include "solvers/broker.hpp"
 #include "solvers/chfsi/chfsi.hpp"
 #include "solvers/sp2_submatrix/sp2.hpp"
@@ -82,7 +83,8 @@ class SCFDriver {
       const std::vector<double>& P_init = {},
       int max_iter = 100, double tol = 1e-10,
       int mixing = 1, double alpha = 0.3,
-      const solvers::BrokerInput* broker_input = nullptr) {
+      const solvers::BrokerInput* broker_input = nullptr,
+      bool fixed_density = false) {
     SCFResult res;
     if (n == 0 || n_occ == 0 || n_occ > n) return res;
 
@@ -369,21 +371,49 @@ class SCFDriver {
       }
 
       if (regime != solvers::SolverRegime::kR1_ChFSI || n_retained <= 20) {
-        // R0: dense eigensolve via LAPACK dsyev_.
-        int nn2 = static_cast<int>(n_retained);
-        char jobz = 'V';
-        char uplo = 'L';
-        int lda = nn2;
-        int lwork = -1;
-        double wkopt = 0.0;
-        int info = 0;
-        dsyev_(&jobz, &uplo, &nn2, Hp_work.data(), &lda, y_eval.data(), &wkopt, &lwork, &info);
-        if (info != 0) return res;
-        lwork = static_cast<int>(wkopt);
-        std::vector<double> work(static_cast<std::size_t>(lwork));
-        dsyev_(&jobz, &uplo, &nn2, Hp_work.data(), &lda, y_eval.data(), work.data(), &lwork, &info);
-        if (info != 0) return res;
-        y_evec = Hp_work;  // column-major eigenvectors
+        // R0: dense eigensolve. Try cuSOLVER GPU path first, fall back to LAPACK.
+        bool eig_solved = false;
+#ifdef TIDES_HAVE_CUDA
+        {
+          solvers::CuSolverBatchedConfig cu_cfg;
+          cu_cfg.use_gpu = true;
+          cu_cfg.tolerance = 1e-13;
+          cu_cfg.max_sweeps = 100;
+          // CuSolverBatched expects row-major input; Hp_work is row-major.
+          std::vector<double> A_in = Hp_work;
+          auto cu_res = solvers::CuSolverBatched::SolveStandard(
+              n_retained, A_in, 1, cu_cfg);
+          if (cu_res.ok && cu_res.used_gpu && !cu_res.results.empty() &&
+              cu_res.results[0].ok) {
+            y_eval = cu_res.results[0].eigenvalues;
+            // GPU returns row-major eigenvectors: evec[i*n + j].
+            // Convert to column-major: y_evec[j + k*n] = evec_rowmajor[k*n + j].
+            y_evec.resize(n_retained * n_retained, 0.0);
+            for (std::size_t k = 0; k < n_retained; ++k)
+              for (std::size_t j = 0; j < n_retained; ++j)
+                y_evec[j + k * n_retained] =
+                    cu_res.results[0].eigenvectors[k * n_retained + j];
+            eig_solved = true;
+          }
+        }
+#endif
+        if (!eig_solved) {
+          // CPU fallback: LAPACK dsyev_.
+          int nn2 = static_cast<int>(n_retained);
+          char jobz = 'V';
+          char uplo = 'L';
+          int lda = nn2;
+          int lwork = -1;
+          double wkopt = 0.0;
+          int info = 0;
+          dsyev_(&jobz, &uplo, &nn2, Hp_work.data(), &lda, y_eval.data(), &wkopt, &lwork, &info);
+          if (info != 0) return res;
+          lwork = static_cast<int>(wkopt);
+          std::vector<double> work(static_cast<std::size_t>(lwork));
+          dsyev_(&jobz, &uplo, &nn2, Hp_work.data(), &lda, y_eval.data(), work.data(), &lwork, &info);
+          if (info != 0) return res;
+          y_evec = Hp_work;  // column-major eigenvectors
+        }
       }
       // Back-transform: C = X y (n x n_retained)
       // y_evec is column-major n_retained x n_retained: y_evec[j + k*n_retained] = comp j of evec k
@@ -451,7 +481,10 @@ class SCFDriver {
       mermin_skip_dsyrk:;
       // Compute energy from the same (P_new, H) pair — no re-diagonalization.
       // AUDIT B5/B7: eigenvalues come from the SCF loop's eigensolve.
-      double E = energy_fn(P_new, eig.eigenvalues);
+      // B6 FIX: When fixed_density=true (XL-BOMD shadow forces), compute energy
+      // from P (the input/auxiliary density) instead of P_new.
+      double E = fixed_density ? energy_fn(P, eig.eigenvalues)
+                                : energy_fn(P_new, eig.eigenvalues);
       res.energy_history.push_back(E);
 
       // Convergence check.

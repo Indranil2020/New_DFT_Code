@@ -370,7 +370,9 @@ class NaoDriver {
       bool use_kpoints = false,             // k-point sampling (periodic)
       std::array<int, 3> kpoint_grid = {1, 1, 1},
       bool use_diffuse = false,            // Diffuse basis augmentation (M10)
-      bool use_paw = false) {               // PAW correction (M9)
+      bool use_paw = false,                // PAW correction (M9)
+      const std::vector<double>* P_init = nullptr,       // B6: initial density for shadow forces
+      bool fixed_density = false) {                        // B6: fixed density (no SCF mixing)
     NaoDriverResult result;
     auto t0 = std::chrono::steady_clock::now();
     auto t_last = t0;
@@ -951,6 +953,10 @@ class NaoDriver {
 
     // Step 9: SCF loop.
     // V_H via grid Poisson (no ERIs for NAO).
+    // B12: Energy meter — start before SCF loop, stop after.
+    verification::EnergyMeter energy_meter;
+    if (use_energy_metering) energy_meter.Start();
+
     struct CachedHBuild {
       std::vector<double> H;
       std::vector<double> V_H;
@@ -1838,9 +1844,11 @@ class NaoDriver {
       broker_input.gap_estimate = 1.0;  // initial guess; refined after first solve
       broker_input.electronic_temp = electronic_temp_k;  // wire Mermin Te into broker
       broker_input.available_vram_mb = 8000;
+      std::vector<double> scf_P_init;
+      if (P_init && P_init->size() == n * n) scf_P_init = *P_init;
       result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
-                                   {}, max_iter, tol, 1, 0.3,
-                                   &broker_input);
+                                   scf_P_init, max_iter, tol, 1, 0.3,
+                                   &broker_input, fixed_density);
       // Refine gap estimate from converged eigenvalues and re-dispatch if the
       // initial regime was wrong. The broker uses gap_estimate to decide
       // between R0 (gapped) and R3 (metallic/finite-Te). After the first SCF,
@@ -1857,7 +1865,7 @@ class NaoDriver {
           std::cout << "[NaoDriver] gap refined: " << gap_ev << " eV — re-dispatching" << std::endl;
           result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
                                        result.scf.P, max_iter, tol, 1, 0.3,
-                                       &broker_input);
+                                       &broker_input, fixed_density);
         }
       }
       step("SCF");
@@ -2014,7 +2022,7 @@ class NaoDriver {
     // If SCF did not converge with the initial grid spacing, retry with a
     // finer grid (half the spacing). This addresses the issue where coarse
     // grid spacing limits SCF energy accuracy for production use.
-    if (!result.scf.converged && grid_h > 0.05) {
+    if (!result.scf.converged && grid_h > 0.05 && !fixed_density) {
       const double refined_h = grid_h * 0.5;
       std::cout << "[NaoDriver] SCF did not converge with h=" << grid_h
                 << ". Retrying with refined grid h=" << refined_h << std::endl;
@@ -2182,20 +2190,9 @@ class NaoDriver {
                 << ", ||[H,P]||=" << bounds.scf_residual_norm << std::endl;
     }
 
-    // Energy metering: log energy consumption for this SCF run.
+    // Energy metering: stop meter and log actual energy consumption.
     if (use_energy_metering) {
-      verification::EnergyMeter meter;
-      meter.Start();
-      // Simulate the energy cost of the SCF (already completed; log based on wall time).
-      // The meter measures from Start() to Stop(), so we use the measured wall_time_ms.
-      double elapsed_s = result.wall_time_ms / 1000.0;
-      verification::EnergyMeasurement em;
-      em.wall_time_s = elapsed_s;
-      em.cpu_energy_joules = 125.0 * 16 * 0.7 * elapsed_s;  // 125W TDP * 16 cores * 0.7 util
-      em.gpu_energy_joules = 350.0 * 0.8 * elapsed_s;       // 350W TDP * 0.8 util
-      double total_j = em.cpu_energy_joules + em.gpu_energy_joules;
-      em.total_energy_kwh = total_j / 3.6e6;
-      em.power_watts = (elapsed_s > 1e-9) ? total_j / elapsed_s : 0.0;
+      auto em = energy_meter.Stop();
       result.energy_kwh = em.total_energy_kwh;
       if (result.a_posteriori_energy_bound > 0.0) {
         result.energy_accuracy_per_joule =
@@ -2203,7 +2200,11 @@ class NaoDriver {
                 result.a_posteriori_energy_bound, em.total_energy_kwh);
       }
       std::cout << "[NaoDriver] Energy: " << em.total_energy_kwh
-                << " kWh (" << em.power_watts << " W)" << std::endl;
+                << " kWh (" << em.power_watts << " W)"
+                << " [GPU: " << em.gpu_name
+                << ", " << em.gpu_power_sample_w << " W]"
+                << (em.used_nvmL ? " (NVML)" : " (TDP estimate)")
+                << std::endl;
     }
 
     // Mixed precision: report the mode that was active during SCF (Gap 2).
@@ -2633,15 +2634,16 @@ class NaoDriver {
     const double fd5_offsets[] = {-2.0, -1.0, 0.0, 1.0, 2.0};
     const double fd5_denom = 12.0 * h;
 
-    // Band energy function: E_band(R) = Tr(P_aux * H(R)) + E_ion(R).
-    // H(R) is built from a single build_H call with P_aux as input (no SCF).
-    // We use Run() with max_iter=1 and P_init=P_aux so SCF does minimal work
-    // (one H build from P_aux, one eigensolve). The energy from that single
-    // iteration captures Tr(P*H) + E_xc + E_H + E_ion.
+    // Band energy function: E(R) = Tr(P_aux * H(R)) + E_xc(P_aux) + E_H(P_aux) + E_ion(R).
+    // B6 FIX: Use fixed_density=true so SCF builds H from P_aux and computes
+    // energy from P_aux (not from a new SCF solution). This is the shadow
+    // dynamics force — forces from the auxiliary density matrix.
     auto band_energy = [&](const std::vector<double>& R) -> double {
-      // Run with P_aux as initial density and max_iter=1 so it builds H once
-      // from P_aux and computes energy. This avoids full SCF convergence.
-      auto res = Run(atomic_numbers, R, grid_h, grid_margin, 1, 1e-3);
+      auto res = Run(atomic_numbers, R, grid_h, grid_margin, 1, 1e-3,
+                     nullptr, {}, 1, 0, false, 0.0, false, false, false,
+                     false, false, false, false, false, false,
+                     std::array<int, 3>{1, 1, 1}, false, false,
+                     &P_aux, true);
       return res.energy.E_total;
     };
 

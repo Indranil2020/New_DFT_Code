@@ -12,6 +12,7 @@ option(TIDES_ENABLE_METIS "Link METIS for high-quality graph partitioning" ON)
 
 add_library(tides_core INTERFACE)
 target_include_directories(tides_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+target_link_libraries(tides_core INTERFACE ${CMAKE_DL_LIBS})
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(tides_core INTERFACE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wpedantic>)

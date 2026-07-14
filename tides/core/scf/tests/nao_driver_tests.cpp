@@ -13,8 +13,10 @@
 //   H2:     actual err ≈ 0.143 Ha — tightened from 0.30 to 0.15 (≈5% margin)
 
 #include "scf/nao_driver.hpp"
+#include "grid/xc/xc_engine.hpp"
 
 #include <cmath>
+#include <array>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -138,17 +140,85 @@ int TestH2DualGrid() {
   return 0;
 }
 
+// B6+M14: Test XL-BOMD shadow forces with real NAO SCF.
+// Verifies that ComputeForcesFromDensity produces finite forces using
+// fixed P_aux (no re-SCF), and that fixed P_aux gives different energy
+// from full SCF at a perturbed geometry.
+int TestXLBOMDShadowForces() {
+  std::cout << "\n=== Test 4: XL-BOMD shadow forces (H2, DZP NAO) ===\n";
+
+  std::vector<int> Z = {1, 1};
+  std::vector<double> pos = {0.0, 0.0, 0.0, 1.4, 0.0, 0.0};
+
+  // Step 1: Run full SCF to get converged P_aux (coarse grid for speed).
+  auto result = NaoDriver::Run(Z, pos, 0.5, 4.0, 30, 1e-4);
+  if (!result.scf.converged)
+    return Fail("XL-BOMD: SCF did not converge for P_aux");
+  std::cout << "  SCF converged: E = " << result.scf.energy << " Ha\n";
+  std::cout << "  P_aux size: " << result.scf.P.size() << "\n";
+
+  // Step 2: Compute forces using fixed P_aux (shadow dynamics).
+  // Use larger FD step (0.05 Bohr) and coarser grid for speed.
+  auto forces = NaoDriver::ComputeForcesFromDensity(
+      Z, pos, result.scf.P, 0.5, 4.0, 0.05);
+  std::cout << "  Shadow forces: F0 = (" << forces[0] << ", " << forces[1]
+            << ", " << forces[2] << ")\n";
+  std::cout << "                F1 = (" << forces[3] << ", " << forces[4]
+            << ", " << forces[5] << ")\n";
+
+  // Verify forces are finite.
+  for (double f : forces) {
+    if (!std::isfinite(f))
+      return Fail("XL-BOMD: shadow forces are non-finite");
+  }
+
+  // Verify force magnitude is reasonable (not exploding).
+  double fmag = 0.0;
+  for (double f : forces) fmag += f * f;
+  fmag = std::sqrt(fmag);
+  std::cout << "  |F| = " << fmag << " Ha/Bohr\n";
+  if (fmag > 500.0)
+    return Fail("XL-BOMD: shadow forces too large (>500 Ha/Bohr)");
+
+  // Step 3: Verify that fixed P_aux gives different energy from full SCF
+  // at a perturbed geometry. This proves P_aux is actually being used.
+  std::vector<double> pos_perturbed = {0.0, 0.0, 0.0, 1.5, 0.0, 0.0};
+  auto res_fixed = NaoDriver::Run(Z, pos_perturbed, 0.5, 4.0, 1, 1e-3,
+                                  nullptr, tides::grid::xc::HostXcSpec{}, 1, 0,
+                                  false, 0.0, false, false,
+                                  false, false, false, false, false, false,
+                                  false, std::array<int, 3>{1, 1, 1},
+                                  false, false,
+                                  &result.scf.P, true);
+  auto res_full = NaoDriver::Run(Z, pos_perturbed, 0.5, 4.0, 30, 1e-4);
+  std::cout << "  Fixed P_aux energy: " << res_fixed.energy.E_total << " Ha\n";
+  std::cout << "  Full SCF energy:    " << res_full.energy.E_total << " Ha\n";
+  double e_diff = std::fabs(res_fixed.energy.E_total - res_full.energy.E_total);
+  std::cout << "  Energy difference:  " << e_diff << " Ha\n";
+  if (e_diff < 1e-10)
+    return Fail("XL-BOMD: fixed P_aux energy identical to full SCF — "
+                "P_aux not being used");
+
+  std::cout << "  PASS\n";
+  return 0;
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
   std::cout << "╔══════════════════════════════════════════════════════════════╗\n"
             << "║  NAO Driver Tests — End-to-End NAO SCF                      ║\n"
             << "╚══════════════════════════════════════════════════════════════╝\n";
 
+  // If argv[1] is "4", run only Test 4 (XL-BOMD shadow forces).
+  int test_filter = 0;
+  if (argc > 1) test_filter = std::atoi(argv[1]);
+
   int failures = 0;
-  failures += TestHAtom();
-  failures += TestH2();
-  failures += TestH2DualGrid();
+  if (test_filter == 0 || test_filter == 1) failures += TestHAtom();
+  if (test_filter == 0 || test_filter == 2) failures += TestH2();
+  if (test_filter == 0 || test_filter == 3) failures += TestH2DualGrid();
+  if (test_filter == 0 || test_filter == 4) failures += TestXLBOMDShadowForces();
 
   std::cout << "\n=== Summary ===\n";
   if (failures == 0) {
