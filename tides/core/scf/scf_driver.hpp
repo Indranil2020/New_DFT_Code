@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <functional>
@@ -51,6 +52,20 @@ namespace tides::scf {
 //
 // Observable (T6.1): converges gauntlet within documented iteration budget.
 
+// Per-step SCF loop timings for profiling (milliseconds, averaged over iterations).
+struct SCFTimings {
+  double build_H_ms = 0.0;       // Hamiltonian build (callback)
+  double gemm_hx_ms = 0.0;       // H@X product
+  double gemm_xthp_ms = 0.0;     // X^T @ tmp product (H' formation)
+  double eigensolve_ms = 0.0;    // Standard eigenproblem solve
+  double backtransform_ms = 0.0; // C = X * y back-transformation
+  double dsyrk_ms = 0.0;         // Density matrix P = C * C^T
+  double energy_ms = 0.0;        // Energy evaluation (callback)
+  double diis_ms = 0.0;          // DIIS/Pulay mixing
+  double scf_total_ms = 0.0;     // Total SCF loop wall time
+  int n_iterations = 0;
+};
+
 struct SCFResult {
   double energy = 0.0;
   std::vector<double> P;             // converged density matrix
@@ -59,6 +74,7 @@ struct SCFResult {
   int n_iterations = 0;
   bool converged = false;
   std::vector<double> energy_history;  // per-iteration energies
+  SCFTimings timings;                   // per-step profiling data
 };
 
 class SCFDriver {
@@ -187,11 +203,21 @@ class SCFDriver {
     std::vector<std::vector<double>> F_history;    // P_new (output) at each step
 
     double E_prev = 1e30;
+
+    // Per-step timing accumulators (milliseconds).
+    double acc_build_H = 0.0, acc_gemm_hx = 0.0, acc_gemm_xthp = 0.0;
+    double acc_eigensolve = 0.0, acc_backtransform = 0.0, acc_dsyrk = 0.0;
+    double acc_energy = 0.0, acc_diis = 0.0;
+    auto t_scf_start = std::chrono::steady_clock::now();
+
     for (int iter = 0; iter < max_iter; ++iter) {
       res.n_iterations = iter + 1;
 
       // Build H from current P.
+      auto t_bh0 = std::chrono::steady_clock::now();
       auto H = build_H(P);
+      auto t_bh1 = std::chrono::steady_clock::now();
+      acc_build_H += std::chrono::duration<double, std::milli>(t_bh1 - t_bh0).count();
 
       // --- R2/R3: density-matrix solvers (no eigendecomposition) ---
       if (regime == solvers::SolverRegime::kR2_SP2 ||
@@ -274,6 +300,7 @@ class SCFDriver {
       // product. This makes the tile substrate the compute backbone for the
       // eigensolve, not just trace verification. For smaller systems, BLAS
       // dgemm is faster (tile overhead exceeds benefit).
+      auto t_hx0 = std::chrono::steady_clock::now();
       std::vector<double> tmp(n * n_retained, 0.0);
       if (n >= 64) {
         // Tile-based H@X: build tile pattern for H, then multiply each tile
@@ -415,7 +442,11 @@ class SCFDriver {
                  X.data(), &nn, H.data(), &kk, &beta, tmp.data(), &nn);
         }
       }
+      auto t_hx1 = std::chrono::steady_clock::now();
+      acc_gemm_hx += std::chrono::duration<double, std::milli>(t_hx1 - t_hx0).count();
+
       // Step 2: H' = X^T tmp (n_retained x n_retained, row-major)
+      auto t_xthp0 = std::chrono::steady_clock::now();
       std::vector<double> Hp(n_retained * n_retained, 0.0);
       {
         bool mp_done = false;
@@ -470,7 +501,11 @@ class SCFDriver {
                  &beta, Hp.data(), &m);
         }
       }
+      auto t_xthp1 = std::chrono::steady_clock::now();
+      acc_gemm_xthp += std::chrono::duration<double, std::milli>(t_xthp1 - t_xthp0).count();
+
       // Solve standard eigenproblem H' y = e y (n_retained x n_retained)
+      auto t_eig0 = std::chrono::steady_clock::now();
       std::vector<double> Hp_work = Hp;
       std::vector<double> y_eval(n_retained, 0.0);
       std::vector<double> y_evec(n_retained * n_retained, 0.0);
@@ -547,7 +582,11 @@ class SCFDriver {
           y_evec = Hp_work;  // column-major eigenvectors
         }
       }
+      auto t_eig1 = std::chrono::steady_clock::now();
+      acc_eigensolve += std::chrono::duration<double, std::milli>(t_eig1 - t_eig0).count();
+
       // Back-transform: C = X y (n x n_retained)
+      auto t_bt0 = std::chrono::steady_clock::now();
       // y_evec is column-major n_retained x n_retained: y_evec[j + k*n_retained] = comp j of evec k
       // C[i, k] = sum_j X[i, j] * y_evec[j + k*n_retained]
       std::vector<double> C_evec(n * n_retained, 0.0);  // row-major
@@ -566,10 +605,13 @@ class SCFDriver {
         for (std::size_t i = 0; i < n; ++i)
           eig.eigenvectors[k * n + i] = C_evec[i * n_retained + k];
       eig.ok = true;
+      auto t_bt1 = std::chrono::steady_clock::now();
+      acc_backtransform += std::chrono::duration<double, std::milli>(t_bt1 - t_bt0).count();
 
       // --- Gap module wiring: Mermin finite-Te occupations ---
       // When finite electronic temperature is active, use Fermi-Dirac occupations
       // instead of integer occupation of the n_occ lowest orbitals.
+      auto t_dsy0 = std::chrono::steady_clock::now();
       std::vector<double> P_new(n * n, 0.0);
       if (mermin_kT > 0.0) {
         double n_electrons = 2.0 * static_cast<double>(n_occ);
@@ -662,12 +704,18 @@ class SCFDriver {
             P_new[j * n + i] = P_new[i * n + j];
       }
       mermin_skip_dsyrk:;
+      auto t_dsy1 = std::chrono::steady_clock::now();
+      acc_dsyrk += std::chrono::duration<double, std::milli>(t_dsy1 - t_dsy0).count();
+
       // Compute energy from the same (P_new, H) pair — no re-diagonalization.
+      auto t_en0 = std::chrono::steady_clock::now();
       // AUDIT B5/B7: eigenvalues come from the SCF loop's eigensolve.
       // B6 FIX: When fixed_density=true (XL-BOMD shadow forces), compute energy
       // from P (the input/auxiliary density) instead of P_new.
       double E = fixed_density ? energy_fn(P, eig.eigenvalues)
                                 : energy_fn(P_new, eig.eigenvalues);
+      auto t_en1 = std::chrono::steady_clock::now();
+      acc_energy += std::chrono::duration<double, std::milli>(t_en1 - t_en0).count();
       res.energy_history.push_back(E);
 
       // Convergence check.
@@ -691,11 +739,30 @@ class SCFDriver {
         res.P = P_new;
         res.eigenvalues = eig.eigenvalues;
         res.eigenvectors = eig.eigenvectors;
+        // Finalize per-step timings.
+        {
+          int n_iter = res.n_iterations;
+          auto t_scf_end = std::chrono::steady_clock::now();
+          res.timings.scf_total_ms =
+              std::chrono::duration<double, std::milli>(t_scf_end - t_scf_start).count();
+          res.timings.n_iterations = n_iter;
+          if (n_iter > 0) {
+            res.timings.build_H_ms = acc_build_H / n_iter;
+            res.timings.gemm_hx_ms = acc_gemm_hx / n_iter;
+            res.timings.gemm_xthp_ms = acc_gemm_xthp / n_iter;
+            res.timings.eigensolve_ms = acc_eigensolve / n_iter;
+            res.timings.backtransform_ms = acc_backtransform / n_iter;
+            res.timings.dsyrk_ms = acc_dsyrk / n_iter;
+            res.timings.energy_ms = acc_energy / n_iter;
+            res.timings.diis_ms = acc_diis / n_iter;
+          }
+        }
         return res;
       }
       E_prev = E;
 
       // Mixing.
+      auto t_diis0 = std::chrono::steady_clock::now();
       std::vector<double> P_next(n * n, 0.0);
       if (mixing == 1 && static_cast<int>(P_history.size()) >= 2) {
         // Real DIIS/Pulay: find coefficients c_j minimizing ||sum c_j R_j||^2
@@ -833,6 +900,26 @@ class SCFDriver {
       res.P = P;
       res.eigenvalues = eig.eigenvalues;
       res.eigenvectors = eig.eigenvectors;
+      auto t_diis1 = std::chrono::steady_clock::now();
+      acc_diis += std::chrono::duration<double, std::milli>(t_diis1 - t_diis0).count();
+    }
+    // Finalize per-step timings for non-converged or last-iteration case.
+    {
+      int n_iter = res.n_iterations;
+      auto t_scf_end = std::chrono::steady_clock::now();
+      res.timings.scf_total_ms =
+          std::chrono::duration<double, std::milli>(t_scf_end - t_scf_start).count();
+      res.timings.n_iterations = n_iter;
+      if (n_iter > 0) {
+        res.timings.build_H_ms = acc_build_H / n_iter;
+        res.timings.gemm_hx_ms = acc_gemm_hx / n_iter;
+        res.timings.gemm_xthp_ms = acc_gemm_xthp / n_iter;
+        res.timings.eigensolve_ms = acc_eigensolve / n_iter;
+        res.timings.backtransform_ms = acc_backtransform / n_iter;
+        res.timings.dsyrk_ms = acc_dsyrk / n_iter;
+        res.timings.energy_ms = acc_energy / n_iter;
+        res.timings.diis_ms = acc_diis / n_iter;
+      }
     }
     return res;
   }

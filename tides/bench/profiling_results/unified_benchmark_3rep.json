@@ -1,0 +1,278 @@
+[
+  {
+    "molecule": "H2",
+    "n_atoms": 2,
+    "tides": {
+      "energy_ha": -1.082288646062334,
+      "energy_std": 0.0,
+      "wall_time_ms": 13321.695049002301,
+      "wall_time_mean_ms": 20250.478123013938,
+      "wall_time_std_ms": 9761.895212394931,
+      "n_iterations": 16,
+      "converged": true,
+      "n_repeats": 3,
+      "per_step": {
+        "build_H": 615.23932175,
+        "gemm_hx": 0.07539843749999998,
+        "gemm_xthp": 0.016395562500000002,
+        "eigensolve": 6.967768937500001,
+        "backtransform": 0.0030256249999999992,
+        "dsyrk": 0.0124004375,
+        "energy": 0.011558437499999998,
+        "diis": 0.010998125000000003
+      },
+      "scf_total_ms": 9957.433543
+    },
+    "n_basis": 16,
+    "pyscf_cpu": {
+      "energy_ha": -1.1315907756023034,
+      "energy_std": 0.0,
+      "wall_time_ms": 2642.8924230276607,
+      "wall_time_mean_ms": 3131.791403682049,
+      "wall_time_std_ms": 355.83069050608793,
+      "n_iterations": 4,
+      "converged": true,
+      "n_repeats": 3
+    },
+    "gpu4pyscf": {
+      "energy_ha": -1.1315907756483479,
+      "energy_std": 0.0,
+      "wall_time_ms": 402.8735899773892,
+      "wall_time_mean_ms": 564.0290463343263,
+      "wall_time_std_ms": 182.20692863514518,
+      "n_iterations": 0,
+      "converged": true,
+      "n_repeats": 3
+    }
+  },
+  {
+    "molecule": "H2O",
+    "n_atoms": 3,
+    "tides": {
+      "energy_ha": -1.9658054152574076,
+      "energy_std": 0.0,
+      "wall_time_ms": 12270.941597991623,
+      "wall_time_mean_ms": 22831.93772532589,
+      "wall_time_std_ms": 14855.7077809895,
+      "n_iterations": 2,
+      "converged": true,
+      "n_repeats": 3,
+      "per_step": {
+        "build_H": 736.1654490000001,
+        "gemm_hx": 0.0113355,
+        "gemm_xthp": 0.0148935,
+        "eigensolve": 1.497993,
+        "backtransform": 0.0068665,
+        "dsyrk": 0.010652499999999999,
+        "energy": 0.0044825,
+        "diis": 0.0015825
+      },
+      "scf_total_ms": 1475.451868
+    },
+    "n_basis": 24,
+    "pyscf_cpu": {
+      "energy_ha": -75.79519049353247,
+      "energy_std": 2.958225308398898e-14,
+      "wall_time_ms": 3140.4887920070905,
+      "wall_time_mean_ms": 3476.348550999925,
+      "wall_time_std_ms": 243.3626226157173,
+      "n_iterations": 7,
+      "converged": true,
+      "n_repeats": 3
+    },
+    "gpu4pyscf": {
+      "energy_ha": -75.79519049358045,
+      "energy_std": 0.0,
+      "wall_time_ms": 810.070037987316,
+      "wall_time_mean_ms": 939.6750219942381,
+      "wall_time_std_ms": 132.44822927693136,
+      "n_iterations": 0,
+      "converged": true,
+      "n_repeats": 3
+    }
+  },
+  {
+    "molecule": "CH4",
+    "n_atoms": 5,
+    "tides": {
+      "energy_ha": -7.823468210127761,
+      "energy_std": 0.0,
+      "wall_time_ms": 39220.278941007564,
+      "wall_time_mean_ms": 49957.759753674814,
+      "wall_time_std_ms": 15011.523485113941,
+      "n_iterations": 27,
+      "converged": true,
+      "n_repeats": 3,
+      "per_step": {
+        "build_H": 1050.9845341851853,
+        "gemm_hx": 0.014523777777777778,
+        "gemm_xthp": 0.007907888888888888,
+        "eigensolve": 3.2782502962962954,
+        "backtransform": 0.03754211111111111,
+        "dsyrk": 0.013558,
+        "energy": 0.2351849259259259,
+        "diis": 0.06221511111111111
+      },
+      "scf_total_ms": 28475.255821
+    },
+    "n_basis": 40,
+    "pyscf_cpu": {
+      "energy_ha": -39.99613543964812,
+      "energy_std": 1.8346134549116834e-14,
+      "wall_time_ms": 6366.665137989912,
+      "wall_time_mean_ms": 6825.9234303162275,
+      "wall_time_std_ms": 325.4338573949506,
+      "n_iterations": 8,
+      "converged": true,
+      "n_repeats": 3
+    },
+    "gpu4pyscf": {
+      "energy_ha": -39.996135439718856,
+      "energy_std": 0.0,
+      "wall_time_ms": 897.0333419856615,
+      "wall_time_mean_ms": 926.7896146629937,
+      "wall_time_std_ms": 21.15286032257443,
+      "n_iterations": 0,
+      "converged": true,
+      "n_repeats": 3
+    }
+  },
+  {
+    "molecule": "NH3",
+    "n_atoms": 4,
+    "tides": {
+      "energy_ha": -11.179720798914378,
+      "energy_std": 1.7763568394002505e-15,
+      "wall_time_ms": 91282.78055798728,
+      "wall_time_mean_ms": 101849.13455565886,
+      "wall_time_std_ms": 14888.648319485881,
+      "n_iterations": 95,
+      "converged": true,
+      "n_repeats": 3,
+      "per_step": {
+        "build_H": 864.4789899473684,
+        "gemm_hx": 0.011415736842105262,
+        "gemm_xthp": 0.005164052631578947,
+        "eigensolve": 2.415044536842106,
+        "backtransform": 0.017820694736842113,
+        "dsyrk": 0.012044157894736845,
+        "energy": 0.12635147368421054,
+        "diis": 0.048660936842105255
+      },
+      "scf_total_ms": 82376.154159
+    },
+    "n_basis": 32,
+    "pyscf_cpu": {
+      "energy_ha": -56.000400801632715,
+      "energy_std": 4.641245714809236e-14,
+      "wall_time_ms": 4059.9479980010074,
+      "wall_time_mean_ms": 4817.789452334789,
+      "wall_time_std_ms": 601.9186633949797,
+      "n_iterations": 7,
+      "converged": true,
+      "n_repeats": 3
+    },
+    "gpu4pyscf": {
+      "energy_ha": -56.000400801690354,
+      "energy_std": 0.0,
+      "wall_time_ms": 789.1173220123164,
+      "wall_time_mean_ms": 823.6463296731623,
+      "wall_time_std_ms": 29.334444149197427,
+      "n_iterations": 0,
+      "converged": true,
+      "n_repeats": 3
+    }
+  },
+  {
+    "molecule": "C2H6",
+    "n_atoms": 8,
+    "tides": {
+      "energy_ha": -12.628880742670027,
+      "energy_std": 0.0,
+      "wall_time_ms": 94888.4523200104,
+      "wall_time_mean_ms": 96952.94480435162,
+      "wall_time_std_ms": 2647.585434693074,
+      "n_iterations": 49,
+      "converged": true,
+      "n_repeats": 3,
+      "per_step": {
+        "build_H": 1542.9343913673465,
+        "gemm_hx": 0.02561444897959184,
+        "gemm_xthp": 0.024088918367346942,
+        "eigensolve": 5.780447285714286,
+        "backtransform": 0.1622179183673469,
+        "dsyrk": 0.013118326530612245,
+        "energy": 0.7460546326530613,
+        "diis": 0.1691727959183674
+      },
+      "scf_total_ms": 75943.398896
+    },
+    "n_basis": 64,
+    "pyscf_cpu": {
+      "energy_ha": -78.72330195600424,
+      "energy_std": 1.803155319699033e-13,
+      "wall_time_ms": 5864.6543599898,
+      "wall_time_mean_ms": 6123.476086669446,
+      "wall_time_std_ms": 189.5512070111816,
+      "n_iterations": 7,
+      "converged": true,
+      "n_repeats": 3
+    },
+    "gpu4pyscf": {
+      "energy_ha": -78.72330195625659,
+      "energy_std": 0.0,
+      "wall_time_ms": 1390.5606930202339,
+      "wall_time_mean_ms": 1401.2992880113113,
+      "wall_time_std_ms": 8.550067297733829,
+      "n_iterations": 0,
+      "converged": true,
+      "n_repeats": 3
+    }
+  },
+  {
+    "molecule": "C2H4",
+    "n_atoms": 6,
+    "tides": {
+      "energy_ha": -12.824151707903564,
+      "energy_std": 1.7763568394002505e-15,
+      "wall_time_ms": 91727.50536201056,
+      "wall_time_mean_ms": 91897.97566500299,
+      "wall_time_std_ms": 124.88568709887123,
+      "n_iterations": 70,
+      "converged": true,
+      "n_repeats": 3,
+      "per_step": {
+        "build_H": 1118.8479389285715,
+        "gemm_hx": 0.01542671428571429,
+        "gemm_xthp": 0.010667114285714287,
+        "eigensolve": 3.2011461857142858,
+        "backtransform": 0.0673295857142857,
+        "dsyrk": 0.012926385714285716,
+        "energy": 0.32893802857142845,
+        "diis": 0.1021031142857143
+      },
+      "scf_total_ms": 78581.325492
+    },
+    "n_basis": 48,
+    "pyscf_cpu": {
+      "energy_ha": -77.76361481335204,
+      "energy_std": 7.105427357601002e-14,
+      "wall_time_ms": 4721.02248101146,
+      "wall_time_mean_ms": 5295.596086332807,
+      "wall_time_std_ms": 427.43906665569403,
+      "n_iterations": 6,
+      "converged": true,
+      "n_repeats": 3
+    },
+    "gpu4pyscf": {
+      "energy_ha": -77.76361481345248,
+      "energy_std": 0.0,
+      "wall_time_ms": 1092.0730489888228,
+      "wall_time_mean_ms": 1103.4667523344979,
+      "wall_time_std_ms": 8.310022165964776,
+      "n_iterations": 0,
+      "converged": true,
+      "n_repeats": 3
+    }
+  }
+]

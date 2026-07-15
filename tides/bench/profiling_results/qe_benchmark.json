@@ -1,0 +1,15 @@
+[
+  {
+    "molecule": "H2",
+    "n_atoms": 2,
+    "qe": {
+      "energy_ha": -1.16647885,
+      "wall_time_ms": 307274.3170579779,
+      "wall_time_mean_ms": 307274.3170579779,
+      "converged": true,
+      "n_iterations": 6,
+      "n_repeats": 1
+    },
+    "ecut_ry": 50.0
+  }
+]

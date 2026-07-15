@@ -260,6 +260,19 @@ NB_MODULE(_native, m) {
     m.def("status_io_error", [](const std::string& msg) { return Status::IoError(msg); });
     m.def("status_unimplemented", [](const std::string& msg) { return Status::Unimplemented(msg); });
 
+    // SCFTimings — per-step profiling data
+    nb::class_<scf::SCFTimings>(m, "SCFTimings")
+        .def_ro("build_H_ms", &scf::SCFTimings::build_H_ms)
+        .def_ro("gemm_hx_ms", &scf::SCFTimings::gemm_hx_ms)
+        .def_ro("gemm_xthp_ms", &scf::SCFTimings::gemm_xthp_ms)
+        .def_ro("eigensolve_ms", &scf::SCFTimings::eigensolve_ms)
+        .def_ro("backtransform_ms", &scf::SCFTimings::backtransform_ms)
+        .def_ro("dsyrk_ms", &scf::SCFTimings::dsyrk_ms)
+        .def_ro("energy_ms", &scf::SCFTimings::energy_ms)
+        .def_ro("diis_ms", &scf::SCFTimings::diis_ms)
+        .def_ro("scf_total_ms", &scf::SCFTimings::scf_total_ms)
+        .def_ro("n_iterations", &scf::SCFTimings::n_iterations);
+
     // SCFResult
     nb::class_<scf::SCFResult>(m, "CppSCFResult")
         .def_ro("energy", &scf::SCFResult::energy)
@@ -268,7 +281,8 @@ NB_MODULE(_native, m) {
         .def_ro("eigenvectors", &scf::SCFResult::eigenvectors)
         .def_ro("n_iterations", &scf::SCFResult::n_iterations)
         .def_ro("converged", &scf::SCFResult::converged)
-        .def_ro("energy_history", &scf::SCFResult::energy_history);
+        .def_ro("energy_history", &scf::SCFResult::energy_history)
+        .def_ro("timings", &scf::SCFResult::timings);
 
     // EnergyComponents
     nb::class_<scf::EnergyComponents>(m, "CppEnergyComponents")
