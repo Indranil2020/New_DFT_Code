@@ -133,15 +133,15 @@ int TestGpuVsCpu() {
             << " S_max_rel=" << s_max_rel
             << " T_max_rel=" << t_max_rel << '\n';
 
-  // Observable (T2.5): equals CPU path <=1e-7 rel.
+  // Observable (T2.5): equals CPU path <=1e-12 rel.
   // GPU cubic spline evaluation matches CPU formula exactly, so we expect
   // machine-precision agreement (~1e-16).
-  if (s_max_rel > 1e-7) {
-    std::cerr << "FAIL: S max_rel=" << s_max_rel << " > 1e-7\n";
+  if (s_max_rel > 1e-12) {
+    std::cerr << "FAIL: S max_rel=" << s_max_rel << " > 1e-12\n";
     return 1;
   }
-  if (t_max_rel > 1e-7) {
-    std::cerr << "FAIL: T max_rel=" << t_max_rel << " > 1e-7\n";
+  if (t_max_rel > 1e-12) {
+    std::cerr << "FAIL: T max_rel=" << t_max_rel << " > 1e-12\n";
     return 1;
   }
   return 0;

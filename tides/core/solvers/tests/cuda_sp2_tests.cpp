@@ -109,12 +109,12 @@ int TestSP2VsCpu() {
               << " |tr(PS)-Ne|=" << trace_err
               << " idem_err=" << idem_err << '\n';
 
-    if (diff > 1e-10) {
-      std::cerr << "FAIL: max_diff=" << diff << " > 1e-10 at n=" << n << '\n';
+    if (diff > 1e-12) {
+      std::cerr << "FAIL: max_diff=" << diff << " > 1e-12 at n=" << n << '\n';
       return 1;
     }
-    if (trace_err > 1e-8) {
-      std::cerr << "FAIL: trace_err=" << trace_err << " > 1e-8\n";
+    if (trace_err > 1e-10) {
+      std::cerr << "FAIL: trace_err=" << trace_err << " > 1e-10\n";
       return 1;
     }
   }
@@ -164,8 +164,8 @@ int TestSP2Idempotency() {
             << " converged=" << gpu.value().converged
             << " iters=" << gpu.value().n_iterations << '\n';
 
-  if (idem > 1e-8) {
-    std::cerr << "FAIL: idempotency " << idem << " > 1e-8\n";
+  if (idem > 1e-10) {
+    std::cerr << "FAIL: idempotency " << idem << " > 1e-10\n";
     return 1;
   }
   return 0;
@@ -212,7 +212,7 @@ int TestSP2Batch() {
               << " max_diff=" << diff
               << " iters=" << gpu.value().n_iterations[b]
               << " converged=" << gpu.value().converged[b] << '\n';
-    if (diff > 1e-10) {
+    if (diff > 1e-12) {
       std::cerr << "FAIL: batch block " << b << " max_diff=" << diff << '\n';
       failures++;
     }

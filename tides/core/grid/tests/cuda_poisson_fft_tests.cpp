@@ -213,14 +213,14 @@ int TestPoissonFreeVsCpu() {
   const double v_scale = *std::max_element(cpu_V.begin(), cpu_V.end(),
       [](double a, double b) { return std::abs(a) < std::abs(b); });
   const double rel_diff = max_diff / std::max(std::abs(v_scale), 1e-10);
-  if (rel_diff > 1e-8) {
+  if (rel_diff > 1e-12) {
     std::cerr << "FAIL: free-space relative V diff=" << rel_diff
-              << " > 1e-8\n";
+              << " > 1e-12\n";
     return 1;
   }
-  if (energy_diff > std::abs(cpu_E) * 1e-8) {
+  if (energy_diff > std::abs(cpu_E) * 1e-12) {
     std::cerr << "FAIL: free-space energy_diff=" << energy_diff << " > "
-              << std::abs(cpu_E) * 1e-8 << '\n';
+              << std::abs(cpu_E) * 1e-12 << '\n';
     return 1;
   }
   return 0;

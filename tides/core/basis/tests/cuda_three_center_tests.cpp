@@ -173,8 +173,8 @@ int TestThreeCenterVsCpu() {
     std::cout << '\n';
   }
 
-  if (max_diff > 1e-2) {
-        std::cerr << "FAIL: max_diff=" << max_diff << " > 1e-12\n";
+  if (max_diff > 5e-3) {
+        std::cerr << "FAIL: max_diff=" << max_diff << " > 5e-3\n";
     return 1;
   }
   return 0;
@@ -226,8 +226,8 @@ int TestThreeCenterLarger() {
             << " kernel_ms=" << gpu_result.value().kernel_ms
             << " max_diff=" << max_diff << '\n';
 
-  if (max_diff > 1e-2) {
-        std::cerr << "FAIL: max_diff=" << max_diff << " > 1e-12\n";
+  if (max_diff > 5e-3) {
+        std::cerr << "FAIL: max_diff=" << max_diff << " > 5e-3\n";
     return 1;
   }
   return 0;

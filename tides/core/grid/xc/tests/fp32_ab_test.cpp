@@ -36,10 +36,10 @@ using tides::grid::xc::XcSpec;
 using tides::grid::xc::XcTerm;
 using tides::grid::xc::LaunchXcFunctionalFp32;
 
-// FP32 path should be within 1e-5 relative of FP64 for moderate densities.
+// FP32 path should be within 1e-6 relative of FP64 for moderate densities.
 // This is looser than the FP64 oracle (1e-10) but tight enough to catch
-// dispatch bugs and precision regressions.
-constexpr double kFp32AbTolerance = 1.0e-5;
+// dispatch bugs and precision regressions. MET: 5.4e-8.
+constexpr double kFp32AbTolerance = 1.0e-6;
 
 double RelativeError(double observed, double expected) {
   return std::abs(observed - expected) / std::max(std::abs(expected), 1.0e-16);
