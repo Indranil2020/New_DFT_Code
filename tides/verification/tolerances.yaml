@@ -193,10 +193,10 @@ wp9:
     rung1_kernel: 1.0e-13      # CPU ref: machine precision
     rung2_operator_overlap: 1.0e-8  # vs PySCF (MET: 8.6e-9)
     rung2_operator_rotation: 1.0e-12  # MET: 1.4e-15
-    rung2_operator_poisson: 1.0e-3  # CPU ref (target 1e-10 w/ cuFFT)
+    rung2_operator_poisson: 1.0e-12  # cuFFT vs CPU (MET: 0, machine precision)
     rung2_operator_adjoint: 1.0e-12  # MET: 1.7e-15
     rung3_energy_component: 1.0e-4  # CPU ref (target 1e-6)
-    rung3_ab_mixed: 5.0e-4       # meV/atom (0.5 meV/atom)
+    rung3_ab_mixed: 1.0e-6       # relative (MET: 5.4e-8)
     rung4_force_fd: 1.0e-6      # Ha/Bohr (MET: 7.1e-14)
     rung4_stress_fd: 1.0e-6     # Ha (MET: 0)
     rung5_nve_drift: 30.0       # uHa/atom/ps (SKIP: needs full MD)
