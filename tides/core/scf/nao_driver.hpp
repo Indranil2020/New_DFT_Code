@@ -2460,9 +2460,19 @@ class NaoDriver {
       broker_input.available_vram_mb = 8000;
       std::vector<double> scf_P_init;
       if (P_init && P_init->size() == n * n) scf_P_init = *P_init;
+      // Build mixed-precision config for SCFDriver internal GEMM operations.
+      scf::MixedPrecisionConfig mp_config;
+      const scf::MixedPrecisionConfig* mp_ptr = nullptr;
+      if (use_mixed_precision) {
+        mp_config.mode = scf::MixedPrecisionSCF::AutoSelect(n, 1e-6);
+        mp_config.n_ozaki_slices = 5;
+        mp_config.error_budget = 1e-6;
+        mp_config.use_f64e_reductions = true;
+        mp_ptr = &mp_config;
+      }
       result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
                                    scf_P_init, max_iter, tol, 1, 0.3,
-                                   &broker_input, fixed_density);
+                                   &broker_input, fixed_density, mp_ptr);
       // Refine gap estimate from converged eigenvalues and re-dispatch if the
       // initial regime was wrong. The broker uses gap_estimate to decide
       // between R0 (gapped) and R3 (metallic/finite-Te). After the first SCF,
@@ -2479,7 +2489,7 @@ class NaoDriver {
           std::cout << "[NaoDriver] gap refined: " << gap_ev << " eV — re-dispatching" << std::endl;
           result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
                                        result.scf.P, max_iter, tol, 1, 0.3,
-                                       &broker_input, fixed_density);
+                                       &broker_input, fixed_density, mp_ptr);
         }
       }
       step("SCF");

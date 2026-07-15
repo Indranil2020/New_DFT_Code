@@ -18,6 +18,7 @@
 #include "verification/a_posteriori_error.hpp"
 #include "tile/tile_scf_integration.hpp"
 #include "tile/gemm_grouped.hpp"
+#include "tile/ozaki.hpp"
 #include "tile/qtt_scf.hpp"
 #include "tile/cuda_graph_scf.hpp"
 
@@ -85,9 +86,18 @@ class SCFDriver {
       int max_iter = 100, double tol = 1e-10,
       int mixing = 1, double alpha = 0.3,
       const solvers::BrokerInput* broker_input = nullptr,
-      bool fixed_density = false) {
+      bool fixed_density = false,
+      const MixedPrecisionConfig* mp_config = nullptr) {
     SCFResult res;
     if (n == 0 || n_occ == 0 || n_occ > n) return res;
+
+    // Mixed-precision activation: when mp_config is provided and mode != kFP64,
+    // the SCF loop's internal GEMM operations use Ozaki FP16-sliced products
+    // with FP64 accumulation, and DIIS dot products use F64E compensated
+    // summation. This makes the mixed-precision path active in the SCFDriver
+    // itself, not just in the NaoDriver callbacks.
+    const bool mp_active = (mp_config != nullptr &&
+                            mp_config->mode != PrecisionMode::kFP64);
 
     // --- Gap module wiring: Mermin finite-Te occupations ---
     // When broker_input specifies finite electronic temperature, use Mermin
@@ -358,30 +368,107 @@ class SCFDriver {
         }
       } else {
         // Small systems: BLAS dgemm is faster than tile overhead.
-        int m = static_cast<int>(n);
-        int kk = static_cast<int>(n);
-        int nn = static_cast<int>(n_retained);
-        double alpha = 1.0, beta = 0.0;
-        char transa = 'N', transb = 'N';
-        dgemm_(&transa, &transb, &nn, &m, &kk, &alpha,
-               X.data(), &nn, H.data(), &kk, &beta, tmp.data(), &nn);
+        // Mixed precision: when mp_active, use Ozaki FP16-sliced GEMM.
+        bool mp_done = false;
+        if (mp_active) {
+#ifdef TIDES_HAVE_CUDA
+          // GPU Ozaki: tensor-core FP16 with FP64-emulated reduction.
+          auto gpu_res = tile::GemmOzakiFp16Cuda(
+              static_cast<std::size_t>(n),
+              static_cast<std::size_t>(n),
+              static_cast<std::size_t>(n_retained),
+              H, X);
+          if (gpu_res.ok()) {
+            for (std::size_t i = 0; i < n * n_retained; ++i)
+              tmp[i] = gpu_res.value().values[i];
+            mp_done = true;
+          }
+#endif
+          if (!mp_done) {
+            // CPU Ozaki: decompose H into FP16 slices, dgemm per slice.
+            auto decomp = tile::DecomposeOzakiFp16Reference(H);
+            if (decomp.ok()) {
+              const auto& plan = decomp.value().plan;
+              int m = static_cast<int>(n);
+              int kk = static_cast<int>(n);
+              int nn = static_cast<int>(n_retained);
+              char transa = 'N', transb = 'N';
+              for (std::uint32_t s = 0; s < plan.slice_count; ++s) {
+                const double* slice =
+                    &decomp.value().slices[static_cast<std::size_t>(s) * H.size()];
+                double alpha = 1.0;
+                double beta = (s == 0) ? 0.0 : 1.0;
+                dgemm_(&transa, &transb, &nn, &m, &kk, &alpha,
+                       X.data(), &nn, slice, &kk, &beta, tmp.data(), &nn);
+              }
+              mp_done = true;
+            }
+          }
+        }
+        if (!mp_done) {
+          int m = static_cast<int>(n);
+          int kk = static_cast<int>(n);
+          int nn = static_cast<int>(n_retained);
+          double alpha = 1.0, beta = 0.0;
+          char transa = 'N', transb = 'N';
+          dgemm_(&transa, &transb, &nn, &m, &kk, &alpha,
+                 X.data(), &nn, H.data(), &kk, &beta, tmp.data(), &nn);
+        }
       }
       // Step 2: H' = X^T tmp (n_retained x n_retained, row-major)
       std::vector<double> Hp(n_retained * n_retained, 0.0);
       {
-        int m = static_cast<int>(n_retained);
-        int kk = static_cast<int>(n);
-        int nn = static_cast<int>(n_retained);
-        double alpha = 1.0, beta = 0.0;
-        char transa = 'T', transb = 'T';
-        // Row-major: Hp[k,l] = sum_i Xt[k,i] * tmp[i,l]
-        // Xt is (n_retained x n) row-major = n x n_retained col-major.
-        // tmp is (n x n_retained) row-major = n_retained x n col-major.
-        // dgemm('T','T'): A^T (n_retained x n) * B^T (n x n_retained) = Hp (n_retained x n_retained)
-        dgemm_(&transa, &transb, &m, &nn, &kk, &alpha,
-               Xt.data(), &m,
-               tmp.data(), &m,
-               &beta, Hp.data(), &m);
+        bool mp_done = false;
+        if (mp_active) {
+#ifdef TIDES_HAVE_CUDA
+          // GPU Ozaki for Xt @ tmp (n_retained × n_retained = n_retained × n @ n × n_retained)
+          auto gpu_res = tile::GemmOzakiFp16Cuda(
+              static_cast<std::size_t>(n_retained),
+              static_cast<std::size_t>(n),
+              static_cast<std::size_t>(n_retained),
+              Xt, tmp);
+          if (gpu_res.ok()) {
+            for (std::size_t i = 0; i < n_retained * n_retained; ++i)
+              Hp[i] = gpu_res.value().values[i];
+            mp_done = true;
+          }
+#endif
+          if (!mp_done) {
+            // CPU Ozaki: decompose Xt into FP16 slices, dgemm per slice.
+            auto decomp = tile::DecomposeOzakiFp16Reference(Xt);
+            if (decomp.ok()) {
+              const auto& plan = decomp.value().plan;
+              int m = static_cast<int>(n_retained);
+              int kk = static_cast<int>(n);
+              int nn = static_cast<int>(n_retained);
+              char transa = 'T', transb = 'T';
+              for (std::uint32_t s = 0; s < plan.slice_count; ++s) {
+                const double* slice =
+                    &decomp.value().slices[static_cast<std::size_t>(s) * Xt.size()];
+                double alpha = 1.0;
+                double beta = (s == 0) ? 0.0 : 1.0;
+                dgemm_(&transa, &transb, &m, &nn, &kk, &alpha,
+                       slice, &m, tmp.data(), &m, &beta, Hp.data(), &m);
+              }
+              mp_done = true;
+            }
+          }
+        }
+        if (!mp_done) {
+          int m = static_cast<int>(n_retained);
+          int kk = static_cast<int>(n);
+          int nn = static_cast<int>(n_retained);
+          double alpha = 1.0, beta = 0.0;
+          char transa = 'T', transb = 'T';
+          // Row-major: Hp[k,l] = sum_i Xt[k,i] * tmp[i,l]
+          // Xt is (n_retained x n) row-major = n x n_retained col-major.
+          // tmp is (n x n_retained) row-major = n_retained x n col-major.
+          // dgemm('T','T'): A^T (n_retained x n) * B^T (n x n_retained) = Hp (n_retained x n_retained)
+          dgemm_(&transa, &transb, &m, &nn, &kk, &alpha,
+                 Xt.data(), &m,
+                 tmp.data(), &m,
+                 &beta, Hp.data(), &m);
+        }
       }
       // Solve standard eigenproblem H' y = e y (n_retained x n_retained)
       std::vector<double> Hp_work = Hp;
@@ -507,16 +594,67 @@ class SCFDriver {
       {
         int nn = static_cast<int>(n);
         int kk = static_cast<int>(n_occ);
-        double alpha_blas = 1.0;
-        double beta_blas = 0.0;
         char uplo = 'L';
         char trans = 'N';
         // eigenvectors are column-major: evec[k*n + j] = component j of eigvector k
         // dsyrk with trans='N' computes C = alpha * A * A^T + beta * C
         // A is n x kk (first kk columns of eigenvectors), lda = n
-        dsyrk_(&uplo, &trans, &nn, &kk, &alpha_blas,
-               eig.eigenvectors.data(), &nn,
-               &beta_blas, P_new.data(), &nn);
+        if (mp_active) {
+          // Ozaki for dsyrk: quantize C, dsyrk with quantized C, then
+          // dsyrk with error = C - C_quant for error compensation.
+          auto C_quant = MixedPrecisionSCF::QuantizeMatrix(
+              eig.eigenvectors, mp_config->mode);
+          double alpha_blas = 1.0;
+          double beta_blas = 0.0;
+          dsyrk_(&uplo, &trans, &nn, &kk, &alpha_blas,
+                 C_quant.data(), &nn,
+                 &beta_blas, P_new.data(), &nn);
+          // Error feedback: P_new += (C - C_quant) @ (C - C_quant)^T
+          //                    + C_quant @ (C - C_quant)^T
+          //                    + (C - C_quant) @ C_quant^T
+          // Simplified Ozaki: just add error @ C^T + C @ error^T - error @ error^T
+          // For symmetric rank-k, the cross terms are:
+          //   P = (C_quant + C_err) @ (C_quant + C_err)^T
+          //     = C_quant @ C_quant^T + C_quant @ C_err^T + C_err @ C_quant^T + C_err @ C_err^T
+          //   = P_quant + cross + C_err @ C_err^T
+          // The cross term C_quant @ C_err^T + C_err @ C_quant^T = 2 * C_quant @ C_err^T
+          // (since the result is symmetric). We compute this via dsyrk with
+          // the concatenated [C_quant, C_err] and appropriate scaling, or
+          // more simply via two dsyrk calls.
+          std::vector<double> C_err(eig.eigenvectors.size());
+          for (std::size_t i = 0; i < eig.eigenvectors.size(); ++i)
+            C_err[i] = eig.eigenvectors[i] - C_quant[i];
+          // Add C_err @ C_err^T (small correction)
+          double alpha_err = 1.0;
+          double beta_err = 1.0;
+          dsyrk_(&uplo, &trans, &nn, &kk, &alpha_err,
+                 C_err.data(), &nn,
+                 &beta_err, P_new.data(), &nn);
+          // Add cross terms: C_quant @ C_err^T + C_err @ C_quant^T
+          // = 2 * dsyrk(C_quant, C_err) but dsyrk only does A*A^T.
+          // Use dgemm for cross term: P += C_quant @ C_err^T + C_err @ C_quant^T
+          // Since P is symmetric, P += C_quant @ C_err^T + (C_quant @ C_err^T)^T
+          {
+            std::vector<double> cross(n * n, 0.0);
+            int m = nn, k = kk, n_col = nn;
+            double alpha_g = 1.0, beta_g = 0.0;
+            char ta = 'N', tb = 'T';
+            // cross = C_quant @ C_err^T (column-major: C_quant is n×kk, C_err^T is kk×n)
+            dgemm_(&ta, &tb, &m, &n_col, &k, &alpha_g,
+                   C_quant.data(), &m, C_err.data(), &m,
+                   &beta_g, cross.data(), &m);
+            // P_new += cross + cross^T
+            for (std::size_t i = 0; i < n; ++i)
+              for (std::size_t j = 0; j < n; ++j)
+                P_new[i * n + j] += cross[i * n + j] + cross[j * n + i];
+          }
+        } else {
+          double alpha_blas = 1.0;
+          double beta_blas = 0.0;
+          dsyrk_(&uplo, &trans, &nn, &kk, &alpha_blas,
+                 eig.eigenvectors.data(), &nn,
+                 &beta_blas, P_new.data(), &nn);
+        }
         // Symmetrize: dsyrk_ uplo='L' writes column-major lower = row-major
         // upper. Copy row-major upper (computed) to row-major lower (zeros).
         for (std::size_t i = 0; i < n; ++i)
@@ -577,8 +715,15 @@ class SCFDriver {
             const auto& Rj = F_history[mstart + j];
             const auto& Pj = P_history[mstart + j];
             double dot = 0.0;
-            for (std::size_t idx = 0; idx < n * n; ++idx)
-              dot += (Ri[idx] - Pi[idx]) * (Rj[idx] - Pj[idx]);
+            if (mp_active) {
+              std::vector<double> products(n * n);
+              for (std::size_t idx = 0; idx < n * n; ++idx)
+                products[idx] = (Ri[idx] - Pi[idx]) * (Rj[idx] - Pj[idx]);
+              dot = MixedPrecisionSCF::F64EReduce(products);
+            } else {
+              for (std::size_t idx = 0; idx < n * n; ++idx)
+                dot += (Ri[idx] - Pi[idx]) * (Rj[idx] - Pj[idx]);
+            }
             B[i][j] = dot;
             B[j][i] = dot;
           }
