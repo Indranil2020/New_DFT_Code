@@ -19,11 +19,20 @@
 
 #include <cuda_runtime.h>
 
+#if __has_include(<cublas_v2.h>)
+#include <cublas_v2.h>
+#define TIDES_HAVE_CUBLAS 1
+#elif defined(__HIP_PLATFORM_AMD__)
+#include "tile/hip_compat.hpp"
+#define TIDES_HAVE_CUBLAS 1
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -40,6 +49,83 @@ namespace {
   return Status::IoError(std::string(context) + ": " +
                          cudaGetErrorString(error));
 }
+
+// Reduction kernel for GEMM-based rho build.
+// After temp = P @ phi (cuBLAS DGEMM), this kernel computes:
+//   rho[point] = sum_mu phi[mu,point] * temp[mu,point]
+//   grad_a[point] = 2 * sum_mu dphi_a[mu,point] * temp[mu,point]  (P symmetric)
+// Each thread processes one grid point, iterating over basis functions O(N).
+__global__ void RhoGemmReduceKernel(
+    const double* phi,       // [nbasis][stride]
+    const double* temp,      // [nbasis][stride] — result of P @ phi
+    const double* grad_phi,  // [3][nbasis][stride] (may be null)
+    double* rho,             // [stride]
+    double* grad,            // [3][stride] (may be null)
+    std::int64_t nbasis,
+    std::int64_t np,
+    std::int64_t point_stride) {
+  const std::int64_t point = static_cast<std::int64_t>(blockIdx.x) * blockDim.x +
+      threadIdx.x;
+  if (point >= np) return;
+  double density = 0.0;
+  double gx = 0.0, gy = 0.0, gz = 0.0;
+  const std::int64_t basis_plane = nbasis * point_stride;
+  const bool has_grad = (grad_phi != nullptr && grad != nullptr);
+  for (std::int64_t mu = 0; mu < nbasis; ++mu) {
+    const double phi_mu = phi[mu * point_stride + point];
+    const double temp_mu = temp[mu * point_stride + point];
+    density += phi_mu * temp_mu;
+    if (has_grad) {
+      const double dphi_mu_x = grad_phi[mu * point_stride + point];
+      const double dphi_mu_y = grad_phi[basis_plane + mu * point_stride + point];
+      const double dphi_mu_z = grad_phi[2 * basis_plane + mu * point_stride + point];
+      gx += dphi_mu_x * temp_mu;
+      gy += dphi_mu_y * temp_mu;
+      gz += dphi_mu_z * temp_mu;
+    }
+  }
+  rho[point] = density;
+  if (has_grad) {
+    grad[point] = 2.0 * gx;
+    grad[point_stride + point] = 2.0 * gy;
+    grad[2 * point_stride + point] = 2.0 * gz;
+  }
+}
+
+#ifdef TIDES_HAVE_CUBLAS
+// Cached cuBLAS handle and temp buffer for GEMM-based rho build.
+// Reused across SCF iterations — handle created once, buffer resized on demand.
+struct RhoGemmCache {
+  cublasHandle_t handle = nullptr;
+  double* d_temp = nullptr;  // [nbasis][stride] — temp = P @ phi
+  std::int64_t cached_nbasis = 0;
+  std::int64_t cached_stride = 0;
+
+  ~RhoGemmCache() {
+    if (handle) cublasDestroy(handle);
+    if (d_temp) cudaFree(d_temp);
+  }
+
+  void Ensure(std::int64_t nbasis, std::int64_t stride) {
+    if (handle == nullptr) {
+      cublasCreate(&handle);
+    }
+    if (nbasis != cached_nbasis || stride != cached_stride) {
+      if (d_temp) { cudaFree(d_temp); d_temp = nullptr; }
+      const std::size_t bytes = static_cast<std::size_t>(nbasis) *
+          static_cast<std::size_t>(stride) * sizeof(double);
+      cudaMalloc(&d_temp, bytes);
+      cached_nbasis = nbasis;
+      cached_stride = stride;
+    }
+  }
+};
+
+static RhoGemmCache& RhoGemmCacheInstance() {
+  static RhoGemmCache instance;
+  return instance;
+}
+#endif  // TIDES_HAVE_CUBLAS
 
 // Kernel: each thread processes one grid point, iterating over all orbitals.
 // rho[point] = sum_k f_k * orb_k[point]^2
@@ -451,6 +537,63 @@ Status BuildRhoGradientDevice(const RhoGradientDeviceIn& input, double* rho,
     return Status::InvalidArgument(
         "rho/gradient device build requires non-null device pointers");
   }
+
+#ifdef TIDES_HAVE_CUBLAS
+  // GEMM-based path: temp = P @ phi via cuBLAS, then O(N) reduction.
+  // Exploits P symmetry: grad_a = 2 * sum_mu dphi_a[mu] * temp[mu].
+  // Falls back to the O(N^2) kernel for very small systems or on error.
+  const bool use_gemm = [] {
+    const char* e = std::getenv("TIDES_RHO_GEMM");
+    return (e == nullptr || e[0] != '0');  // enabled by default
+  }();
+
+  if (use_gemm && input.nbasis >= 4) {
+    auto& cache = RhoGemmCacheInstance();
+    cache.Ensure(input.nbasis, input.point_stride);
+    if (cache.handle == nullptr || cache.d_temp == nullptr) {
+      // cuBLAS init failed — fall back.
+      goto fallback_rho_kernel;
+    }
+    cublasSetStream(cache.handle, stream);
+
+    // temp = P @ phi  (row-major: temp[nbasis][np])
+    // Column-major: temp_col = phi_col @ P_col, i.e.
+    //   m = np, n = nbasis, k = nbasis
+    //   A = d_phi (lda = point_stride), B = d_P (ldb = nbasis), C = d_temp (ldc = point_stride)
+    const double alpha = 1.0, beta = 0.0;
+    const int m = static_cast<int>(input.np);
+    const int n = static_cast<int>(input.nbasis);
+    const int k = static_cast<int>(input.nbasis);
+    const int lda = static_cast<int>(input.point_stride);
+    const int ldb = static_cast<int>(input.nbasis);
+    const int ldc = static_cast<int>(input.point_stride);
+    cublasStatus_t st = cublasDgemm(
+        cache.handle, CUBLAS_OP_N, CUBLAS_OP_N,
+        m, n, k, &alpha,
+        input.phi, lda,
+        input.density_matrix, ldb,
+        &beta,
+        cache.d_temp, ldc);
+    if (st != CUBLAS_STATUS_SUCCESS) {
+      goto fallback_rho_kernel;
+    }
+
+    // Reduction: rho[g] = sum_mu phi[mu,g] * temp[mu,g]
+    //            grad_a[g] = 2 * sum_mu dphi_a[mu,g] * temp[mu,g]  (P symmetric)
+    constexpr int kThreads = 256;
+    const std::int64_t required_blocks = (input.np + kThreads - 1) / kThreads;
+    const int blocks = static_cast<int>(
+        std::min<std::int64_t>(required_blocks, 65535));
+    RhoGemmReduceKernel<<<blocks, kThreads, 0, stream>>>(
+        input.phi, cache.d_temp, input.grad_phi,
+        rho, grad, input.nbasis, input.np, input.point_stride);
+    return CudaStatus(cudaGetLastError(), "RhoGemmReduceKernel launch");
+  }
+
+fallback_rho_kernel:
+#endif  // TIDES_HAVE_CUBLAS
+
+  // Fallback: original O(N^2) per-thread kernel.
   constexpr int kThreads = 128;
   const std::int64_t required_blocks = (input.np + kThreads - 1) / kThreads;
   const int blocks = static_cast<int>(std::min<std::int64_t>(required_blocks, 65535));
