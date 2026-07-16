@@ -765,10 +765,25 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
   cufftSetStream(plan_fwd_, stream);
   cufftSetStream(plan_inv_, stream);
 
-  auto kernel_start = std::chrono::steady_clock::now();
+  // Profiling mode: set TIDES_POISSON_PROFILE=1 to enable CUDA event timing.
+  // Event creation + sync adds ~10-30ms overhead, so disabled by default.
+  static const bool profile = [] {
+    const char* e = std::getenv("TIDES_POISSON_PROFILE");
+    return e && e[0] == '1';
+  }();
+
+  cudaEvent_t ev0, ev1, ev2, ev3, ev4, ev5, ev6, ev7;
+  if (profile) {
+    cudaEventCreate(&ev0); cudaEventCreate(&ev1);
+    cudaEventCreate(&ev2); cudaEventCreate(&ev3);
+    cudaEventCreate(&ev4); cudaEventCreate(&ev5);
+    cudaEventCreate(&ev6); cudaEventCreate(&ev7);
+    cudaEventRecord(ev0, stream);
+  }
 
   // Step 1: Zero-pad rho into d_rho_pad (GPU kernel).
   cudaMemsetAsync(d_rho_pad_, 0, M_ * sizeof(cufftDoubleComplex), stream);
+  if (profile) cudaEventRecord(ev1, stream);
   {
     const int total = static_cast<int>(N);
     const int threads = 256;
@@ -778,12 +793,14 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
         static_cast<int>(n0), static_cast<int>(n1), static_cast<int>(n2),
         static_cast<int>(m0_), static_cast<int>(m1_));
   }
+  if (profile) cudaEventRecord(ev2, stream);
 
   // Step 2: Forward FFT rho.
   cufftResult cufft_err = cufftExecZ2Z(plan_fwd_, d_rho_pad_, d_rho_pad_,
                                        CUFFT_FORWARD);
   if (cufft_err != CUFFT_SUCCESS)
     return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2Z fwd rho");
+  if (profile) cudaEventRecord(ev3, stream);
 
   // Step 3: Pointwise multiply V(k) = rho(k) * g(k).
   {
@@ -793,11 +810,13 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
     ComplexMultiplyKernel<<<blocks, threads, 0, stream>>>(
         d_V_pad_, d_rho_pad_, d_g_, total);
   }
+  if (profile) cudaEventRecord(ev4, stream);
 
   // Step 4: Inverse FFT V(k) -> V(r).
   cufft_err = cufftExecZ2Z(plan_inv_, d_V_pad_, d_V_pad_, CUFFT_INVERSE);
   if (cufft_err != CUFFT_SUCCESS)
     return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2Z inv");
+  if (profile) cudaEventRecord(ev5, stream);
 
   // Step 5: Extract first octant and normalize.
   {
@@ -809,6 +828,7 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
         static_cast<int>(n0), static_cast<int>(n1), static_cast<int>(n2),
         static_cast<int>(m0_), static_cast<int>(m1_));
   }
+  if (profile) cudaEventRecord(ev6, stream);
 
   // Step 6: Compute Hartree energy on device (async, no sync).
   cudaMemsetAsync(d_energy_, 0, sizeof(double), stream);
@@ -821,11 +841,34 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
   }
   cudaMemcpyAsync(&result.hartree_energy, d_energy_, sizeof(double),
                   cudaMemcpyDeviceToHost, stream);
-  // No sync — caller owns the stream and will sync when they need V_H or energy.
+  if (profile) cudaEventRecord(ev7, stream);
 
-  auto kernel_end = std::chrono::steady_clock::now();
-  result.kernel_ms =
-      std::chrono::duration<double, std::milli>(kernel_end - kernel_start).count();
+  if (profile) {
+    // Sync to get event timings (also needed for energy D2H).
+    cudaStreamSynchronize(stream);
+
+    float ms;
+    cudaEventElapsedTime(&ms, ev0, ev1); result.memset_pad_ms = ms;
+    cudaEventElapsedTime(&ms, ev1, ev2); result.zero_pad_ms = ms;
+    cudaEventElapsedTime(&ms, ev2, ev3); result.fft_fwd_ms = ms;
+    cudaEventElapsedTime(&ms, ev3, ev4); result.multiply_ms = ms;
+    cudaEventElapsedTime(&ms, ev4, ev5); result.fft_inv_ms = ms;
+    cudaEventElapsedTime(&ms, ev5, ev6); result.extract_ms = ms;
+    cudaEventElapsedTime(&ms, ev6, ev7); result.energy_ms = ms;
+    result.kernel_ms = result.memset_pad_ms + result.zero_pad_ms +
+        result.fft_fwd_ms + result.multiply_ms + result.fft_inv_ms +
+        result.extract_ms + result.energy_ms;
+    result.fft_n0 = m0_; result.fft_n1 = m1_; result.fft_n2 = m2_;
+
+    cudaEventDestroy(ev0); cudaEventDestroy(ev1);
+    cudaEventDestroy(ev2); cudaEventDestroy(ev3);
+    cudaEventDestroy(ev4); cudaEventDestroy(ev5);
+    cudaEventDestroy(ev6); cudaEventDestroy(ev7);
+  } else {
+    // No sync — caller owns the stream and will sync when they need V_H or energy.
+    // kernel_ms remains 0; substep fields remain 0.
+    result.fft_n0 = m0_; result.fft_n1 = m1_; result.fft_n2 = m2_;
+  }
 
   return result;
 }

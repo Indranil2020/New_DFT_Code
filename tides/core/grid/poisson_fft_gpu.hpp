@@ -47,6 +47,15 @@ struct PoissonFreeDeviceResult {
   double hartree_energy = 0.0;
   double kernel_ms = 0.0;
   std::size_t grid_size = 0;
+  // Substep GPU timings (via CUDA events, valid after stream sync).
+  double memset_pad_ms = 0.0;
+  double zero_pad_ms = 0.0;
+  double fft_fwd_ms = 0.0;
+  double multiply_ms = 0.0;
+  double fft_inv_ms = 0.0;
+  double extract_ms = 0.0;
+  double energy_ms = 0.0;
+  std::size_t fft_n0 = 0, fft_n1 = 0, fft_n2 = 0;  // doubled grid dims
 };
 
 class PoissonFreeDeviceCache {

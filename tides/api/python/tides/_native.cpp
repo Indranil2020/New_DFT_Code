@@ -447,7 +447,19 @@ NB_MODULE(_native, m) {
         .def_ro("assemble_H_ms", &scf::BuildHTimings::assemble_H_ms)
         .def_ro("total_ms", &scf::BuildHTimings::total_ms)
         .def_ro("n_iterations", &scf::BuildHTimings::n_iterations)
-        .def_ro("used_gpu_pipeline", &scf::BuildHTimings::used_gpu_pipeline);
+        .def_ro("used_gpu_pipeline", &scf::BuildHTimings::used_gpu_pipeline)
+        .def_ro("poisson_memset_ms", &scf::BuildHTimings::poisson_memset_ms)
+        .def_ro("poisson_zeropad_ms", &scf::BuildHTimings::poisson_zeropad_ms)
+        .def_ro("poisson_fft_fwd_ms", &scf::BuildHTimings::poisson_fft_fwd_ms)
+        .def_ro("poisson_multiply_ms", &scf::BuildHTimings::poisson_multiply_ms)
+        .def_ro("poisson_fft_inv_ms", &scf::BuildHTimings::poisson_fft_inv_ms)
+        .def_ro("poisson_extract_ms", &scf::BuildHTimings::poisson_extract_ms)
+        .def_ro("poisson_energy_ms", &scf::BuildHTimings::poisson_energy_ms)
+        .def_ro("poisson_solve_cpu_ms", &scf::BuildHTimings::poisson_solve_cpu_ms)
+        .def_ro("poisson_vmat_cpu_ms", &scf::BuildHTimings::poisson_vmat_cpu_ms)
+        .def_ro("poisson_fft_n0", &scf::BuildHTimings::poisson_fft_n0)
+        .def_ro("poisson_fft_n1", &scf::BuildHTimings::poisson_fft_n1)
+        .def_ro("poisson_fft_n2", &scf::BuildHTimings::poisson_fft_n2);
 
     nb::class_<scf::NaoDriverResult>(m, "NaoDriverResult")
         .def_rw("scf", &scf::NaoDriverResult::scf)

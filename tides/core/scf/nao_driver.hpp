@@ -98,6 +98,17 @@ struct BuildHTimings {
   double total_ms = 0.0;        // Total build_H wall time per iteration
   int n_iterations = 0;
   bool used_gpu_pipeline = false;
+  // Poisson substep breakdown (GPU event timings, averaged).
+  double poisson_memset_ms = 0.0;
+  double poisson_zeropad_ms = 0.0;
+  double poisson_fft_fwd_ms = 0.0;
+  double poisson_multiply_ms = 0.0;
+  double poisson_fft_inv_ms = 0.0;
+  double poisson_extract_ms = 0.0;
+  double poisson_energy_ms = 0.0;
+  double poisson_solve_cpu_ms = 0.0;  // CPU wall time of Solve call (async GPU launches)
+  double poisson_vmat_cpu_ms = 0.0;  // CPU wall time of Vmat build + D2H launch
+  std::size_t poisson_fft_n0 = 0, poisson_fft_n1 = 0, poisson_fft_n2 = 0;
 };
 
 struct NaoDriverResult {
@@ -1530,6 +1541,11 @@ class NaoDriver {
     double acc_quantize_P = 0.0, acc_rho_build = 0.0, acc_poisson = 0.0;
     double acc_xc_eval = 0.0, acc_vmat_build = 0.0, acc_assemble_H = 0.0;
     double acc_build_H_total = 0.0;
+    // Poisson substep accumulators.
+    double acc_p_memset = 0, acc_p_zeropad = 0, acc_p_fft_fwd = 0;
+    double acc_p_multiply = 0, acc_p_fft_inv = 0, acc_p_extract = 0, acc_p_energy = 0;
+    double acc_p_solve_cpu = 0, acc_p_vmat_cpu = 0;
+    std::size_t p_fft_n0 = 0, p_fft_n1 = 0, p_fft_n2 = 0;
     // E6: CUDA graph capture for SCF loop — capture build_H operations on
     // the first iteration and replay on subsequent iterations to eliminate
     // kernel launch overhead. On GPU, this captures real CUDA kernels;
@@ -1625,9 +1641,21 @@ class NaoDriver {
           if (!is_periodic) {
             // Free-space: use device-resident cached solver.
             // rho is already on device (dev_arena->rho()), V goes to d_vh_grid.
+            auto t_solve0 = std::chrono::steady_clock::now();
             auto poisson_res = grid::PoissonFreeDeviceCache::Instance().Solve(
                 grid, dev_arena->rho(), d_vh_grid, dev_stream);
+            auto t_solve1 = std::chrono::steady_clock::now();
+            acc_p_solve_cpu += std::chrono::duration<double, std::milli>(t_solve1 - t_solve0).count();
             if (poisson_res.ok()) {
+              const auto& pr = poisson_res.value();
+              acc_p_memset += pr.memset_pad_ms;
+              acc_p_zeropad += pr.zero_pad_ms;
+              acc_p_fft_fwd += pr.fft_fwd_ms;
+              acc_p_multiply += pr.multiply_ms;
+              acc_p_fft_inv += pr.fft_inv_ms;
+              acc_p_extract += pr.extract_ms;
+              acc_p_energy += pr.energy_ms;
+              p_fft_n0 = pr.fft_n0; p_fft_n1 = pr.fft_n1; p_fft_n2 = pr.fft_n2;
               // Build V_H matrix directly from d_vh_grid (no H2D needed).
               grid::WeightedVmatDeviceIn win;
               win.phi = d_phi;
@@ -1638,10 +1666,13 @@ class NaoDriver {
               win.scale = dv;
               if (grid::BuildWeightedVmatDevice(win, d_vmat, dev_stream).ok()) {
                 cache.V_H.resize(n * n);
+                auto t_vmat0 = std::chrono::steady_clock::now();
                 cudaMemcpyAsync(cache.V_H.data(), d_vmat,
                                 n * n * sizeof(double),
                                 cudaMemcpyDeviceToHost, dev_stream);
                 poisson_ok = true;
+                auto t_vmat1 = std::chrono::steady_clock::now();
+                acc_p_vmat_cpu += std::chrono::duration<double, std::milli>(t_vmat1 - t_vmat0).count();
               }
             }
           }
@@ -3131,6 +3162,21 @@ class NaoDriver {
       result.build_H_timings.total_ms = acc_build_H_total / scf_iter;
       result.build_H_timings.n_iterations = scf_iter;
       result.build_H_timings.used_gpu_pipeline = gpu_pipeline_was_active;
+      // Poisson substep breakdown.
+      if (scf_iter > 0 && p_fft_n0 > 0) {
+        result.build_H_timings.poisson_memset_ms = acc_p_memset / scf_iter;
+        result.build_H_timings.poisson_zeropad_ms = acc_p_zeropad / scf_iter;
+        result.build_H_timings.poisson_fft_fwd_ms = acc_p_fft_fwd / scf_iter;
+        result.build_H_timings.poisson_multiply_ms = acc_p_multiply / scf_iter;
+        result.build_H_timings.poisson_fft_inv_ms = acc_p_fft_inv / scf_iter;
+        result.build_H_timings.poisson_extract_ms = acc_p_extract / scf_iter;
+        result.build_H_timings.poisson_energy_ms = acc_p_energy / scf_iter;
+        result.build_H_timings.poisson_solve_cpu_ms = acc_p_solve_cpu / scf_iter;
+        result.build_H_timings.poisson_vmat_cpu_ms = acc_p_vmat_cpu / scf_iter;
+        result.build_H_timings.poisson_fft_n0 = p_fft_n0;
+        result.build_H_timings.poisson_fft_n1 = p_fft_n1;
+        result.build_H_timings.poisson_fft_n2 = p_fft_n2;
+      }
       std::cout << "[NaoDriver] build_H substep timings (avg per iteration, ms):"
                 << "\n  quantize_P:  " << result.build_H_timings.quantize_P_ms
                 << "\n  rho_build:   " << result.build_H_timings.rho_build_ms
@@ -3139,8 +3185,20 @@ class NaoDriver {
                 << "\n  vmat_build:  " << result.build_H_timings.vmat_build_ms
                 << "\n  assemble_H:  " << result.build_H_timings.assemble_H_ms
                 << "\n  total:       " << result.build_H_timings.total_ms
-                << "\n  GPU pipeline: " << (result.build_H_timings.used_gpu_pipeline ? "yes" : "no")
-                << std::endl;
+                << "\n  GPU pipeline: " << (result.build_H_timings.used_gpu_pipeline ? "yes" : "no");
+      if (p_fft_n0 > 0) {
+        std::cout << "\n  Poisson substeps (FFT grid " << p_fft_n0 << "x" << p_fft_n1 << "x" << p_fft_n2 << "):"
+                  << "\n    memset_pad: " << result.build_H_timings.poisson_memset_ms
+                  << "\n    zero_pad:   " << result.build_H_timings.poisson_zeropad_ms
+                  << "\n    fft_fwd:    " << result.build_H_timings.poisson_fft_fwd_ms
+                  << "\n    multiply:   " << result.build_H_timings.poisson_multiply_ms
+                  << "\n    fft_inv:    " << result.build_H_timings.poisson_fft_inv_ms
+                  << "\n    extract:    " << result.build_H_timings.poisson_extract_ms
+                  << "\n    energy:     " << result.build_H_timings.poisson_energy_ms
+                  << "\n    solve_cpu:  " << result.build_H_timings.poisson_solve_cpu_ms
+                  << "\n    vmat_cpu:   " << result.build_H_timings.poisson_vmat_cpu_ms;
+      }
+      std::cout << std::endl;
     }
 
     auto t1 = std::chrono::steady_clock::now();
