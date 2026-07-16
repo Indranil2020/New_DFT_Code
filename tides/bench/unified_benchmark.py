@@ -204,6 +204,16 @@ def run_tides(mol_entry, use_mp=False, max_iter=100, tol=1e-8, repeats=3):
                 "energy": t.energy_ms,
                 "diis": t.diis_ms,
             },
+            "build_H_substep_ms": {
+                "quantize_P": result.build_H_timings.quantize_P_ms,
+                "rho_build": result.build_H_timings.rho_build_ms,
+                "poisson": result.build_H_timings.poisson_ms,
+                "xc_eval": result.build_H_timings.xc_eval_ms,
+                "vmat_build": result.build_H_timings.vmat_build_ms,
+                "assemble_H": result.build_H_timings.assemble_H_ms,
+                "total": result.build_H_timings.total_ms,
+                "used_gpu_pipeline": result.build_H_timings.used_gpu_pipeline,
+            },
         }
         results.append(entry)
     return results

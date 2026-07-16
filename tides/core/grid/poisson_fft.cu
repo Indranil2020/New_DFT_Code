@@ -11,6 +11,7 @@
 // DFT with O(N log N).
 
 #include "grid/poisson.hpp"
+#include "grid/poisson_fft_gpu.hpp"
 #include "grid/dual_grid.hpp"
 #include "grid/gpu_arena.hpp"
 
@@ -91,14 +92,6 @@ __global__ void ComplexMultiplyKernel(
 }
 
 }  // namespace
-
-struct PoissonFftGpuResult {
-  std::vector<double> V;
-  double hartree_energy = 0.0;
-  double kernel_ms = 0.0;
-  std::size_t grid_size = 0;
-  tides::tile::OperationLedger ledger;
-};
 
 [[nodiscard]] bool PoissonFftCudaAvailable() {
   int device_count = 0;
@@ -572,6 +565,283 @@ struct PoissonFftGpuResult {
       "CUDA cuFFT free-space Poisson (zero-padded convolution)"});
 
   return result;
+}
+
+// =============================================================================
+// Device-resident free-space Poisson solver (cached plans + device data flow)
+// =============================================================================
+
+namespace {
+
+// GPU kernel: zero-pad rho into first octant of doubled grid and scale by dv.
+// Input: d_rho (np_total doubles in grid.flatten layout)
+// Output: d_rho_pad (M cufftDoubleComplex, first octant filled, rest zero)
+__global__ void ZeroPadRhoKernel(
+    cufftDoubleComplex* d_rho_pad,
+    const double* d_rho,
+    double dv,
+    int n0, int n1, int n2,
+    int m0, int m1) {
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const int total = n0 * n1 * n2;
+  if (idx >= total) return;
+  const int iz = idx / (n0 * n1);
+  const int rem = idx % (n0 * n1);
+  const int iy = rem / n0;
+  const int ix = rem % n0;
+  const int dst = ix + m0 * (iy + m1 * iz);
+  d_rho_pad[dst].x = d_rho[idx] * dv;
+  d_rho_pad[dst].y = 0.0;
+}
+
+// GPU kernel: extract first octant from V_pad and normalize by 1/M.
+__global__ void ExtractOctantKernel(
+    double* d_V_out,
+    const cufftDoubleComplex* d_V_pad,
+    double inv_M,
+    int n0, int n1, int n2,
+    int m0, int m1) {
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const int total = n0 * n1 * n2;
+  if (idx >= total) return;
+  const int iz = idx / (n0 * n1);
+  const int rem = idx % (n0 * n1);
+  const int iy = rem / n0;
+  const int ix = rem % n0;
+  const int src = ix + m0 * (iy + m1 * iz);
+  d_V_out[idx] = d_V_pad[src].x * inv_M;
+}
+
+// GPU kernel: compute Hartree energy = 0.5 * sum(rho * V * dv) via reduction.
+// Uses a single block for simplicity (grid sizes are modest).
+__global__ void HartreeEnergyKernel(
+    double* d_energy,
+    const double* d_rho,
+    const double* d_V,
+    double dv,
+    int n) {
+  extern __shared__ double sdata[];
+  const int tid = threadIdx.x;
+  const int bid = blockIdx.x;
+  const int total = n;
+
+  double partial = 0.0;
+  for (int i = bid * blockDim.x + tid; i < total; i += gridDim.x * blockDim.x) {
+    partial += d_rho[i] * d_V[i] * dv;
+  }
+  sdata[tid] = partial;
+  __syncthreads();
+
+  for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+    if (tid < s) sdata[tid] += sdata[tid + s];
+    __syncthreads();
+  }
+
+  if (tid == 0) atomicAdd(d_energy, 0.5 * sdata[0]);
+}
+
+// GPU kernel: zero a cufftDoubleComplex array.
+__global__ void ZeroComplexKernel(
+    cufftDoubleComplex* d, int total) {
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= total) return;
+  d[idx].x = 0.0;
+  d[idx].y = 0.0;
+}
+
+}  // namespace
+
+Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
+    const UniformGrid3D& grid,
+    const double* d_rho,
+    double* d_V_out,
+    cudaStream_t stream) {
+
+  const std::size_t N = grid.total_points();
+  if (N == 0) return Status::InvalidArgument("PoissonFreeDeviceCache: N=0");
+
+  PoissonFreeDeviceResult result;
+  result.grid_size = N;
+
+  const auto [n0, n1, n2] = grid.n;
+  const auto [h0, h1, h2] = grid.h;
+  const double dv = h0 * h1 * h2;
+
+  // Small grids: fall back to the host API.
+  if (N <= 32768) {
+    std::vector<double> rho_host(N);
+    cudaMemcpyAsync(rho_host.data(), d_rho, N * sizeof(double),
+                    cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
+    auto V_cpu = PoissonSolver::SolveFreeFFT(grid, rho_host);
+    cudaMemcpyAsync(d_V_out, V_cpu.data(), N * sizeof(double),
+                    cudaMemcpyHostToDevice, stream);
+    double E = 0.0;
+    for (std::size_t i = 0; i < N; ++i)
+      E += rho_host[i] * V_cpu[i] * dv;
+    result.hartree_energy = 0.5 * E;
+    return result;
+  }
+
+  const std::size_t m0 = 2 * n0, m1 = 2 * n1, m2 = 2 * n2;
+  const std::size_t M = m0 * m1 * m2;
+  const double h_eff = std::cbrt(dv);
+  const double self_phi = 2.3801 / h_eff;
+  const double inv_M = 1.0 / static_cast<double>(M);
+
+  // Initialize or reinitialize cache if grid dimensions changed.
+  if (!initialized_ || cached_n0_ != n0 || cached_n1_ != n1 || cached_n2_ != n2) {
+    if (initialized_) {
+      if (plan_fwd_) cufftDestroy(plan_fwd_);
+      if (plan_inv_) cufftDestroy(plan_inv_);
+      if (d_g_) cudaFree(d_g_);
+      if (d_rho_pad_) cudaFree(d_rho_pad_);
+      if (d_V_pad_) cudaFree(d_V_pad_);
+      if (d_energy_) cudaFree(d_energy_);
+    }
+
+    m0_ = m0; m1_ = m1; m2_ = m2; M_ = M;
+    cached_n0_ = n0; cached_n1_ = n1; cached_n2_ = n2;
+
+    // Allocate device buffers.
+    cudaMalloc(&d_g_, M * sizeof(cufftDoubleComplex));
+    cudaMalloc(&d_rho_pad_, M * sizeof(cufftDoubleComplex));
+    cudaMalloc(&d_V_pad_, M * sizeof(cufftDoubleComplex));
+    cudaMalloc(&d_energy_, sizeof(double));
+
+    // Build and upload 1/|r| kernel on host (one-time cost).
+    std::vector<cufftDoubleComplex> host_g(M);
+    for (std::size_t iz = 0; iz < m2; ++iz) {
+      const double dz = (iz < n2) ? static_cast<double>(iz) * h2
+                                  : (static_cast<double>(iz) - static_cast<double>(m2)) * h2;
+      for (std::size_t iy = 0; iy < m1; ++iy) {
+        const double dy = (iy < n1) ? static_cast<double>(iy) * h1
+                                    : (static_cast<double>(iy) - static_cast<double>(m1)) * h1;
+        for (std::size_t ix = 0; ix < m0; ++ix) {
+          const double dx = (ix < n0) ? static_cast<double>(ix) * h0
+                                      : (static_cast<double>(ix) - static_cast<double>(m0)) * h0;
+          const bool wrap = (ix == n0) || (iy == n1) || (iz == n2);
+          const std::size_t g = ix + m0 * (iy + m1 * iz);
+          if (wrap) {
+            host_g[g].x = 0.0; host_g[g].y = 0.0;
+          } else {
+            const double r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 < 1e-30) {
+              host_g[g].x = self_phi; host_g[g].y = 0.0;
+            } else {
+              host_g[g].x = 1.0 / std::sqrt(r2); host_g[g].y = 0.0;
+            }
+          }
+        }
+      }
+    }
+    cudaMemcpyAsync(d_g_, host_g.data(), M * sizeof(cufftDoubleComplex),
+                    cudaMemcpyHostToDevice, stream);
+
+    // Create cuFFT plans (dimension order: m2, m1, m0 for column-major).
+    cufftResult cufft_err = cufftPlan3d(&plan_fwd_,
+        static_cast<int>(m2), static_cast<int>(m1), static_cast<int>(m0),
+        CUFFT_Z2Z);
+    if (cufft_err != CUFFT_SUCCESS)
+      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftPlan3d fwd");
+    cufftSetStream(plan_fwd_, stream);
+
+    cufft_err = cufftPlan3d(&plan_inv_,
+        static_cast<int>(m2), static_cast<int>(m1), static_cast<int>(m0),
+        CUFFT_Z2Z);
+    if (cufft_err != CUFFT_SUCCESS)
+      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftPlan3d inv");
+    cufftSetStream(plan_inv_, stream);
+
+    // Forward FFT the kernel (one-time).
+    cufft_err = cufftExecZ2Z(plan_fwd_, d_g_, d_g_, CUFFT_FORWARD);
+    if (cufft_err != CUFFT_SUCCESS)
+      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2Z fwd g");
+
+    initialized_ = true;
+  }
+
+  // Update stream on cached plans (stream may change across Run calls).
+  cufftSetStream(plan_fwd_, stream);
+  cufftSetStream(plan_inv_, stream);
+
+  auto kernel_start = std::chrono::steady_clock::now();
+
+  // Step 1: Zero-pad rho into d_rho_pad (GPU kernel).
+  cudaMemsetAsync(d_rho_pad_, 0, M_ * sizeof(cufftDoubleComplex), stream);
+  {
+    const int total = static_cast<int>(N);
+    const int threads = 256;
+    const int blocks = (total + threads - 1) / threads;
+    ZeroPadRhoKernel<<<blocks, threads, 0, stream>>>(
+        d_rho_pad_, d_rho, dv,
+        static_cast<int>(n0), static_cast<int>(n1), static_cast<int>(n2),
+        static_cast<int>(m0_), static_cast<int>(m1_));
+  }
+
+  // Step 2: Forward FFT rho.
+  cufftResult cufft_err = cufftExecZ2Z(plan_fwd_, d_rho_pad_, d_rho_pad_,
+                                       CUFFT_FORWARD);
+  if (cufft_err != CUFFT_SUCCESS)
+    return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2Z fwd rho");
+
+  // Step 3: Pointwise multiply V(k) = rho(k) * g(k).
+  {
+    const int total = static_cast<int>(M_);
+    const int threads = 256;
+    const int blocks = (total + threads - 1) / threads;
+    ComplexMultiplyKernel<<<blocks, threads, 0, stream>>>(
+        d_V_pad_, d_rho_pad_, d_g_, total);
+  }
+
+  // Step 4: Inverse FFT V(k) -> V(r).
+  cufft_err = cufftExecZ2Z(plan_inv_, d_V_pad_, d_V_pad_, CUFFT_INVERSE);
+  if (cufft_err != CUFFT_SUCCESS)
+    return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2Z inv");
+
+  // Step 5: Extract first octant and normalize.
+  {
+    const int total = static_cast<int>(N);
+    const int threads = 256;
+    const int blocks = (total + threads - 1) / threads;
+    ExtractOctantKernel<<<blocks, threads, 0, stream>>>(
+        d_V_out, d_V_pad_, inv_M,
+        static_cast<int>(n0), static_cast<int>(n1), static_cast<int>(n2),
+        static_cast<int>(m0_), static_cast<int>(m1_));
+  }
+
+  // Step 6: Compute Hartree energy on device (async, no sync).
+  cudaMemsetAsync(d_energy_, 0, sizeof(double), stream);
+  {
+    const int threads = 256;
+    const int blocks = 256;
+    const int smem = threads * sizeof(double);
+    HartreeEnergyKernel<<<blocks, threads, smem, stream>>>(
+        d_energy_, d_rho, d_V_out, dv, static_cast<int>(N));
+  }
+  cudaMemcpyAsync(&result.hartree_energy, d_energy_, sizeof(double),
+                  cudaMemcpyDeviceToHost, stream);
+  // No sync — caller owns the stream and will sync when they need V_H or energy.
+
+  auto kernel_end = std::chrono::steady_clock::now();
+  result.kernel_ms =
+      std::chrono::duration<double, std::milli>(kernel_end - kernel_start).count();
+
+  return result;
+}
+
+void PoissonFreeDeviceCache::Release() {
+  if (plan_fwd_) { cufftDestroy(plan_fwd_); plan_fwd_ = 0; }
+  if (plan_inv_) { cufftDestroy(plan_inv_); plan_inv_ = 0; }
+  if (d_g_) { cudaFree(d_g_); d_g_ = nullptr; }
+  if (d_rho_pad_) { cudaFree(d_rho_pad_); d_rho_pad_ = nullptr; }
+  if (d_V_pad_) { cudaFree(d_V_pad_); d_V_pad_ = nullptr; }
+  if (d_energy_) { cudaFree(d_energy_); d_energy_ = nullptr; }
+  initialized_ = false;
+}
+
+PoissonFreeDeviceCache::~PoissonFreeDeviceCache() {
+  Release();
 }
 
 }  // namespace tides::grid

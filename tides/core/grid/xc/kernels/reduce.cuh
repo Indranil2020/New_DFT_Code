@@ -260,19 +260,26 @@ template <class Func>
                                             cudaStream_t stream,
                                             bool deterministic) {
   const std::int64_t* sys_offsets = input.sys_offsets;
-  std::int64_t* d_default_sys_offsets = nullptr;
+  // Cached default sys_offsets buffer (avoids per-call malloc/free).
+  static std::int64_t* d_cached_offsets = nullptr;
+  static std::int64_t d_cached_np = -1;
   if (sys_offsets == nullptr) {
-    std::int64_t host_offsets[2] = {0, input.np};
-    cudaError_t err = cudaMallocAsync(reinterpret_cast<void**>(&d_default_sys_offsets),
-                                      sizeof(host_offsets), stream);
-    if (err != cudaSuccess) return CudaStatus(err, "cudaMallocAsync default sys_offsets");
-    err = cudaMemcpyAsync(d_default_sys_offsets, host_offsets, sizeof(host_offsets),
-                          cudaMemcpyHostToDevice, stream);
-    if (err != cudaSuccess) {
-      cudaFreeAsync(d_default_sys_offsets, stream);
-      return CudaStatus(err, "cudaMemcpyAsync default sys_offsets");
+    if (d_cached_offsets == nullptr || d_cached_np != input.np) {
+      if (d_cached_offsets) cudaFreeAsync(d_cached_offsets, stream);
+      std::int64_t host_offsets[2] = {0, input.np};
+      cudaError_t err = cudaMallocAsync(reinterpret_cast<void**>(&d_cached_offsets),
+                                        sizeof(host_offsets), stream);
+      if (err != cudaSuccess) return CudaStatus(err, "cudaMallocAsync default sys_offsets");
+      err = cudaMemcpyAsync(d_cached_offsets, host_offsets, sizeof(host_offsets),
+                            cudaMemcpyHostToDevice, stream);
+      if (err != cudaSuccess) {
+        cudaFreeAsync(d_cached_offsets, stream);
+        d_cached_offsets = nullptr;
+        return CudaStatus(err, "cudaMemcpyAsync default sys_offsets");
+      }
+      d_cached_np = input.np;
     }
-    sys_offsets = d_default_sys_offsets;
+    sys_offsets = d_cached_offsets;
   }
   const std::int64_t required_blocks = (input.np + kThreads - 1) / kThreads;
   const int blocks = static_cast<int>(std::min<std::int64_t>(required_blocks, 65535));
@@ -289,14 +296,12 @@ template <class Func>
   }
   Status status = CudaStatus(cudaGetLastError(), "FunctionalKernel launch");
   if (!status.ok() || !deterministic) {
-    if (d_default_sys_offsets) cudaFreeAsync(d_default_sys_offsets, stream);
     return status;
   }
   FunctionalDeterministicEnergyKernel<Func><<<1, 1, 0, stream>>>(
       input.rho, input.grad, input.w, output.exc_per_system,
       sys_offsets, input.nsys, input.np, input.point_stride);
   status = CudaStatus(cudaGetLastError(), "FunctionalDeterministicEnergyKernel launch");
-  if (d_default_sys_offsets) cudaFreeAsync(d_default_sys_offsets, stream);
   return status;
 }
 

@@ -157,15 +157,24 @@ static scf::NaoDriverResult NaoDriver_run(
     bool use_qtt_compression,
     bool use_cuda_graph,
     bool use_kpoints,
-    std::array<int, 3> kpoint_grid) {
-    // Load pseudopotentials for each atom type (same as C++ tests).
+    std::array<int, 3> kpoint_grid,
+    const std::string& xc_functional,
+    const std::string& pp_dir) {
+    grid::xc::HostXcSpec spec{};
+    if (xc_functional == "pbe" || xc_functional == "PBE") {
+        spec.id = grid::xc::XcFunctionalId::kPbe;
+        spec.family = grid::xc::XcFamily::kGga;
+    } else {
+        spec.id = grid::xc::XcFunctionalId::kLdaPw92;
+        spec.family = grid::xc::XcFamily::kLda;
+    }
     std::string pp_err;
-    auto pps = basis::PpLoader::LoadByAtomicNumbers(atomic_numbers, "", &pp_err);
+    auto pps = basis::PpLoader::LoadByAtomicNumbers(atomic_numbers, pp_dir, &pp_err);
     const bool have_pps = (pps.size() == atomic_numbers.size());
     if (have_pps) {
         return scf::NaoDriver::Run(atomic_numbers, positions,
                                     grid_h, grid_margin, max_iter, tol,
-                                    &pps, {}, 1, 0,
+                                    &pps, spec, 1, 0,
                                     use_dual_grid,
                                     0.0, false, false, false, false, false,
                                     use_mixed_precision,
@@ -173,10 +182,9 @@ static scf::NaoDriverResult NaoDriver_run(
                                     use_cuda_graph,
                                     use_kpoints, kpoint_grid);
     }
-    // Fallback: all-electron path (no PPs available).
     return scf::NaoDriver::Run(atomic_numbers, positions,
                                 grid_h, grid_margin, max_iter, tol,
-                                nullptr, {}, 1, 0,
+                                nullptr, spec, 1, 0,
                                 use_dual_grid,
                                 0.0, false, false, false, false, false,
                                 use_mixed_precision,
@@ -430,6 +438,17 @@ NB_MODULE(_native, m) {
             nb::arg("mol"), nb::arg("scf_result"), nb::arg("energy"));
 
     // NaoDriver — the NAO-based SCF engine (product pipeline).
+    nb::class_<scf::BuildHTimings>(m, "BuildHTimings")
+        .def_ro("quantize_P_ms", &scf::BuildHTimings::quantize_P_ms)
+        .def_ro("rho_build_ms", &scf::BuildHTimings::rho_build_ms)
+        .def_ro("poisson_ms", &scf::BuildHTimings::poisson_ms)
+        .def_ro("xc_eval_ms", &scf::BuildHTimings::xc_eval_ms)
+        .def_ro("vmat_build_ms", &scf::BuildHTimings::vmat_build_ms)
+        .def_ro("assemble_H_ms", &scf::BuildHTimings::assemble_H_ms)
+        .def_ro("total_ms", &scf::BuildHTimings::total_ms)
+        .def_ro("n_iterations", &scf::BuildHTimings::n_iterations)
+        .def_ro("used_gpu_pipeline", &scf::BuildHTimings::used_gpu_pipeline);
+
     nb::class_<scf::NaoDriverResult>(m, "NaoDriverResult")
         .def_rw("scf", &scf::NaoDriverResult::scf)
         .def_rw("energy", &scf::NaoDriverResult::energy)
@@ -439,6 +458,8 @@ NB_MODULE(_native, m) {
         .def_rw("grid_h", &scf::NaoDriverResult::grid_h)
         .def_rw("wall_time_ms", &scf::NaoDriverResult::wall_time_ms)
         .def_rw("basis_info", &scf::NaoDriverResult::basis_info)
+        .def_rw("xc_functional", &scf::NaoDriverResult::xc_functional)
+        .def_rw("build_H_timings", &scf::NaoDriverResult::build_H_timings)
         .def_prop_ro("grid_n", [](const scf::NaoDriverResult& r) {
             return std::vector<std::size_t>{r.grid_n[0], r.grid_n[1], r.grid_n[2]};
         });
@@ -453,7 +474,9 @@ NB_MODULE(_native, m) {
            nb::arg("use_qtt") = false,
            nb::arg("use_cuda_graph") = false,
            nb::arg("use_kpoints") = false,
-           nb::arg("kpoint_grid") = std::array<int, 3>{1, 1, 1})
+           nb::arg("kpoint_grid") = std::array<int, 3>{1, 1, 1},
+           nb::arg("xc_functional") = "lda",
+           nb::arg("pp_dir") = "")
         .def_static("compute_forces", &NaoDriver_compute_forces,
             nb::arg("atomic_numbers"), nb::arg("positions"),
            nb::arg("grid_h") = 0.2835, nb::arg("grid_margin") = 3.7794,

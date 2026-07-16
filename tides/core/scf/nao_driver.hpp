@@ -87,6 +87,19 @@ void dsygv_(const int* itype, const char* jobz, const char* uplo,
 
 namespace tides::scf {
 
+// Per-substep timings for build_H decomposition (milliseconds, averaged over SCF iterations).
+struct BuildHTimings {
+  double quantize_P_ms = 0.0;   // Mixed-precision quantization of density matrix
+  double rho_build_ms = 0.0;    // Density build on grid (GEMM or GPU)
+  double poisson_ms = 0.0;      // Poisson solve (FFT or GPU cuFFT)
+  double xc_eval_ms = 0.0;      // XC potential evaluation on grid
+  double vmat_build_ms = 0.0;   // V_H and V_xc matrix projection (GEMM or GPU)
+  double assemble_H_ms = 0.0;   // Final H = T + V_ext + V_H + V_xc assembly
+  double total_ms = 0.0;        // Total build_H wall time per iteration
+  int n_iterations = 0;
+  bool used_gpu_pipeline = false;
+};
+
 struct NaoDriverResult {
   SCFResult scf;
   EnergyComponents energy;
@@ -98,6 +111,7 @@ struct NaoDriverResult {
   double wall_time_ms = 0.0;
   std::string basis_info;
   std::string xc_functional;  // Name of XC functional used
+  BuildHTimings build_H_timings;  // Per-substep profiling of build_H
   // Tile substrate stats (Gap 3).
   std::size_t tile_count_H = 0;    // non-zero tiles in Hamiltonian
   std::size_t tile_count_S = 0;    // non-zero tiles in overlap
@@ -1086,7 +1100,7 @@ class NaoDriver {
         dev_xc_spec.nspin = nspin;
         dev_xc_spec.terms = {{host_to_dev_functional(xc_spec.id), xc_spec.exchange_fraction}};
         dev_xc_spec.precision = grid::xc::PrecisionPolicy::kFloat64;
-        dev_xc_spec.deterministic = true;
+        dev_xc_spec.deterministic = false;
 
         cudaStreamSynchronize(dev_stream);
         device_pipeline_ready = true;
@@ -1512,6 +1526,10 @@ class NaoDriver {
     };
     CachedHBuild cache;
     int scf_iter = 0;
+    // Build_H substep timing accumulators (milliseconds).
+    double acc_quantize_P = 0.0, acc_rho_build = 0.0, acc_poisson = 0.0;
+    double acc_xc_eval = 0.0, acc_vmat_build = 0.0, acc_assemble_H = 0.0;
+    double acc_build_H_total = 0.0;
     // E6: CUDA graph capture for SCF loop — capture build_H operations on
     // the first iteration and replay on subsequent iterations to eliminate
     // kernel launch overhead. On GPU, this captures real CUDA kernels;
@@ -1521,11 +1539,13 @@ class NaoDriver {
 
     auto build_H = [&](const std::vector<double>& P) -> std::vector<double> {
       ++scf_iter;
+      auto t_bh_start = std::chrono::steady_clock::now();
       // Mixed precision: quantize P to BF16/FP16 before building rho.
       // This simulates the reduced-precision storage path where the density
       // matrix is stored in FP16/BF16 on GPU tensor cores. The Hamiltonian
       // is still built in FP64 from the quantized P, and energy reductions
       // use Ozaki error-compensated summation (see energy_fn below).
+      auto t_quant0 = std::chrono::steady_clock::now();
       const auto mp_mode = use_mixed_precision
           ? scf::MixedPrecisionSCF::AutoSelect(n, 1e-6)
           : scf::PrecisionMode::kFP64;
@@ -1534,6 +1554,8 @@ class NaoDriver {
           : P;
       cache.P2.assign(n * n, 0.0);
       for (std::size_t i = 0; i < n * n; ++i) cache.P2[i] = occ_factor * P_eff[i];
+      auto t_quant1 = std::chrono::steady_clock::now();
+      acc_quantize_P += std::chrono::duration<double, std::milli>(t_quant1 - t_quant0).count();
 
       const bool is_gga = (xc_spec.family == grid::xc::XcFamily::kGga);
       std::vector<double> grad_rho_x, grad_rho_y, grad_rho_z;
@@ -1549,6 +1571,7 @@ class NaoDriver {
                         cudaMemcpyHostToDevice, dev_stream);
 
         // Build rho (and grad_rho if GGA) on device into arena.
+        auto t_rho0 = std::chrono::steady_clock::now();
         grid::RhoGradientDeviceIn rho_in;
         rho_in.density_matrix = d_P_up;
         rho_in.phi = d_phi;
@@ -1560,12 +1583,12 @@ class NaoDriver {
         auto rho_status = grid::BuildRhoGradientDevice(
             rho_in, dev_arena->rho(), dev_arena->grad(), dev_stream);
         if (rho_status.ok()) {
-          // Download rho for Poisson (unavoidable for molecular free-space BC).
-          cache.rho.resize(np_total);
-          cudaMemcpyAsync(cache.rho.data(), dev_arena->rho(),
-                          np_total * sizeof(double), cudaMemcpyDeviceToHost,
-                          dev_stream);
-          cudaStreamSynchronize(dev_stream);
+          // rho is on device (dev_arena->rho()). No D2H needed —
+          // device-resident Poisson uses it directly. We still need
+          // cache.rho for the energy function fallback, but only download
+          // if the device Poisson fails (deferred to fallback path).
+          auto t_rho1 = std::chrono::steady_clock::now();
+          acc_rho_build += std::chrono::duration<double, std::milli>(t_rho1 - t_rho0).count();
 
           // PP-GPU Phase A: project a grid potential to the basis on device
           // (H2D the potential, weighted vmat with resident d_phi, D2H the
@@ -1593,36 +1616,61 @@ class NaoDriver {
             return true;
           };
 
-          // --- Poisson solve (GPU for both periodic and free-space) ---
+          // --- Poisson solve (device-resident, cached cuFFT plans) ---
+          auto t_poisson0 = std::chrono::steady_clock::now();
           bool is_periodic = (grid.bc[0] == grid::BoundaryCondition::kPeriodic &&
                               grid.bc[1] == grid::BoundaryCondition::kPeriodic &&
                               grid.bc[2] == grid::BoundaryCondition::kPeriodic);
-          bool gpu_poisson_ok = false;
-          if (is_periodic && grid::PoissonFftCudaAvailable()) {
-            auto gpu_res = grid::PoissonFftCuda(grid, cache.rho);
-            if (gpu_res.ok()) {
-              if (!project_v_device(gpu_res.value().V, cache.V_H))
-                cache.V_H = grid::VmatBuilder::BuildHmatGemm(
-                    grid, orbitals, gpu_res.value().V);
-              gpu_poisson_ok = true;
+          bool poisson_ok = false;
+          if (!is_periodic) {
+            // Free-space: use device-resident cached solver.
+            // rho is already on device (dev_arena->rho()), V goes to d_vh_grid.
+            auto poisson_res = grid::PoissonFreeDeviceCache::Instance().Solve(
+                grid, dev_arena->rho(), d_vh_grid, dev_stream);
+            if (poisson_res.ok()) {
+              // Build V_H matrix directly from d_vh_grid (no H2D needed).
+              grid::WeightedVmatDeviceIn win;
+              win.phi = d_phi;
+              win.wv = d_vh_grid;
+              win.nbasis = static_cast<std::int64_t>(n);
+              win.np = static_cast<std::int64_t>(np_total);
+              win.point_stride = static_cast<std::int64_t>(dev_stride);
+              win.scale = dv;
+              if (grid::BuildWeightedVmatDevice(win, d_vmat, dev_stream).ok()) {
+                cache.V_H.resize(n * n);
+                cudaMemcpyAsync(cache.V_H.data(), d_vmat,
+                                n * n * sizeof(double),
+                                cudaMemcpyDeviceToHost, dev_stream);
+                poisson_ok = true;
+              }
             }
-          } else if (!is_periodic && grid::PoissonFftCudaAvailable()) {
+          }
+          if (!poisson_ok) {
+            // Fallback: download rho, use host-based Poisson + vmat.
+            cache.rho.resize(np_total);
+            cudaMemcpyAsync(cache.rho.data(), dev_arena->rho(),
+                            np_total * sizeof(double), cudaMemcpyDeviceToHost,
+                            dev_stream);
+            cudaStreamSynchronize(dev_stream);
             auto gpu_res = grid::PoissonFreeCuda(grid, cache.rho);
             if (gpu_res.ok()) {
               if (!project_v_device(gpu_res.value().V, cache.V_H))
                 cache.V_H = grid::VmatBuilder::BuildHmatGemm(
                     grid, orbitals, gpu_res.value().V);
-              gpu_poisson_ok = true;
+              poisson_ok = true;
+            }
+            if (!poisson_ok) {
+              auto poisson_result = grid::PoissonSolver::Solve(grid, cache.rho);
+              if (!project_v_device(poisson_result, cache.V_H))
+                cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals,
+                                                             poisson_result);
             }
           }
-          if (!gpu_poisson_ok) {
-            auto poisson_result = grid::PoissonSolver::Solve(grid, cache.rho);
-            if (!project_v_device(poisson_result, cache.V_H))
-              cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals,
-                                                           poisson_result);
-          }
+          auto t_poisson1 = std::chrono::steady_clock::now();
+          acc_poisson += std::chrono::duration<double, std::milli>(t_poisson1 - t_poisson0).count();
 
           // --- XC evaluation on device ---
+          auto t_xc0 = std::chrono::steady_clock::now();
           grid::xc::XcGridIn xc_in;
           xc_in.rho = dev_arena->rho();
           xc_in.grad = is_gga ? dev_arena->grad() : nullptr;
@@ -1677,9 +1725,8 @@ class NaoDriver {
                   cudaMemcpyAsync(cache.V_xc.data(), d_vmat,
                                   n * n * sizeof(double),
                                   cudaMemcpyDeviceToHost, dev_stream);
-                  cudaStreamSynchronize(dev_stream);
                   lda_vmat_on_device = true;
-                }
+                    }
               }
               if (!lda_vmat_on_device) {
                 std::vector<double> wv_rho(np_total, 0.0);
@@ -1708,24 +1755,13 @@ class NaoDriver {
                               sizeof(double), cudaMemcpyDeviceToHost, dev_stream);
               cudaStreamSynchronize(dev_stream);
               cache.xc_energy_gpu = exc;
-
-              // Download vxc grid for energy assembly (eps_xc per point).
-              // The device pipeline doesn't compute per-point eps_xc;
-              // compute it on host from rho for energy reporting.
-              cache.xc.vxc.assign(np_total, 0.0);
-              cache.xc.eps_xc.assign(np_total, 0.0);
-              std::vector<double> wv_rho_host(np_total, 0.0);
-              cudaMemcpyAsync(wv_rho_host.data(), dev_arena->wv_rho(),
-                              np_total * sizeof(double), cudaMemcpyDeviceToHost,
-                              dev_stream);
-              cudaStreamSynchronize(dev_stream);
-              for (std::size_t g = 0; g < np_total; ++g) {
-                const double n_rho = std::max(cache.rho[g], 0.0);
-                cache.xc.vxc[g] = (n_rho > 1e-30) ? wv_rho_host[g] / (dv * n_rho) : 0.0;
-                cache.xc.eps_xc[g] = (n_rho > 1e-30) ? exc / np_total : 0.0;
-              }
+              auto t_xc1 = std::chrono::steady_clock::now();
+              acc_xc_eval += std::chrono::duration<double, std::milli>(t_xc1 - t_xc0).count();
+              // vmat_build is fused into poisson/xc timers in GPU path.
+              acc_vmat_build += 0.0;
 
               // H = T + V_ext + V_H + V_xc (+ V_nl if pseudopotentials).
+              auto t_asm0 = std::chrono::steady_clock::now();
               cache.H = tides::ham::AssembleH(n, T, V_ext, cache.V_H, cache.V_xc, V_nl);
               // M9: PAW on-site correction (device path).
               if (use_paw) {
@@ -1751,6 +1787,10 @@ class NaoDriver {
                   for (std::size_t i = 0; i < n * n; ++i) cache.H[i] += H_paw[i];
                 }
               }
+              auto t_asm1 = std::chrono::steady_clock::now();
+              acc_assemble_H += std::chrono::duration<double, std::milli>(t_asm1 - t_asm0).count();
+              auto t_bh_end = std::chrono::steady_clock::now();
+              acc_build_H_total += std::chrono::duration<double, std::milli>(t_bh_end - t_bh_start).count();
               return cache.H;
             }
           } else {
@@ -1767,6 +1807,7 @@ class NaoDriver {
       // --- CPU fallback path ---
       // Dual grid: build rho and solve Poisson on fine grid, then restrict
       // V_H to coarse grid for matrix element computation.
+      auto t_rho0_cpu = std::chrono::steady_clock::now();
       if (use_dual_grid) {
         const std::size_t fine_np = fn0 * fn1 * fn2;
         auto rho_fine = grid::VmatBuilder::BuildRhoGemm(
@@ -1799,9 +1840,12 @@ class NaoDriver {
         cache.rho = grid::VmatBuilder::BuildRhoGemm(grid, orbitals, cache.P2);
       }
       } // end dual grid else
+      auto t_rho1_cpu = std::chrono::steady_clock::now();
+      acc_rho_build += std::chrono::duration<double, std::milli>(t_rho1_cpu - t_rho0_cpu).count();
 
       // Poisson solve: GPU for both periodic and free-space, CPU fallback.
       // Skip if dual grid already computed V_H above.
+      auto t_poisson0_cpu = std::chrono::steady_clock::now();
       if (!use_dual_grid) {
       bool is_periodic = (grid.bc[0] == grid::BoundaryCondition::kPeriodic &&
                           grid.bc[1] == grid::BoundaryCondition::kPeriodic &&
@@ -1834,8 +1878,11 @@ class NaoDriver {
         cache.V_H = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, poisson_result);
       }
       } // end !use_dual_grid Poisson guard
+      auto t_poisson1_cpu = std::chrono::steady_clock::now();
+      acc_poisson += std::chrono::duration<double, std::milli>(t_poisson1_cpu - t_poisson0_cpu).count();
 
       // XC evaluation via host API.
+      auto t_xc0_cpu = std::chrono::steady_clock::now();
       bool gpu_xc_ok = false;
       if (!is_gga && grid::XCCudaAvailable()) {
         auto gpu_res = grid::XCEvalLdaCuda(grid, cache.rho, 0.0);
@@ -1906,8 +1953,13 @@ class NaoDriver {
           cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.xc.vxc);
         }
       }
+      auto t_xc1_cpu = std::chrono::steady_clock::now();
+      acc_xc_eval += std::chrono::duration<double, std::milli>(t_xc1_cpu - t_xc0_cpu).count();
+      // vmat_build (BuildHmatGemm) is fused into poisson and xc timers in the CPU path.
+      acc_vmat_build += 0.0;
 
       // H = T + V_ext + V_H + V_xc (+ V_nl if pseudopotentials).
+      auto t_asm0_cpu = std::chrono::steady_clock::now();
       cache.H = tides::ham::AssembleH(n, T, V_ext, cache.V_H, cache.V_xc, V_nl);
       // Gap 5: HSE screened exchange — fold short-range exact exchange into
       // the SCF Hamiltonian (not just a post-SCF correction).  When
@@ -2072,6 +2124,10 @@ class NaoDriver {
       if (use_cuda_graph && cuda_graph_captured && scf_iter > 1) {
         cuda_graph.Replay();
       }
+      auto t_asm1_cpu = std::chrono::steady_clock::now();
+      acc_assemble_H += std::chrono::duration<double, std::milli>(t_asm1_cpu - t_asm0_cpu).count();
+      auto t_bh_end = std::chrono::steady_clock::now();
+      acc_build_H_total += std::chrono::duration<double, std::milli>(t_bh_end - t_bh_start).count();
       return cache.H;
     };
 
@@ -3039,7 +3095,9 @@ class NaoDriver {
     // --- Device pipeline cleanup (audit B10) ---
     // Return arena-allocated buffers to the GpuArena pool (no cudaFree).
     // This ensures device memory is recycled across SCF runs.
+    bool gpu_pipeline_was_active = false;
 #ifdef TIDES_HAVE_CUDA
+    gpu_pipeline_was_active = device_pipeline_ready;
     if (device_pipeline_ready) {
       tides::grid::GpuArena& gpu_arena = tides::grid::GpuArena::Instance();
       if (d_phi) gpu_arena.Free(d_phi);
@@ -3061,6 +3119,29 @@ class NaoDriver {
     }
 #endif
     // --- End gap module wiring ---
+
+    // Populate build_H substep timings from accumulators.
+    if (scf_iter > 0) {
+      result.build_H_timings.quantize_P_ms = acc_quantize_P / scf_iter;
+      result.build_H_timings.rho_build_ms = acc_rho_build / scf_iter;
+      result.build_H_timings.poisson_ms = acc_poisson / scf_iter;
+      result.build_H_timings.xc_eval_ms = acc_xc_eval / scf_iter;
+      result.build_H_timings.vmat_build_ms = acc_vmat_build / scf_iter;
+      result.build_H_timings.assemble_H_ms = acc_assemble_H / scf_iter;
+      result.build_H_timings.total_ms = acc_build_H_total / scf_iter;
+      result.build_H_timings.n_iterations = scf_iter;
+      result.build_H_timings.used_gpu_pipeline = gpu_pipeline_was_active;
+      std::cout << "[NaoDriver] build_H substep timings (avg per iteration, ms):"
+                << "\n  quantize_P:  " << result.build_H_timings.quantize_P_ms
+                << "\n  rho_build:   " << result.build_H_timings.rho_build_ms
+                << "\n  poisson:     " << result.build_H_timings.poisson_ms
+                << "\n  xc_eval:     " << result.build_H_timings.xc_eval_ms
+                << "\n  vmat_build:  " << result.build_H_timings.vmat_build_ms
+                << "\n  assemble_H:  " << result.build_H_timings.assemble_H_ms
+                << "\n  total:       " << result.build_H_timings.total_ms
+                << "\n  GPU pipeline: " << (result.build_H_timings.used_gpu_pipeline ? "yes" : "no")
+                << std::endl;
+    }
 
     auto t1 = std::chrono::steady_clock::now();
     result.wall_time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
