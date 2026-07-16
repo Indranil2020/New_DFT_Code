@@ -9,8 +9,10 @@
 #include "grid/gpu_arena.hpp"
 
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 
 #include "common/status.hpp"
@@ -22,6 +24,54 @@ namespace {
   if (error == cudaSuccess) return Status::Ok();
   return Status::IoError(std::string(context) + ": " +
                          cudaGetErrorString(error));
+}
+
+[[nodiscard]] Status CublasStatus(cublasStatus_t s, const char* ctx) {
+  if (s == CUBLAS_STATUS_SUCCESS) return Status::Ok();
+  return Status::IoError(std::string(ctx) + ": cuBLAS error " +
+                         std::to_string(static_cast<int>(s)));
+}
+
+// Scale each column g of phi by wv[g]:  temp[mu, g] = wv[g] * phi[mu, g]
+// 2D grid: (g, mu) for coalesced memory access along g.
+__global__ void ScaleColumnsKernel(
+    double* out, const double* phi, const double* wv,
+    std::int64_t nbasis, std::int64_t np, std::int64_t stride) {
+  const std::int64_t g = blockIdx.x * blockDim.x + threadIdx.x;
+  const std::int64_t mu = blockIdx.y * blockDim.y + threadIdx.y;
+  if (g >= np || mu >= nbasis) return;
+  out[mu * stride + g] = wv[g] * phi[mu * stride + g];
+}
+
+// cuBLAS handle + temp buffer for GEMM-based vmat.
+struct VmatGemmCache {
+  cublasHandle_t handle = nullptr;
+  double* d_temp = nullptr;   // [nbasis * stride] scaled phi
+  std::int64_t cached_nbasis = 0, cached_stride = 0;
+
+  ~VmatGemmCache() {
+    if (handle) cublasDestroy(handle);
+    if (d_temp) cudaFree(d_temp);
+  }
+
+  bool ensure(std::int64_t nbasis, std::int64_t stride, cudaStream_t stream) {
+    if (!handle) {
+      if (cublasCreate(&handle) != CUBLAS_STATUS_SUCCESS) return false;
+    }
+    cublasSetStream(handle, stream);
+    if (cached_nbasis != nbasis || cached_stride != stride) {
+      if (d_temp) cudaFree(d_temp);
+      cudaMalloc(&d_temp, nbasis * stride * sizeof(double));
+      cached_nbasis = nbasis;
+      cached_stride = stride;
+    }
+    return d_temp != nullptr;
+  }
+};
+
+VmatGemmCache& vmat_gemm_cache() {
+  static VmatGemmCache c;
+  return c;
 }
 
 // One thread per grid point; loops over atoms. The interpolation branches
@@ -231,6 +281,52 @@ Status BuildWeightedVmatDevice(const WeightedVmatDeviceIn& input, double* vmat,
                           stream),
                       "cudaMemsetAsync weighted vmat");
   }
+
+  // GEMM path: V = scale * (diag(wv) * Phi) * Phi^T
+  // phi is [nbasis][stride] row-major = [stride][nbasis] col-major.
+  // V[mu,nu] = scale * sum_g temp[mu,g] * phi[nu,g]
+  // col-major: V = Phi^T * temp  (CUBLAS_OP_T on phi, CUBLAS_OP_N on temp)
+  const bool use_gemm = [] {
+    const char* e = std::getenv("TIDES_VMAT_GEMM");
+    return (e == nullptr || e[0] != '0');  // enabled by default
+  }();
+
+  if (use_gemm && input.nbasis >= 4) {
+    auto& gc = vmat_gemm_cache();
+    if (gc.ensure(input.nbasis, input.point_stride, stream)) {
+      // Step 1: temp = wv * phi  (scale each column)
+      {
+        dim3 block(32, 4);
+        dim3 grid((static_cast<unsigned int>(input.np) + block.x - 1) / block.x,
+                  (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
+        ScaleColumnsKernel<<<grid, block, 0, stream>>>(
+            gc.d_temp, input.phi, input.wv,
+            input.nbasis, input.np, input.point_stride);
+      }
+      // Step 2: V = scale * Phi^T * temp  (col-major GEMM)
+      // C = op(A) * op(B), A=phi (stride x nbasis col-major), op=T -> (nbasis x stride)
+      // B=temp (stride x nbasis col-major), op=N
+      // C=V (nbasis x nbasis col-major)
+      const double alpha = input.scale;
+      const double beta = 0.0;
+      cublasStatus_t cs = cublasDgemm(
+          gc.handle,
+          CUBLAS_OP_T, CUBLAS_OP_N,
+          static_cast<int>(input.nbasis),   // m
+          static_cast<int>(input.nbasis),   // n
+          static_cast<int>(input.np),       // k
+          &alpha,
+          input.phi, static_cast<int>(input.point_stride),  // A, lda
+          gc.d_temp, static_cast<int>(input.point_stride),  // B, ldb
+          &beta,
+          vmat, static_cast<int>(input.nbasis));             // C, ldc
+      if (cs == CUBLAS_STATUS_SUCCESS)
+        return Status::Ok();
+      // Fall through to kernel on cuBLAS error.
+    }
+  }
+
+  // Fallback: original per-(mu,nu) reduction kernel.
   dim3 grid_dim(static_cast<unsigned int>(input.nbasis),
                 static_cast<unsigned int>(input.nbasis));
   WeightedVmatKernel<<<grid_dim, 256, 0, stream>>>(

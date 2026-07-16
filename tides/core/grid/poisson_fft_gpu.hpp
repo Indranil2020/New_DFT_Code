@@ -88,12 +88,13 @@ class PoissonFreeDeviceCache {
   bool initialized_ = false;
   std::size_t cached_n0_ = 0, cached_n1_ = 0, cached_n2_ = 0;
   std::size_t m0_ = 0, m1_ = 0, m2_ = 0, M_ = 0;
+  std::size_t M_hc_ = 0;  // hermitian half size: (m0/2+1) * m1 * m2
 
-  cufftHandle plan_fwd_ = 0;
-  cufftHandle plan_inv_ = 0;
-  cufftDoubleComplex* d_g_ = nullptr;      // 1/|r| kernel (device)
-  cufftDoubleComplex* d_rho_pad_ = nullptr; // zero-padded rho (device)
-  cufftDoubleComplex* d_V_pad_ = nullptr;   // zero-padded V (device)
+  cufftHandle plan_fwd_ = 0;  // D2Z (real-to-complex)
+  cufftHandle plan_inv_ = 0;  // Z2D (complex-to-real)
+  cufftDoubleComplex* d_g_ = nullptr;      // 1/|r| kernel FFT'd (hermitian half)
+  double* d_rho_pad_ = nullptr;            // zero-padded rho (real, M doubles)
+  cufftDoubleComplex* d_fft_ = nullptr;    // FFT work buffer (hermitian half)
   double* d_energy_ = nullptr;              // scratch for hartree energy
 };
 #endif

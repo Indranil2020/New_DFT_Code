@@ -575,9 +575,9 @@ namespace {
 
 // GPU kernel: zero-pad rho into first octant of doubled grid and scale by dv.
 // Input: d_rho (np_total doubles in grid.flatten layout)
-// Output: d_rho_pad (M cufftDoubleComplex, first octant filled, rest zero)
+// Output: d_rho_pad (M doubles, first octant filled, rest zero)
 __global__ void ZeroPadRhoKernel(
-    cufftDoubleComplex* d_rho_pad,
+    double* d_rho_pad,
     const double* d_rho,
     double dv,
     int n0, int n1, int n2,
@@ -590,14 +590,13 @@ __global__ void ZeroPadRhoKernel(
   const int iy = rem / n0;
   const int ix = rem % n0;
   const int dst = ix + m0 * (iy + m1 * iz);
-  d_rho_pad[dst].x = d_rho[idx] * dv;
-  d_rho_pad[dst].y = 0.0;
+  d_rho_pad[dst] = d_rho[idx] * dv;
 }
 
-// GPU kernel: extract first octant from V_pad and normalize by 1/M.
+// GPU kernel: extract first octant from V_pad (real) and normalize by 1/M.
 __global__ void ExtractOctantKernel(
     double* d_V_out,
-    const cufftDoubleComplex* d_V_pad,
+    const double* d_V_pad,
     double inv_M,
     int n0, int n1, int n2,
     int m0, int m1) {
@@ -609,7 +608,7 @@ __global__ void ExtractOctantKernel(
   const int iy = rem / n0;
   const int ix = rem % n0;
   const int src = ix + m0 * (iy + m1 * iz);
-  d_V_out[idx] = d_V_pad[src].x * inv_M;
+  d_V_out[idx] = d_V_pad[src] * inv_M;
 }
 
 // GPU kernel: compute Hartree energy = 0.5 * sum(rho * V * dv) via reduction.
@@ -640,13 +639,12 @@ __global__ void HartreeEnergyKernel(
   if (tid == 0) atomicAdd(d_energy, 0.5 * sdata[0]);
 }
 
-// GPU kernel: zero a cufftDoubleComplex array.
-__global__ void ZeroComplexKernel(
-    cufftDoubleComplex* d, int total) {
+// GPU kernel: zero a double array.
+__global__ void ZeroRealKernel(
+    double* d, int total) {
   const int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx >= total) return;
-  d[idx].x = 0.0;
-  d[idx].y = 0.0;
+  d[idx] = 0.0;
 }
 
 }  // namespace
@@ -696,21 +694,26 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
       if (plan_inv_) cufftDestroy(plan_inv_);
       if (d_g_) cudaFree(d_g_);
       if (d_rho_pad_) cudaFree(d_rho_pad_);
-      if (d_V_pad_) cudaFree(d_V_pad_);
+      if (d_fft_) cudaFree(d_fft_);
       if (d_energy_) cudaFree(d_energy_);
     }
 
     m0_ = m0; m1_ = m1; m2_ = m2; M_ = M;
+    M_hc_ = (m0 / 2 + 1) * m1 * m2;  // hermitian half-size for R2C/C2R
     cached_n0_ = n0; cached_n1_ = n1; cached_n2_ = n2;
 
     // Allocate device buffers.
-    cudaMalloc(&d_g_, M * sizeof(cufftDoubleComplex));
-    cudaMalloc(&d_rho_pad_, M * sizeof(cufftDoubleComplex));
-    cudaMalloc(&d_V_pad_, M * sizeof(cufftDoubleComplex));
+    // d_rho_pad: real array [M] doubles (zero-padded rho)
+    // d_fft_: complex array [M_hc] (hermitian half for R2C/C2R)
+    // d_g_: complex array [M_hc] (FFT'd kernel, hermitian half)
+    cudaMalloc(&d_g_, M_hc_ * sizeof(cufftDoubleComplex));
+    cudaMalloc(&d_rho_pad_, M * sizeof(double));
+    cudaMalloc(&d_fft_, M_hc_ * sizeof(cufftDoubleComplex));
     cudaMalloc(&d_energy_, sizeof(double));
 
     // Build and upload 1/|r| kernel on host (one-time cost).
-    std::vector<cufftDoubleComplex> host_g(M);
+    // Build as real array, then R2C FFT to get hermitian half.
+    std::vector<double> host_g_real(M);
     for (std::size_t iz = 0; iz < m2; ++iz) {
       const double dz = (iz < n2) ? static_cast<double>(iz) * h2
                                   : (static_cast<double>(iz) - static_cast<double>(m2)) * h2;
@@ -723,40 +726,47 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
           const bool wrap = (ix == n0) || (iy == n1) || (iz == n2);
           const std::size_t g = ix + m0 * (iy + m1 * iz);
           if (wrap) {
-            host_g[g].x = 0.0; host_g[g].y = 0.0;
+            host_g_real[g] = 0.0;
           } else {
             const double r2 = dx * dx + dy * dy + dz * dz;
             if (r2 < 1e-30) {
-              host_g[g].x = self_phi; host_g[g].y = 0.0;
+              host_g_real[g] = self_phi;
             } else {
-              host_g[g].x = 1.0 / std::sqrt(r2); host_g[g].y = 0.0;
+              host_g_real[g] = 1.0 / std::sqrt(r2);
             }
           }
         }
       }
     }
-    cudaMemcpyAsync(d_g_, host_g.data(), M * sizeof(cufftDoubleComplex),
-                    cudaMemcpyHostToDevice, stream);
 
-    // Create cuFFT plans (dimension order: m2, m1, m0 for column-major).
+    // Create cuFFT plans: D2Z (real-to-complex) forward, Z2D (complex-to-real) inverse.
+    // Dimension order: m2, m1, m0 for column-major.
     cufftResult cufft_err = cufftPlan3d(&plan_fwd_,
         static_cast<int>(m2), static_cast<int>(m1), static_cast<int>(m0),
-        CUFFT_Z2Z);
+        CUFFT_D2Z);
     if (cufft_err != CUFFT_SUCCESS)
-      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftPlan3d fwd");
+      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftPlan3d D2Z fwd");
     cufftSetStream(plan_fwd_, stream);
 
     cufft_err = cufftPlan3d(&plan_inv_,
         static_cast<int>(m2), static_cast<int>(m1), static_cast<int>(m0),
-        CUFFT_Z2Z);
+        CUFFT_Z2D);
     if (cufft_err != CUFFT_SUCCESS)
-      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftPlan3d inv");
+      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftPlan3d Z2D inv");
     cufftSetStream(plan_inv_, stream);
 
-    // Forward FFT the kernel (one-time).
-    cufft_err = cufftExecZ2Z(plan_fwd_, d_g_, d_g_, CUFFT_FORWARD);
-    if (cufft_err != CUFFT_SUCCESS)
-      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2Z fwd g");
+    // Forward FFT the kernel (one-time): real -> hermitian half.
+    // Upload real kernel, D2Z transform, result in d_g_.
+    double* d_g_real = nullptr;
+    cudaMalloc(&d_g_real, M * sizeof(double));
+    cudaMemcpyAsync(d_g_real, host_g_real.data(), M * sizeof(double),
+                    cudaMemcpyHostToDevice, stream);
+    cufft_err = cufftExecD2Z(plan_fwd_, d_g_real, d_g_);
+    if (cufft_err != CUFFT_SUCCESS) {
+      cudaFree(d_g_real);
+      return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecD2Z fwd g");
+    }
+    cudaFree(d_g_real);
 
     initialized_ = true;
   }
@@ -781,8 +791,8 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
     cudaEventRecord(ev0, stream);
   }
 
-  // Step 1: Zero-pad rho into d_rho_pad (GPU kernel).
-  cudaMemsetAsync(d_rho_pad_, 0, M_ * sizeof(cufftDoubleComplex), stream);
+  // Step 1: Zero-pad rho into d_rho_pad (real array, M doubles).
+  cudaMemsetAsync(d_rho_pad_, 0, M_ * sizeof(double), stream);
   if (profile) cudaEventRecord(ev1, stream);
   {
     const int total = static_cast<int>(N);
@@ -795,27 +805,27 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
   }
   if (profile) cudaEventRecord(ev2, stream);
 
-  // Step 2: Forward FFT rho.
-  cufftResult cufft_err = cufftExecZ2Z(plan_fwd_, d_rho_pad_, d_rho_pad_,
-                                       CUFFT_FORWARD);
+  // Step 2: Forward D2Z FFT: real rho_pad -> hermitian half d_fft_.
+  cufftResult cufft_err = cufftExecD2Z(plan_fwd_, d_rho_pad_, d_fft_);
   if (cufft_err != CUFFT_SUCCESS)
-    return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2Z fwd rho");
+    return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecD2Z fwd rho");
   if (profile) cudaEventRecord(ev3, stream);
 
-  // Step 3: Pointwise multiply V(k) = rho(k) * g(k).
+  // Step 3: Pointwise multiply V(k) = rho(k) * g(k) in hermitian half.
   {
-    const int total = static_cast<int>(M_);
+    const int total = static_cast<int>(M_hc_);
     const int threads = 256;
     const int blocks = (total + threads - 1) / threads;
     ComplexMultiplyKernel<<<blocks, threads, 0, stream>>>(
-        d_V_pad_, d_rho_pad_, d_g_, total);
+        d_fft_, d_fft_, d_g_, total);
   }
   if (profile) cudaEventRecord(ev4, stream);
 
-  // Step 4: Inverse FFT V(k) -> V(r).
-  cufft_err = cufftExecZ2Z(plan_inv_, d_V_pad_, d_V_pad_, CUFFT_INVERSE);
+  // Step 4: Inverse Z2D FFT: hermitian half d_fft_ -> real d_rho_pad_.
+  // Z2D overwrites input, result is real in d_rho_pad_ (M doubles).
+  cufft_err = cufftExecZ2D(plan_inv_, d_fft_, d_rho_pad_);
   if (cufft_err != CUFFT_SUCCESS)
-    return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2Z inv");
+    return CufftStatus(cufft_err, "PoissonFreeDeviceCache: cufftExecZ2D inv");
   if (profile) cudaEventRecord(ev5, stream);
 
   // Step 5: Extract first octant and normalize.
@@ -824,7 +834,7 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
     const int threads = 256;
     const int blocks = (total + threads - 1) / threads;
     ExtractOctantKernel<<<blocks, threads, 0, stream>>>(
-        d_V_out, d_V_pad_, inv_M,
+        d_V_out, d_rho_pad_, inv_M,
         static_cast<int>(n0), static_cast<int>(n1), static_cast<int>(n2),
         static_cast<int>(m0_), static_cast<int>(m1_));
   }
@@ -878,7 +888,7 @@ void PoissonFreeDeviceCache::Release() {
   if (plan_inv_) { cufftDestroy(plan_inv_); plan_inv_ = 0; }
   if (d_g_) { cudaFree(d_g_); d_g_ = nullptr; }
   if (d_rho_pad_) { cudaFree(d_rho_pad_); d_rho_pad_ = nullptr; }
-  if (d_V_pad_) { cudaFree(d_V_pad_); d_V_pad_ = nullptr; }
+  if (d_fft_) { cudaFree(d_fft_); d_fft_ = nullptr; }
   if (d_energy_) { cudaFree(d_energy_); d_energy_ = nullptr; }
   initialized_ = false;
 }

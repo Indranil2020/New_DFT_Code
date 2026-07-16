@@ -12,12 +12,14 @@
 #include "grid/gpu_arena.hpp"
 
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,74 @@ namespace {
   if (error == cudaSuccess) return Status::Ok();
   return Status::IoError(std::string(context) + ": " +
                          cudaGetErrorString(error));
+}
+
+[[nodiscard]] Status CublasStatus(cublasStatus_t s, const char* ctx) {
+  if (s == CUBLAS_STATUS_SUCCESS) return Status::Ok();
+  return Status::IoError(std::string(ctx) + ": cuBLAS error " +
+                         std::to_string(static_cast<int>(s)));
+}
+
+// Scale each column g of phi by wv[g]:  temp[mu, g] = wv[g] * phi[mu, g]
+// 2D grid: (g, mu) for coalesced memory access along g.
+__global__ void ScaleColumnsKernel(
+    double* out, const double* phi, const double* wv,
+    std::int64_t nbasis, std::int64_t np, std::int64_t stride) {
+  const std::int64_t g = blockIdx.x * blockDim.x + threadIdx.x;
+  const std::int64_t mu = blockIdx.y * blockDim.y + threadIdx.y;
+  if (g >= np || mu >= nbasis) return;
+  out[mu * stride + g] = wv[g] * phi[mu * stride + g];
+}
+
+// Add W + W^T to V (symmetric accumulation). V += W + W^T.
+__global__ void SymmetrizeAddKernel(
+    double* V, const double* W, std::int64_t n) {
+  const std::int64_t mu = blockIdx.x * blockDim.x + threadIdx.x;
+  if (mu >= n) return;
+  for (std::int64_t nu = mu; nu < n; ++nu) {
+    const double val = W[mu * n + nu] + W[nu * n + mu];
+    V[mu * n + nu] += val;
+    if (nu != mu) V[nu * n + mu] += val;
+  }
+}
+
+// cuBLAS handle + temp buffers for GEMM-based GGA vmat.
+struct GgaVmatGemmCache {
+  cublasHandle_t handle = nullptr;
+  double* d_temp_phi = nullptr;    // [nbasis * stride] scaled phi/grad_phi
+  double* d_temp_g = nullptr;      // [nbasis * stride] scaled grad_phi
+  double* d_W = nullptr;           // [nbasis * nbasis] temp result
+  std::int64_t cached_nbasis = 0, cached_stride = 0;
+
+  ~GgaVmatGemmCache() {
+    if (handle) cublasDestroy(handle);
+    if (d_temp_phi) cudaFree(d_temp_phi);
+    if (d_temp_g) cudaFree(d_temp_g);
+    if (d_W) cudaFree(d_W);
+  }
+
+  bool ensure(std::int64_t nbasis, std::int64_t stride, cudaStream_t stream) {
+    if (!handle) {
+      if (cublasCreate(&handle) != CUBLAS_STATUS_SUCCESS) return false;
+    }
+    cublasSetStream(handle, stream);
+    if (cached_nbasis != nbasis || cached_stride != stride) {
+      if (d_temp_phi) cudaFree(d_temp_phi);
+      if (d_temp_g) cudaFree(d_temp_g);
+      if (d_W) cudaFree(d_W);
+      cudaMalloc(&d_temp_phi, nbasis * stride * sizeof(double));
+      cudaMalloc(&d_temp_g, nbasis * stride * sizeof(double));
+      cudaMalloc(&d_W, nbasis * nbasis * sizeof(double));
+      cached_nbasis = nbasis;
+      cached_stride = stride;
+    }
+    return d_temp_phi && d_temp_g && d_W;
+  }
+};
+
+GgaVmatGemmCache& gga_vmat_gemm_cache() {
+  static GgaVmatGemmCache c;
+  return c;
 }
 
 // Kernel: each block computes one H[i, j] by reducing over all grid points.
@@ -308,12 +378,85 @@ Status BuildGgaVmatDevice(const GgaVmatDeviceIn& input, double* vmat,
                           stream),
                       "cudaMemsetAsync GGA vmat");
   }
-  dim3 grid_dim(static_cast<unsigned int>(input.nbasis),
-                static_cast<unsigned int>(input.nbasis));
-  GgaVmatDeviceKernel<<<grid_dim, 256, 0, stream>>>(
-      input.phi, input.grad_phi, input.wv_rho, input.wv_grad, vmat,
-      input.nbasis, input.np, input.point_stride);
-  return CudaStatus(cudaGetLastError(), "GgaVmatDeviceKernel launch");
+
+  // GEMM path: V = Phi * diag(wv_rho) * Phi^T
+  //             + sum_a [G_a * diag(wv_grad_a) * Phi^T + its transpose]
+  //
+  // Decomposition:
+  //   1. temp_rho = wv_rho * Phi;   V = temp_rho * Phi^T         (1 GEMM)
+  //   2. For each direction a:
+  //      temp_ga = wv_grad_a * G_a;  W = temp_ga * Phi^T          (1 GEMM)
+  //      V += W + W^T                                               (symmetrize)
+  const bool use_gemm = [] {
+    const char* e = std::getenv("TIDES_VMAT_GEMM");
+    return (e == nullptr || e[0] != '0');
+  }();
+
+  if (use_gemm && input.nbasis >= 4) {
+    auto& gc = gga_vmat_gemm_cache();
+    if (gc.ensure(input.nbasis, input.point_stride, stream)) {
+      const int n = static_cast<int>(input.nbasis);
+      const int k = static_cast<int>(input.np);
+      const int lda = static_cast<int>(input.point_stride);
+      const double alpha = 1.0, beta0 = 0.0, beta1 = 1.0;
+      const std::int64_t basis_plane = input.nbasis * input.point_stride;
+
+      // Step 1: temp_rho = wv_rho * phi;  V = temp_rho * Phi^T
+      {
+        dim3 block(32, 4);
+        dim3 grid((static_cast<unsigned int>(input.np) + block.x - 1) / block.x,
+                  (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
+        ScaleColumnsKernel<<<grid, block, 0, stream>>>(
+            gc.d_temp_phi, input.phi, input.wv_rho,
+            input.nbasis, input.np, input.point_stride);
+      }
+      cublasStatus_t cs = cublasDgemm(
+          gc.handle, CUBLAS_OP_T, CUBLAS_OP_N, n, n, k,
+          &alpha, input.phi, lda, gc.d_temp_phi, lda, &beta0,
+          vmat, n);
+      if (cs != CUBLAS_STATUS_SUCCESS) goto gga_fallback;
+
+      // Step 2: For each direction a, W = temp_ga * Phi^T, V += W + W^T
+      for (int a = 0; a < 3; ++a) {
+        const double* grad_a = input.grad_phi + a * basis_plane;
+        const double* wv_g_a = input.wv_grad + a * input.point_stride;
+
+        {
+          dim3 block(32, 4);
+          dim3 grid((static_cast<unsigned int>(input.np) + block.x - 1) / block.x,
+                    (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
+          ScaleColumnsKernel<<<grid, block, 0, stream>>>(
+              gc.d_temp_g, grad_a, wv_g_a,
+              input.nbasis, input.np, input.point_stride);
+        }
+        cs = cublasDgemm(
+            gc.handle, CUBLAS_OP_T, CUBLAS_OP_N, n, n, k,
+            &alpha, input.phi, lda, gc.d_temp_g, lda, &beta0,
+            gc.d_W, n);
+        if (cs != CUBLAS_STATUS_SUCCESS) goto gga_fallback;
+
+        // V += W + W^T
+        {
+          const int threads = 64;
+          const int blocks = (n + threads - 1) / threads;
+          SymmetrizeAddKernel<<<blocks, threads, 0, stream>>>(
+              vmat, gc.d_W, input.nbasis);
+        }
+      }
+      return Status::Ok();
+    }
+  }
+
+gga_fallback:
+  // Fallback: original per-(mu,nu) reduction kernel.
+  {
+    dim3 grid_dim(static_cast<unsigned int>(input.nbasis),
+                  static_cast<unsigned int>(input.nbasis));
+    GgaVmatDeviceKernel<<<grid_dim, 256, 0, stream>>>(
+        input.phi, input.grad_phi, input.wv_rho, input.wv_grad, vmat,
+        input.nbasis, input.np, input.point_stride);
+    return CudaStatus(cudaGetLastError(), "GgaVmatDeviceKernel launch");
+  }
 }
 
 Status BuildMggaVmatDevice(const MggaVmatDeviceIn& input, double* vmat,
