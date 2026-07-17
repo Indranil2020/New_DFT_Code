@@ -136,13 +136,13 @@
 ## Still open
 
 - **BUG-7: PP SCF non-convergence** — FIXED. Pseudo-NAO generation added. All molecules ≤14 atoms converge. C6H6 needs level_shift=0.2 + 200+ iters.
-- **BUG-6: GPU OOM for >12 atoms** — UNRESOLVED. Need VRAM-efficient GGA path. 8GB RTX 3060 limits GGA vmat for large molecules.
+- **BUG-6: GPU OOM for >12 atoms** — FIXED. Pre-allocation VRAM check with graceful CPU fallback. Logs free/total/needed MB.
 - SCF convergence for >12 atoms — level shift 0.2 helps but needs many iters; DIIS/Pulay already implemented but oscillates for PP
-- Aggressive opts: rho GEMM, split-K, dual-grid, cut XC/vmat further vs gpupyscf
-- Cache basis generation (5–17s one-time cost dominates small molecules)
-- XC bottleneck: gpu_xc_vmat (GGA vmat GEMM) is 5-75ms/iter vs gpu_xc_ker 0.5ms. Fuse XC+GEMM to reduce D2H/H2D.
-- CPU TIDES vs CPU PySCF comparison — not yet implemented
-- Iteration counts now logged in comparison script (Task 5 done)
+- **Basis generation caching** — DONE. In-process cache keyed by recipe hash. 4.8x speedup for repeated elements (CH4: 9.12s → 1.89s).
+- **GGA vmat GEMM batched** — DONE. Screened path: 4 GEMMs → 1 batched GEMM. vmat_build_ms now ~0 (was 5-75ms).
+- **CPU TIDES vs CPU PySCF** — DONE. Added run_pyscf_cpu() and TIDES_DISABLE_GPU env var. CPU comparison tables in benchmark script.
+- XC bottleneck: now dominated by xc_eval_ms (XC kernel), not vmat. Further optimization needs XC kernel fusion or grid pruning.
+- Iteration counts logged in comparison script (Task 5 done)
 
 ## Env flags
 
@@ -150,6 +150,7 @@
 - `TIDES_RHO_GEMM=1`
 - `TIDES_GRID_SCREEN=1` (default on; set `0` for full-grid reference)
 - `TIDES_LEVEL_SHIFT=0.2` (for PP calculations with >8 atoms; 0.3 for >20 atoms)
+- `TIDES_DISABLE_GPU=1` (force CPU-only execution; for CPU vs CPU benchmarking)
 - `TIDES_SRC_DIR=/home/indranil/git/New_DFT_Code/tides` (REQUIRED for PP loading)
 - `LD_PRELOAD=libmkl_core.so:libmkl_intel_thread.so:libiomp5.so` (needed if MKL AVX2 loading fails)
 
