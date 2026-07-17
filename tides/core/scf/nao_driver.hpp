@@ -1155,6 +1155,24 @@ class NaoDriver {
         // raw cudaMalloc. The arena caches and reuses device memory across
         // SCF runs, eliminating per-run allocation overhead.
         tides::grid::GpuArena& gpu_arena = tides::grid::GpuArena::Instance();
+
+        // --- BUG-6: Check VRAM availability before committing to GPU path ---
+        // Estimate total device memory needed: phi + grad_phi + P + vmat + vmat_xc + vh_grid
+        // phi: n * stride * 8, grad_phi: 3 * n * stride * 8, rest: small
+        const std::size_t est_phi_bytes = n * dev_stride * sizeof(double);
+        const std::size_t est_grad_bytes = 3 * n * dev_stride * sizeof(double);
+        const std::size_t est_total = est_phi_bytes + est_grad_bytes + 4 * n * n * sizeof(double) + np_total * sizeof(double);
+        size_t free_vram = 0, total_vram = 0;
+        cudaMemGetInfo(&free_vram, &total_vram);
+        std::cout << "[NaoDriver] VRAM: free=" << (free_vram >> 20) << "MB  total=" << (total_vram >> 20)
+                  << "MB  needed~" << (est_total >> 20) << "MB" << std::endl;
+        if (est_total > free_vram) {
+          std::cout << "[NaoDriver] Insufficient VRAM for GPU pipeline — using CPU fallback" << std::endl;
+          delete dev_arena;
+          dev_arena = nullptr;
+          cudaStreamDestroy(dev_stream);
+          dev_stream = nullptr;
+        } else {
         d_phi = static_cast<double*>(gpu_arena.Alloc(n * dev_stride * sizeof(double)));
         cudaMemcpyAsync(d_phi, phi_flat.data(), n * dev_stride * sizeof(double),
                         cudaMemcpyHostToDevice, dev_stream);
@@ -1192,6 +1210,28 @@ class NaoDriver {
         // V_H per iteration) consumed by BuildWeightedVmatDevice.
         d_vh_grid = static_cast<double*>(gpu_arena.Alloc(np_total * sizeof(double)));
 
+        // Check if any allocation failed.
+        if (!d_phi || !d_grad_phi || !d_P_up || !d_vmat || !d_vmat_xc || !d_vh_grid ||
+            (nspin == 2 && !d_P_down)) {
+          std::cout << "[NaoDriver] GPU alloc failed — falling back to CPU"
+                    << " (d_phi=" << (d_phi ? "ok" : "FAIL")
+                    << " d_grad=" << (d_grad_phi ? "ok" : "FAIL")
+                    << " d_P=" << (d_P_up ? "ok" : "FAIL")
+                    << " d_vmat=" << (d_vmat ? "ok" : "FAIL")
+                    << ")" << std::endl;
+          if (d_phi) gpu_arena.Free(d_phi); d_phi = nullptr;
+          if (d_grad_phi) gpu_arena.Free(d_grad_phi); d_grad_phi = nullptr;
+          if (d_P_up) gpu_arena.Free(d_P_up); d_P_up = nullptr;
+          if (d_P_down) gpu_arena.Free(d_P_down); d_P_down = nullptr;
+          if (d_vmat) gpu_arena.Free(d_vmat); d_vmat = nullptr;
+          if (d_vmat_xc) gpu_arena.Free(d_vmat_xc); d_vmat_xc = nullptr;
+          if (d_vh_grid) gpu_arena.Free(d_vh_grid); d_vh_grid = nullptr;
+          delete dev_arena;
+          dev_arena = nullptr;
+          cudaStreamDestroy(dev_stream);
+          dev_stream = nullptr;
+        } else {
+
         // Build device XcSpec.
         dev_xc_spec.family = (is_gga) ? grid::xc::Family::kGga : grid::xc::Family::kLda;
         dev_xc_spec.nspin = nspin;
@@ -1204,6 +1244,8 @@ class NaoDriver {
         std::cout << "[NaoDriver] Device pipeline ready (stride=" << dev_stride
                   << ", functional=" << grid::xc::XcFunctionalName(xc_spec.id) << ")"
                   << std::endl;
+        }  // end alloc null check
+        }  // end VRAM check
       } else {
         std::cout << "[NaoDriver] Device pipeline disabled: arena reserve failed ("
                   << arena_status.message() << ")" << std::endl;
