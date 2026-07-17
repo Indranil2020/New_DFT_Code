@@ -103,6 +103,43 @@ def run_tides(Z, pos_bohr_flat, xc='b3lyp', use_pp=True):
         'gpu_pipeline': bh.used_gpu_pipeline,
     }
 
+def run_pyscf_cpu(atoms, pos_ang, xc='b3lyp', basis='def2-svp', pseudo=None):
+    from pyscf import gto, dft
+    kwargs = dict(
+        atom=[(a, r) for a, r in zip(atoms, pos_ang)],
+        basis=basis,
+        unit='Angstrom',
+    )
+    if pseudo:
+        kwargs['pseudo'] = pseudo
+    mol = gto.M(**kwargs)
+    mf = dft.RKS(mol)
+    mf.xc = xc
+    mf.grids.level = 4
+    mf.conv_tol = 1e-7
+    t0 = time.time()
+    e = mf.kernel()
+    wall = time.time() - t0
+    return {
+        'engine': 'pyscf_cpu',
+        'basis': basis,
+        'pseudo': pseudo or 'none',
+        'xc': xc,
+        'conv_tol': 1e-7,
+        'E_total': e,
+        'converged': mf.converged,
+        'n_iters': mf.cycles,
+        'wall_s': round(wall, 3),
+    }
+
+def run_tides_cpu(Z, pos_bohr_flat, xc='b3lyp', use_pp=True):
+    os.environ['TIDES_DISABLE_GPU'] = '1'
+    r = run_tides(Z, pos_bohr_flat, xc=xc, use_pp=use_pp)
+    if 'TIDES_DISABLE_GPU' in os.environ:
+        del os.environ['TIDES_DISABLE_GPU']
+    r['engine'] = 'tides_cpu'
+    return r
+
 molecules = [
     ('CH4',      'C',       5),
     ('H2O',      'O',       3),
@@ -131,6 +168,16 @@ for label, smiles, natoms in molecules:
     r_gpu_pp = run_gpupyscf(atoms, pos_ang, xc='b3lyp', basis='gth-dzvp', pseudo='gth-pbe')
     print(f"  E={r_gpu_pp['E_total']:.6f}  conv={r_gpu_pp['converged']}  iters={r_gpu_pp['n_iters']}  wall={r_gpu_pp['wall_s']:.2f}s")
 
+    # --- CPU PySCF all-electron ---
+    print(f"  --- CPU PySCF AE (def2-svp, B3LYP) ---")
+    r_cpu_ae = run_pyscf_cpu(atoms, pos_ang, xc='b3lyp', basis='def2-svp')
+    print(f"  E={r_cpu_ae['E_total']:.6f}  conv={r_cpu_ae['converged']}  iters={r_cpu_ae['n_iters']}  wall={r_cpu_ae['wall_s']:.2f}s")
+
+    # --- CPU PySCF pseudopotential ---
+    print(f"  --- CPU PySCF PP (gth-dzvp + gth-pbe, B3LYP) ---")
+    r_cpu_pp = run_pyscf_cpu(atoms, pos_ang, xc='b3lyp', basis='gth-dzvp', pseudo='gth-pbe')
+    print(f"  E={r_cpu_pp['E_total']:.6f}  conv={r_cpu_pp['converged']}  iters={r_cpu_pp['n_iters']}  wall={r_cpu_pp['wall_s']:.2f}s")
+
     # --- TIDES all-electron ---
     print(f"  --- TIDES AE (NAO-DZP, B3LYP) ---")
     r_tides_ae = run_tides(Z, pos_bohr_flat, xc='b3lyp', use_pp=False)
@@ -147,16 +194,24 @@ for label, smiles, natoms in molecules:
     dE_ae = r_tides_ae['E_total'] - r_gpu_ae['E_total']
     speedup_pp = r_gpu_pp['wall_s'] / r_tides_pp['wall_s'] if r_tides_pp['wall_s'] > 0 else float('inf')
     speedup_ae = r_gpu_ae['wall_s'] / r_tides_ae['wall_s'] if r_tides_ae['wall_s'] > 0 else float('inf')
+
+    dE_ae_cpu = r_tides_ae['E_total'] - r_cpu_ae['E_total']
+    dE_pp_cpu = r_tides_pp['E_total'] - r_cpu_pp['E_total']
+    speedup_ae_cpu = r_cpu_ae['wall_s'] / r_tides_ae['wall_s'] if r_tides_ae['wall_s'] > 0 else float('inf')
+    speedup_pp_cpu = r_cpu_pp['wall_s'] / r_tides_pp['wall_s'] if r_tides_pp['wall_s'] > 0 else float('inf')
     entry = {
         'label': label, 'natoms': natoms,
         'gpu_ae': r_gpu_ae, 'gpu_pp': r_gpu_pp,
         'tides_ae': r_tides_ae, 'tides_pp': r_tides_pp,
+        'cpu_ae': r_cpu_ae, 'cpu_pp': r_cpu_pp,
         'dE_ae': round(dE_ae, 6), 'dE_pp': round(dE_pp, 6),
+        'dE_ae_cpu': round(dE_ae_cpu, 6), 'dE_pp_cpu': round(dE_pp_cpu, 6),
         'speedup_ae': round(speedup_ae, 3), 'speedup_pp': round(speedup_pp, 3),
+        'speedup_ae_cpu': round(speedup_ae_cpu, 3), 'speedup_pp_cpu': round(speedup_pp_cpu, 3),
     }
     results.append(entry)
-    print(f"  AE: dE={dE_ae:+.4f}  speedup={speedup_ae:.2f}x")
-    print(f"  PP: dE={dE_pp:+.4f}  speedup={speedup_pp:.2f}x")
+    print(f"  AE: dE_gpu={dE_ae:+.4f}  dE_cpu={dE_ae_cpu:+.4f}  sp_gpu={speedup_ae:.2f}x  sp_cpu={speedup_ae_cpu:.2f}x")
+    print(f"  PP: dE_gpu={dE_pp:+.4f}  dE_cpu={dE_pp_cpu:+.4f}  sp_gpu={speedup_pp:.2f}x  sp_cpu={speedup_pp_cpu:.2f}x")
 
 print(f"\n{'='*110}")
 print("SUMMARY: GPU-PySCF vs TIDES (B3LYP) — 4 configurations")
@@ -180,6 +235,22 @@ print("-"*90)
 for e in results:
     gpu = "Yes" if e['tides_pp']['gpu_pipeline'] else "No"
     print(f"{e['label']:<10} {e['natoms']:>3} | {e['gpu_ae']['wall_s']:>7.2f}s {e['tides_ae']['wall_s']:>8.2f}s | {e['gpu_pp']['wall_s']:>7.2f}s {e['tides_pp']['wall_s']:>8.2f}s | {gpu:>5} | 1e-7")
+
+print(f"\n{'='*110}")
+print("CPU COMPARISON: CPU-PySCF vs TIDES (B3LYP)")
+print(f"{'='*110}")
+print(f"{'Mol':<10} {'N':>3} | {'CPU-AE':>12} {'TIDES-AE':>12} {'dE_AE':>9} {'sp_AE':>6} | {'CPU-PP':>12} {'TIDES-PP':>12} {'dE_PP':>9} {'sp_PP':>6}")
+print("-"*110)
+for e in results:
+    print(f"{e['label']:<10} {e['natoms']:>3} | {e['cpu_ae']['E_total']:>12.4f} {e['tides_ae']['E_total']:>12.4f} {e['dE_ae_cpu']:>+9.4f} {e['speedup_ae_cpu']:>5.2f}x | {e['cpu_pp']['E_total']:>12.4f} {e['tides_pp']['E_total']:>12.4f} {e['dE_pp_cpu']:>+9.4f} {e['speedup_pp_cpu']:>5.2f}x")
+
+print(f"\n{'='*110}")
+print("CPU TIMING SUMMARY (wall seconds)")
+print(f"{'='*110}")
+print(f"{'Mol':<10} {'N':>3} | {'CPU-AE':>8} {'TIDES-AE':>9} | {'CPU-PP':>8} {'TIDES-PP':>9}")
+print("-"*70)
+for e in results:
+    print(f"{e['label']:<10} {e['natoms']:>3} | {e['cpu_ae']['wall_s']:>7.2f}s {e['tides_ae']['wall_s']:>8.2f}s | {e['cpu_pp']['wall_s']:>7.2f}s {e['tides_pp']['wall_s']:>8.2f}s")
 
 out_path = '/home/indranil/git/New_DFT_Code/tides/bench/profiling_results/gpupyscf_vs_tides.json'
 os.makedirs(os.path.dirname(out_path), exist_ok=True)

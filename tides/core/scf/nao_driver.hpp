@@ -1092,8 +1092,12 @@ class NaoDriver {
     // --- T-X1.6: Device-resident pipeline setup ---
     // Upload phi and grad_phi to device once. Create XcArena for XC evaluation.
     // These persist across SCF iterations; only P and V_xc are transferred per iter.
+    const bool cpu_only = (std::getenv("TIDES_DISABLE_GPU") != nullptr);
 #ifdef TIDES_HAVE_CUDA
     bool device_pipeline_ready = false;
+    if (cpu_only) {
+      std::cout << "[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path" << std::endl;
+    }
     cudaStream_t dev_stream = nullptr;
     grid::xc::XcArena* dev_arena = nullptr;
     double* d_phi = nullptr;          // [n][stride]
@@ -1130,7 +1134,7 @@ class NaoDriver {
 
     // Only use device pipeline for Tier-0 functionals with CUDA available.
     const bool is_tier0 = grid::xc::IsTier0(xc_spec.id);
-    if (is_tier0 && grid::XCCudaAvailable()) {
+    if (!cpu_only && is_tier0 && grid::XCCudaAvailable()) {
       cudaStreamCreate(&dev_stream);
       dev_arena = new grid::xc::XcArena();
       auto arena_status = dev_arena->Reserve(np_total, nspin, true, false, 1, dev_stream);
