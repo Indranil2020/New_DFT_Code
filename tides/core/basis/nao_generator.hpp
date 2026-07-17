@@ -25,6 +25,7 @@
 
 #include "basis/atomgen/atomic_lda.hpp"
 #include "basis/atomgen/radial_solver.hpp"
+#include "basis/pseudo/pseudopotential.hpp"
 
 namespace tides::basis {
 
@@ -59,6 +60,180 @@ struct NaoBasis {
 
 class NaoGenerator {
  public:
+  // Generate pseudo-NAO basis for an element using a pseudopotential.
+  // Instead of -Z/r, uses V_loc(r) from the PP as the external potential.
+  // Only valence states are filled (Z_valence electrons). The resulting
+  // NAOs are smooth inside the core cutoff radius, matching the PP
+  // assumption.
+  static NaoBasis GeneratePseudo(
+      const NaoRecipe& recipe,
+      const tides::basis::Pseudopotential& pp) {
+    using tides::atomgen::AtomConfig;
+    using tides::atomgen::AtomicLDA;
+    using tides::atomgen::AtomicResult;
+    NaoBasis basis;
+    basis.Z = recipe.Z;
+    basis.element = recipe.element;
+
+    const double wall_height = 1e6;
+    const double wall_power = 32.0;
+
+    // Interpolate V_loc from PP radial grid onto the NAO generation grid.
+    // The PP radial grid may differ from the uniform grid used by the solver.
+    auto interp_vloc = [&](double r) -> double {
+      const auto& pp_rg = pp.r_grid;
+      const auto& pp_vl = pp.v_local;
+      if (pp_rg.empty() || pp_vl.empty()) return 0.0;
+      if (r <= pp_rg.front()) return pp_vl.front();
+      if (r >= pp_rg.back()) return pp_vl.back();
+      auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r);
+      if (it == pp_rg.begin() || it == pp_rg.end()) return pp_vl.back();
+      std::size_t j = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+      double t = (r - pp_rg[j]) / (pp_rg[j + 1] - pp_rg[j]);
+      return (1.0 - t) * pp_vl[j] + t * pp_vl[j + 1];
+    };
+
+    for (const auto& ch : recipe.channels) {
+      for (std::size_t z = 0; z < ch.rcuts.size(); ++z) {
+        const double rc = ch.rcuts[z];
+
+        // Build valence-only atom config using Z_valence from PP.
+        AtomConfig cfg = MakeValenceClosedShell(pp.Z_valence, pp.l_max);
+        if (cfg.shells.empty()) continue;
+
+        // Run atomic SCF with V_loc as external potential instead of -Z/r.
+        // We need a custom solve since AtomicLDA::Solve hardcodes -Z/r.
+        // Instead, we do a simplified approach: build V_eff from V_loc +
+        // a crude Hartree + XC from a Thomas-Fermi-like density, then solve.
+        // For NAO generation we only need a reasonable screening potential.
+        const double r_max = recipe.r_max;
+        const std::size_t n_r = recipe.n_r;
+        std::vector<double> r_grid(n_r);
+        const double h = r_max / static_cast<double>(n_r - 1);
+        for (std::size_t i = 0; i < n_r; ++i)
+          r_grid[i] = h * static_cast<double>(i);
+
+        // Build initial V_eff = V_loc(r) + confinement.
+        std::vector<double> V_eff(n_r, 0.0);
+        for (std::size_t i = 0; i < n_r; ++i) {
+          const double r = r_grid[i];
+          double Vext = interp_vloc(r);
+          // Add confinement wall.
+          double Vconf = 0.0;
+          if (r < rc) {
+            const double x = r / rc;
+            Vconf = wall_height * std::pow(x, wall_power);
+          } else {
+            Vconf = wall_height;
+          }
+          V_eff[i] = Vext + Vconf;
+        }
+
+        // Run a few SCF iterations to build a screening potential.
+        // Start with V_loc only, solve for valence states, build density,
+        // add V_H + V_xc, iterate.
+        std::vector<double> density(n_r, 0.0);
+        for (int scf_iter = 0; scf_iter < 30; ++scf_iter) {
+          // Solve for each l.
+          int l_max_cfg = 0;
+          for (const auto& sh : cfg.shells)
+            l_max_cfg = std::max(l_max_cfg, sh.l);
+
+          std::vector<int> max_n_per_l(l_max_cfg + 1, 0);
+          for (const auto& sh : cfg.shells)
+            max_n_per_l[sh.l] = std::max(max_n_per_l[sh.l], sh.n);
+
+          std::vector<double> n_new(n_r, 0.0);
+          for (int l = 0; l <= l_max_cfg; ++l) {
+            if (max_n_per_l[l] == 0) continue;
+            const std::size_t nstates =
+                static_cast<std::size_t>(max_n_per_l[l] - l);
+            auto states = tides::atomgen::RadialSolver::SolveUniform(
+                0.0, r_max, n_r, l, V_eff, nstates);
+            for (std::size_t k = 0; k < states.size(); ++k) {
+              const int n_principal = l + static_cast<int>(k) + 1;
+              int occ = 0;
+              for (const auto& sh : cfg.shells)
+                if (sh.n == n_principal && sh.l == l) {
+                  occ = sh.occ;
+                  break;
+                }
+              if (occ == 0) continue;
+              const double fac =
+                  static_cast<double>(occ) / (4.0 * M_PI);
+              for (std::size_t i = 0; i < n_r; ++i)
+                n_new[i] +=
+                    fac * states[k].R[i] * states[k].R[i];
+            }
+          }
+
+          // Mix density.
+          const double alpha = 0.3;
+          for (std::size_t i = 0; i < n_r; ++i)
+            density[i] = (1.0 - alpha) * density[i] + alpha * n_new[i];
+
+          // Rebuild V_eff = V_loc + V_H + V_xc + V_conf.
+          auto VH = tides::atomgen::AtomicLDA::HartreePotential(
+              r_grid, density);
+          for (std::size_t i = 0; i < n_r; ++i) {
+            const double r = r_grid[i];
+            double Vext = interp_vloc(r);
+            double Vxc = LdaXC_V(std::max(0.0, density[i]));
+            double Vconf = 0.0;
+            if (r < rc) {
+              const double x = r / rc;
+              Vconf = wall_height * std::pow(x, wall_power);
+            } else {
+              Vconf = wall_height;
+            }
+            V_eff[i] = Vext + VH[i] + Vxc + Vconf;
+          }
+        }
+
+        // Solve for the lowest state of angular momentum ch.l in V_eff.
+        auto states = tides::atomgen::RadialSolver::SolveUniform(
+            0.0, r_max, n_r, ch.l, V_eff, 1);
+        if (states.empty()) continue;
+
+        NaoBasisFunction f;
+        f.l = ch.l;
+        f.zeta = static_cast<int>(z);
+        f.r_cut = rc;
+        f.R = states[0].R;
+        f.r = states[0].r_grid;
+        // Smooth cutoff: same as AE path.
+        for (std::size_t i = 0; i < f.R.size() && f.r[i] <= rc; ++i) {
+          const double x = f.r[i] / rc;
+          if (x > 0.9) {
+            const double y = (x - 0.9) / 0.1;
+            const double cutoff = (1.0 - y * y) * (1.0 - y * y);
+            f.R[i] *= cutoff;
+          }
+        }
+        for (std::size_t i = 0; i < f.R.size(); ++i)
+          if (f.r[i] > rc) f.R[i] = 0.0;
+        // Renormalize within [0, rc].
+        double norm2 = 0.0;
+        const double dh =
+            (f.r.size() > 1) ? f.r[1] - f.r[0] : 0.0;
+        for (std::size_t i = 0; i + 1 < f.r.size() && f.r[i] <= rc;
+             ++i)
+          norm2 += 0.5 *
+                   (f.R[i] * f.R[i] * f.r[i] * f.r[i] +
+                    f.R[i + 1] * f.R[i + 1] *
+                        f.r[i + 1] * f.r[i + 1]) *
+                   dh;
+        f.norm = std::sqrt(norm2);
+        const double inv = (f.norm > 0) ? 1.0 / f.norm : 0.0;
+        for (double& v : f.R) v *= inv;
+        f.norm = 1.0;
+        basis.functions.push_back(f);
+      }
+    }
+    basis.recipe_hash = RecipeHash(recipe) + ":pp:" + pp.element;
+    return basis;
+  }
+
   // Generate the NAO basis for an element from a recipe.
   static NaoBasis Generate(const NaoRecipe& recipe) {
     using tides::atomgen::AtomConfig;
@@ -225,6 +400,43 @@ class NaoGenerator {
       const int occ = std::min(remaining, cap);
       // Include the shell even if partially filled (open shell) — for NAO
       // generation we only need a screening potential, not a precise SCF.
+      cfg.shells.push_back({o.n, o.l, occ});
+      remaining -= occ;
+    }
+    return cfg;
+  }
+
+  // Build valence-only closed-shell config for pseudopotential calculations.
+  // Z_valence is the number of valence electrons from the PP.
+  // l_max is the max angular momentum from the PP.
+  // Fills valence shells starting from n=2 for Z_valence > 2 (skipping core).
+  static tides::atomgen::AtomConfig MakeValenceClosedShell(
+      int Z_valence, int l_max) {
+    tides::atomgen::AtomConfig cfg;
+    cfg.Z = Z_valence;  // Use Z_valence for the solver (affects only info)
+    int remaining = Z_valence;
+    struct Orb { int n; int l; };
+    // For H/He (Z_val <= 2), start from 1s.
+    // For Li..Ne (Z_val <= 8 with core), start from 2s.
+    // For Na..Ar (Z_val <= 8 with core), start from 3s.
+    // Heuristic: if Z_val <= 2, fill from 1s; else from 2s.
+    const Orb* order;
+    const Orb order_h[] = {{1,0}};
+    const Orb order_2nd[] = {{2,0},{2,1}};
+    const Orb order_3rd[] = {{3,0},{3,1}};
+    if (Z_valence <= 2) {
+      order = order_h;
+    } else if (Z_valence <= 8) {
+      order = order_2nd;
+    } else {
+      order = order_3rd;
+    }
+    // Fill shells up to l_max.
+    for (int i = 0; i < 2 && remaining > 0; ++i) {
+      const auto& o = order[i];
+      if (o.l > l_max && l_max > 0) continue;
+      const int cap = 2 * (2 * o.l + 1);
+      const int occ = std::min(remaining, cap);
       cfg.shells.push_back({o.n, o.l, occ});
       remaining -= occ;
     }

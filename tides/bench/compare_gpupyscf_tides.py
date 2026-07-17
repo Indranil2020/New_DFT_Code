@@ -51,7 +51,7 @@ def run_gpupyscf(atoms, pos_ang, xc='b3lyp', basis='def2-svp', pseudo=None):
     mf = dft.RKS(mol)
     mf.xc = xc
     mf.grids.level = 4
-    mf.conv_tol = 1e-6
+    mf.conv_tol = 1e-7
     t0 = time.time()
     e = mf.kernel()
     wall = time.time() - t0
@@ -60,6 +60,7 @@ def run_gpupyscf(atoms, pos_ang, xc='b3lyp', basis='def2-svp', pseudo=None):
         'basis': basis,
         'pseudo': pseudo or 'none',
         'xc': xc,
+        'conv_tol': 1e-7,
         'E_total': e,
         'converged': mf.converged,
         'n_iters': mf.cycles,
@@ -70,17 +71,21 @@ def run_tides(Z, pos_bohr_flat, xc='b3lyp', use_pp=True):
     import tides._native as native
     if not use_pp:
         del os.environ['TIDES_SRC_DIR']
+    if use_pp:
+        os.environ['TIDES_LEVEL_SHIFT'] = '0.2'
     t0 = time.time()
     r = native.NaoDriver.run(
         atomic_numbers=Z, positions=pos_bohr_flat,
         grid_h=0.5, grid_margin=6.0,
-        max_iter=80, tol=5e-6,
+        max_iter=200, tol=1e-7,
         use_dual_grid=False, xc_functional=xc,
         allow_grid_refine=False,
     )
     wall = time.time() - t0
     if not use_pp:
         os.environ['TIDES_SRC_DIR'] = TIDES_SRC
+    if 'TIDES_LEVEL_SHIFT' in os.environ:
+        del os.environ['TIDES_LEVEL_SHIFT']
     bh = r.build_H_timings
     return {
         'engine': 'tides',
@@ -90,6 +95,7 @@ def run_tides(Z, pos_bohr_flat, xc='b3lyp', use_pp=True):
         'E_total': r.energy.E_total,
         'converged': r.scf.converged,
         'n_iters': bh.n_iterations,
+        'conv_tol': 1e-7,
         'wall_s': round(wall, 3),
         'build_H_ms': round(bh.total_ms, 2),
         'xc_eval_ms': round(bh.xc_eval_ms, 2),
@@ -156,18 +162,24 @@ print(f"\n{'='*110}")
 print("SUMMARY: GPU-PySCF vs TIDES (B3LYP) — 4 configurations")
 print(f"{'='*110}")
 print(f"{'Mol':<10} {'N':>3} | {'GPU-AE':>12} {'TIDES-AE':>12} {'dE_AE':>9} {'sp_AE':>6} | {'GPU-PP':>12} {'TIDES-PP':>12} {'dE_PP':>9} {'sp_PP':>6}")
+print(f"{'':>14} | {'it':>3} {'it':>3} {'conv':>4} {'conv':>4} | {'it':>3} {'it':>3} {'conv':>4} {'conv':>4}")
 print("-"*110)
 for e in results:
     print(f"{e['label']:<10} {e['natoms']:>3} | {e['gpu_ae']['E_total']:>12.4f} {e['tides_ae']['E_total']:>12.4f} {e['dE_ae']:>+9.4f} {e['speedup_ae']:>5.2f}x | {e['gpu_pp']['E_total']:>12.4f} {e['tides_pp']['E_total']:>12.4f} {e['dE_pp']:>+9.4f} {e['speedup_pp']:>5.2f}x")
+    ae_g = 'Y' if e['gpu_ae']['converged'] else 'N'
+    ae_t = 'Y' if e['tides_ae']['converged'] else 'N'
+    pp_g = 'Y' if e['gpu_pp']['converged'] else 'N'
+    pp_t = 'Y' if e['tides_pp']['converged'] else 'N'
+    print(f"{'':>14} | {e['gpu_ae']['n_iters']:>3} {e['tides_ae']['n_iters']:>3} {ae_g:>4} {ae_t:>4} | {e['gpu_pp']['n_iters']:>3} {e['tides_pp']['n_iters']:>3} {pp_g:>4} {pp_t:>4}")
 
 print(f"\n{'='*110}")
 print("TIMING SUMMARY (wall seconds)")
 print(f"{'='*110}")
-print(f"{'Mol':<10} {'N':>3} | {'GPU-AE':>8} {'TIDES-AE':>9} | {'GPU-PP':>8} {'TIDES-PP':>9} | {'GPU?':>5}")
-print("-"*80)
+print(f"{'Mol':<10} {'N':>3} | {'GPU-AE':>8} {'TIDES-AE':>9} | {'GPU-PP':>8} {'TIDES-PP':>9} | {'GPU?':>5} | {'tol':>8}")
+print("-"*90)
 for e in results:
     gpu = "Yes" if e['tides_pp']['gpu_pipeline'] else "No"
-    print(f"{e['label']:<10} {e['natoms']:>3} | {e['gpu_ae']['wall_s']:>7.2f}s {e['tides_ae']['wall_s']:>8.2f}s | {e['gpu_pp']['wall_s']:>7.2f}s {e['tides_pp']['wall_s']:>8.2f}s | {gpu:>5}")
+    print(f"{e['label']:<10} {e['natoms']:>3} | {e['gpu_ae']['wall_s']:>7.2f}s {e['tides_ae']['wall_s']:>8.2f}s | {e['gpu_pp']['wall_s']:>7.2f}s {e['tides_pp']['wall_s']:>8.2f}s | {gpu:>5} | 1e-7")
 
 out_path = '/home/indranil/git/New_DFT_Code/tides/bench/profiling_results/gpupyscf_vs_tides.json'
 os.makedirs(os.path.dirname(out_path), exist_ok=True)

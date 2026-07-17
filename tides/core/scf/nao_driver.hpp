@@ -169,7 +169,8 @@ class NaoDriver {
   static std::vector<NaoAtom> BuildAtoms(
       const std::vector<int>& atomic_numbers,
       const std::vector<double>& positions,
-      bool use_diffuse = false) {
+      bool use_diffuse = false,
+      const std::vector<basis::Pseudopotential>* pseudopotentials = nullptr) {
     std::vector<NaoAtom> atoms;
     for (std::size_t a = 0; a < atomic_numbers.size(); ++a) {
       NaoAtom atom;
@@ -181,7 +182,16 @@ class NaoDriver {
       auto recipe = use_diffuse
           ? basis::NaoGenerator::AugDzpRecipe(atom.Z, atom.element)
           : basis::NaoGenerator::DzpRecipe(atom.Z, atom.element);
-      atom.basis = basis::NaoGenerator::Generate(recipe);
+
+      // Use pseudo-NAO generation when PPs are available for this atom.
+      const bool have_pp = (pseudopotentials != nullptr &&
+                            a < pseudopotentials->size() &&
+                            !(*pseudopotentials)[a].v_local.empty());
+      if (have_pp) {
+        atom.basis = basis::NaoGenerator::GeneratePseudo(recipe, (*pseudopotentials)[a]);
+      } else {
+        atom.basis = basis::NaoGenerator::Generate(recipe);
+      }
       atoms.push_back(atom);
     }
     return atoms;
@@ -777,7 +787,7 @@ class NaoDriver {
     std::cout << "[NaoDriver] Starting Run (Z={ ";
     for (int Z : atomic_numbers) std::cout << Z << " ";
     std::cout << "}, grid_h=" << grid_h << ")" << std::endl;
-    auto atoms = BuildAtoms(atomic_numbers, positions, use_diffuse);
+    auto atoms = BuildAtoms(atomic_numbers, positions, use_diffuse, pseudopotentials);
     if (use_diffuse) {
       result.diffuse_basis_used = true;
       std::cout << "[NaoDriver] Using augmented DZP basis (diffuse functions)" << std::endl;
