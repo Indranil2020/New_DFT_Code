@@ -188,9 +188,9 @@ class NaoDriver {
                             a < pseudopotentials->size() &&
                             !(*pseudopotentials)[a].v_local.empty());
       if (have_pp) {
-        atom.basis = basis::NaoGenerator::GeneratePseudo(recipe, (*pseudopotentials)[a]);
+        atom.basis = basis::NaoGenerator::GeneratePseudoCached(recipe, (*pseudopotentials)[a]);
       } else {
-        atom.basis = basis::NaoGenerator::Generate(recipe);
+        atom.basis = basis::NaoGenerator::GenerateCached(recipe);
       }
       atoms.push_back(atom);
     }

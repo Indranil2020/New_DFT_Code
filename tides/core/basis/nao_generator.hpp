@@ -19,8 +19,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "basis/atomgen/atomic_lda.hpp"
@@ -60,6 +62,55 @@ struct NaoBasis {
 
 class NaoGenerator {
  public:
+  // --- In-process basis cache ---
+  // Keyed by recipe hash (+ ":pp:" + pp element for pseudo-NAOs).
+  // Eliminates redundant atomic SCF solves for repeated elements (e.g. C, H
+  // in a benchmark suite). Cache persists for the process lifetime.
+  static std::mutex& CacheMutex() {
+    static std::mutex m;
+    return m;
+  }
+  static std::unordered_map<std::string, NaoBasis>& CacheMap() {
+    static std::unordered_map<std::string, NaoBasis> cache;
+    return cache;
+  }
+
+  static NaoBasis GenerateCached(const NaoRecipe& recipe) {
+    const std::string key = RecipeHash(recipe);
+    {
+      std::lock_guard<std::mutex> lk(CacheMutex());
+      auto it = CacheMap().find(key);
+      if (it != CacheMap().end()) {
+        std::cout << "[NaoGenerator] Cache hit for Z=" << recipe.Z
+                  << " (" << recipe.element << "), key=" << key << std::endl;
+        return it->second;
+      }
+    }
+    NaoBasis basis = Generate(recipe);
+    std::lock_guard<std::mutex> lk(CacheMutex());
+    CacheMap()[key] = basis;
+    return basis;
+  }
+
+  static NaoBasis GeneratePseudoCached(
+      const NaoRecipe& recipe,
+      const tides::basis::Pseudopotential& pp) {
+    const std::string key = RecipeHash(recipe) + ":pp:" + pp.element;
+    {
+      std::lock_guard<std::mutex> lk(CacheMutex());
+      auto it = CacheMap().find(key);
+      if (it != CacheMap().end()) {
+        std::cout << "[NaoGenerator] Cache hit (pseudo) for Z=" << recipe.Z
+                  << " (" << recipe.element << "), key=" << key << std::endl;
+        return it->second;
+      }
+    }
+    NaoBasis basis = GeneratePseudo(recipe, pp);
+    std::lock_guard<std::mutex> lk(CacheMutex());
+    CacheMap()[key] = basis;
+    return basis;
+  }
+
   // Generate pseudo-NAO basis for an element using a pseudopotential.
   // Instead of -Z/r, uses V_loc(r) from the PP as the external potential.
   // Only valence states are filled (Z_valence electrons). The resulting
