@@ -280,18 +280,24 @@ struct GgaVmatGemmCache {
     if (cached_nbasis != nbasis || cached_stride != stride) {
       if (d_temp_g) cudaFree(d_temp_g);
       if (d_W) cudaFree(d_W);
+      if (d_W4) cudaFree(d_W4);
       d_temp_g = nullptr;
       d_W = nullptr;
+      d_W4 = nullptr;
       free_screen_all();
-      // Only W is always needed for both screen and full paths.
+      // W and W4 are needed for both screen and full paths.
       if (cudaMalloc(&d_W, nbasis * nbasis * sizeof(double)) != cudaSuccess) {
         d_W = nullptr;
+        return false;
+      }
+      if (cudaMalloc(&d_W4, 4 * nbasis * nbasis * sizeof(double)) != cudaSuccess) {
+        d_W4 = nullptr;
         return false;
       }
       cached_nbasis = nbasis;
       cached_stride = stride;
     }
-    return d_W != nullptr;
+    return d_W != nullptr && d_W4 != nullptr;
   }
 
   // Phase-1: index + counter only (cheap).
@@ -312,6 +318,7 @@ struct GgaVmatGemmCache {
   }
 
   // Phase-2: size compact buffers exactly to np_c (avoids multi-GB OOM).
+  // d_temp_g_c is [4 * nbasis * np_c] for batched 4-plane GEMM.
   bool ensure_screen_data(std::int64_t nbasis, std::int64_t np_c) {
     if (np_c <= 0) return false;
     if (screen_cap >= np_c && d_phi_compact && d_grad_compact &&
@@ -323,7 +330,7 @@ struct GgaVmatGemmCache {
         cudaMalloc(&d_grad_compact, 3 * nbasis * np_c * sizeof(double)) != cudaSuccess ||
         cudaMalloc(&d_wv_rho_c, np_c * sizeof(double)) != cudaSuccess ||
         cudaMalloc(&d_wv_grad_c, 3 * np_c * sizeof(double)) != cudaSuccess ||
-        cudaMalloc(&d_temp_g_c, nbasis * np_c * sizeof(double)) != cudaSuccess) {
+        cudaMalloc(&d_temp_g_c, 4 * nbasis * np_c * sizeof(double)) != cudaSuccess) {
       free_screen_data();
       fprintf(stderr, "[gga] screen data alloc FAILED nbasis=%ld np_c=%ld\n",
               (long)nbasis, (long)np_c);
@@ -343,14 +350,8 @@ struct GgaVmatGemmCache {
         return false;
       }
     }
-    if (!d_W4) {
-      if (cudaMalloc(&d_W4, 4 * nbasis * nbasis * sizeof(double)) != cudaSuccess) {
-        d_W4 = nullptr;
-        fprintf(stderr, "[gga] full W4 alloc FAILED nbasis=%ld\n", (long)nbasis);
-        return false;
-      }
-    }
-    return true;
+    // d_W4 is now allocated in ensure().
+    return d_W4 != nullptr;
   }
 };
 
@@ -711,15 +712,14 @@ Status BuildGgaVmatDevice(const GgaVmatDeviceIn& input, double* vmat,
 
           const int k_c = static_cast<int>(gc.np_compact);
           const std::int64_t bp_c = input.nbasis * gc.np_compact;
-          // d_temp_g_c is reused as a single [nbasis x np_c] scaled buffer
-          // (first plane of the 4-plane allocation). d_W stores one n x n block.
-          double* d_temp_c = gc.d_temp_g_c;
-          double* d_W1 = gc.d_W;  // first n x n block of d_W
+          const int n4 = 4 * n;
           bool ok = true;
 
           cudaMemsetAsync(vmat, 0, n * n * sizeof(double), stream);
 
-          // --- rho term: V = (wv_rho * Phi) * Phi^T ---
+          // --- Batched: scale all 4 planes, then 1 GEMM ---
+          // Plane 0: wv_rho * phi
+          // Plane a (1..3): wv_grad_a * grad_phi_a
           {
             int threads = 256;
             int blocks = (k_c + threads - 1) / threads;
@@ -731,24 +731,10 @@ Status BuildGgaVmatDevice(const GgaVmatDeviceIn& input, double* vmat,
             dim3 grid((static_cast<unsigned int>(gc.np_compact) + block.x - 1) / block.x,
                       (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
             ScaleCompactColumnsKernel<<<grid, block, 0, stream>>>(
-                d_temp_c, gc.d_phi_compact, gc.d_wv_rho_c,
+                gc.d_temp_g_c, gc.d_phi_compact, gc.d_wv_rho_c,
                 input.nbasis, gc.np_compact);
           }
-          {
-            cublasStatus_t cs = cublasGemmEx(
-                gc.handle, CUBLAS_OP_T, CUBLAS_OP_N,
-                n, n, k_c,
-                &alpha,
-                d_temp_c, CUDA_R_64F, k_c,
-                gc.d_phi_compact, CUDA_R_64F, k_c,
-                &beta0,
-                vmat, CUDA_R_64F, n,
-                CUDA_R_64F, CUBLAS_GEMM_DEFAULT);
-            if (cs != CUBLAS_STATUS_SUCCESS) ok = false;
-          }
-
-          // --- grad terms: V += W + W^T where W = (wv_ga * Ga) * Phi^T ---
-          for (int a = 0; a < 3 && ok; ++a) {
+          for (int a = 0; a < 3; ++a) {
             {
               int threads = 256;
               int blocks = (k_c + threads - 1) / threads;
@@ -762,28 +748,35 @@ Status BuildGgaVmatDevice(const GgaVmatDeviceIn& input, double* vmat,
               dim3 grid((static_cast<unsigned int>(gc.np_compact) + block.x - 1) / block.x,
                         (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
               ScaleCompactColumnsKernel<<<grid, block, 0, stream>>>(
-                  d_temp_c,
+                  gc.d_temp_g_c + (a + 1) * bp_c,
                   gc.d_grad_compact + a * bp_c,
                   gc.d_wv_grad_c + a * gc.np_compact,
                   input.nbasis, gc.np_compact);
             }
-            {
-              cublasStatus_t cs = cublasGemmEx(
-                  gc.handle, CUBLAS_OP_T, CUBLAS_OP_N,
-                  n, n, k_c,
-                  &alpha,
-                  d_temp_c, CUDA_R_64F, k_c,
-                  gc.d_phi_compact, CUDA_R_64F, k_c,
-                  &beta0,
-                  d_W1, CUDA_R_64F, n,
-                  CUDA_R_64F, CUBLAS_GEMM_DEFAULT);
-              if (cs != CUBLAS_STATUS_SUCCESS) { ok = false; break; }
-            }
-            {
-              const int threads = 64;
-              const int blocks = (n + threads - 1) / threads;
-              SymmetrizeAddKernel<<<blocks, threads, 0, stream>>>(
-                  vmat, d_W1, n);
+          }
+
+          // Single batched GEMM: W4[4n x n] = temp4^T * phi_compact
+          {
+            cublasStatus_t cs = cublasGemmEx(
+                gc.handle, CUBLAS_OP_T, CUBLAS_OP_N,
+                n4, n, k_c,
+                &alpha,
+                gc.d_temp_g_c, CUDA_R_64F, k_c,
+                gc.d_phi_compact, CUDA_R_64F, k_c,
+                &beta0,
+                gc.d_W4, CUDA_R_64F, n4,
+                CUDA_R_64F, CUBLAS_GEMM_DEFAULT);
+            if (cs != CUBLAS_STATUS_SUCCESS) ok = false;
+          }
+          // Add rho block (plane 0) + symmetrize 3 grad blocks (planes 1..3)
+          if (ok) {
+            const int threads = 64;
+            const int blocks = (n + threads - 1) / threads;
+            StridedAddKernel<<<blocks, threads, 0, stream>>>(
+                vmat, gc.d_W4, 0, n, n4);
+            for (int a = 1; a < 4; ++a) {
+              SymmetrizeAddStridedKernel<<<blocks, threads, 0, stream>>>(
+                  vmat, gc.d_W4, a * n, n, n4);
             }
           }
           done = ok;
