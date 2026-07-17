@@ -1358,7 +1358,7 @@ if(BUILD_PYTHON_BINDINGS)
     nanobind_add_module(tides_native
       api/python/tides/_native.cpp)
     if(TIDES_ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
-      set_source_files_properties(api/python/tides/_native.cpp PROPERTIES LANGUAGE CUDA)
+      set_source_files_properties(api/python/tides/_native.cpp PROPERTIES LANGUAGE CXX)
     endif()
     target_link_libraries(tides_native PRIVATE
       tides_core tides_scf tides_solvers tides_basis tides_grid)

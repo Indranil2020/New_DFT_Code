@@ -849,8 +849,8 @@ Result<PoissonFreeDeviceResult> PoissonFreeDeviceCache::Solve(
     HartreeEnergyKernel<<<blocks, threads, smem, stream>>>(
         d_energy_, d_rho, d_V_out, dv, static_cast<int>(N));
   }
-  cudaMemcpyAsync(&result.hartree_energy, d_energy_, sizeof(double),
-                  cudaMemcpyDeviceToHost, stream);
+  // Energy D2H deferred to caller — no blocking cudaMemcpyAsync here.
+  // The caller syncs the stream when needed and can read d_energy_ if required.
   if (profile) cudaEventRecord(ev7, stream);
 
   if (profile) {

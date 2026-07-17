@@ -52,6 +52,75 @@ __global__ void ScaleColumnsKernel(
   out[mu * stride + g] = wv[g] * phi[mu * stride + g];
 }
 
+// FP32 version: scale + cast to float in one pass.
+__global__ void ScaleColumnsKernelF32(
+    float* out, const double* phi, const double* wv,
+    std::int64_t nbasis, std::int64_t np, std::int64_t stride) {
+  const std::int64_t g = blockIdx.x * blockDim.x + threadIdx.x;
+  const std::int64_t mu = blockIdx.y * blockDim.y + threadIdx.y;
+  if (g >= np || mu >= nbasis) return;
+  out[mu * stride + g] = static_cast<float>(wv[g] * phi[mu * stride + g]);
+}
+
+// Cast double array to float.
+__global__ void CastToF32Kernel(
+    float* out, const double* in, std::int64_t n) {
+  std::int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+  out[i] = static_cast<float>(in[i]);
+}
+
+// Cast float array to double.
+__global__ void CastToF64Kernel(
+    double* out, const float* in, std::int64_t n) {
+  std::int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+  out[i] = static_cast<double>(in[i]);
+}
+
+// Accumulate FP32 matrix into FP64: V_f64[i,j] += (double)W_f32[i,j]
+__global__ void AccumulateF32ToF64Kernel(
+    double* V, const float* W, std::int64_t n) {
+  std::int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= n * n) return;
+  V[idx] += static_cast<double>(W[idx]);
+}
+
+// 2D slice cast: out[mu*stride + g] = (float)in[mu*stride + g] for g in [0,k_cur)
+__global__ void CastSliceToF32Kernel(
+    float* out, const double* in,
+    std::int64_t nbasis, std::int64_t k_cur, std::int64_t stride) {
+  const std::int64_t g = blockIdx.x * blockDim.x + threadIdx.x;
+  const std::int64_t mu = blockIdx.y * blockDim.y + threadIdx.y;
+  if (g >= k_cur || mu >= nbasis) return;
+  out[mu * stride + g] = static_cast<float>(in[mu * stride + g]);
+}
+
+// Symmetrize-accumulate FP32 into FP64: V_f64 += W_f32 + W_f32^T
+__global__ void SymmetrizeAccumulateF32ToF64Kernel(
+    double* V, const float* W, std::int64_t n) {
+  std::int64_t mu = blockIdx.x * blockDim.x + threadIdx.x;
+  if (mu >= n) return;
+  for (std::int64_t nu = mu; nu < n; ++nu) {
+    const double val = static_cast<double>(W[mu * n + nu] + W[nu * n + mu]);
+    V[mu * n + nu] += val;
+    if (nu != mu) V[nu * n + mu] += val;
+  }
+}
+
+// Add W + W^T to V (symmetric accumulation). V += W + W^T.
+// FP32 version.
+__global__ void SymmetrizeAddKernelF32(
+    float* V, const float* W, std::int64_t n) {
+  const std::int64_t mu = blockIdx.x * blockDim.x + threadIdx.x;
+  if (mu >= n) return;
+  for (std::int64_t nu = mu; nu < n; ++nu) {
+    const float val = W[mu * n + nu] + W[nu * n + mu];
+    V[mu * n + nu] += val;
+    if (nu != mu) V[nu * n + mu] += val;
+  }
+}
+
 // Add W + W^T to V (symmetric accumulation). V += W + W^T.
 __global__ void SymmetrizeAddKernel(
     double* V, const double* W, std::int64_t n) {
@@ -64,37 +133,224 @@ __global__ void SymmetrizeAddKernel(
   }
 }
 
+// Symmetrize-accumulate a strided block from concatenated W:
+// W is col-major with leading dim ldw. Block starts at row offset.
+// V[mu,nu] += W[offset+mu, nu] + W[offset+nu, mu]
+// W[offset+i, j] = W_col[offset + i + j*ldw]
+__global__ void SymmetrizeAddStridedKernel(
+    double* V, const double* W,
+    std::int64_t offset, std::int64_t n, std::int64_t ldw) {
+  const std::int64_t mu = blockIdx.x * blockDim.x + threadIdx.x;
+  if (mu >= n) return;
+  for (std::int64_t nu = mu; nu < n; ++nu) {
+    const double val = W[offset + mu + nu * ldw] + W[offset + nu + mu * ldw];
+    V[mu * n + nu] += val;
+    if (nu != mu) V[nu * n + mu] += val;
+  }
+}
+
+// Add a strided block from concatenated W to V (no symmetrize):
+// V[mu,nu] += W[offset+mu, nu]  for all mu, nu
+// W is col-major with leading dim ldw.
+__global__ void StridedAddKernel(
+    double* V, const double* W,
+    std::int64_t offset, std::int64_t n, std::int64_t ldw) {
+  const std::int64_t mu = blockIdx.x * blockDim.x + threadIdx.x;
+  if (mu >= n) return;
+  for (std::int64_t nu = 0; nu < n; ++nu) {
+    V[mu * n + nu] += W[offset + mu + nu * ldw];
+  }
+}
+
+// Grid screening kernels for GGA vmat (same concept as LDA path).
+__global__ void GgaBuildCompactionIndexKernel(
+    const double* phi, std::int64_t nbasis, std::int64_t np,
+    std::int64_t stride, int* index, int* compact_count) {
+  std::int64_t g = blockIdx.x * blockDim.x + threadIdx.x;
+  if (g >= np) return;
+  bool active = false;
+  for (std::int64_t mu = 0; mu < nbasis; ++mu) {
+    if (phi[mu * stride + g] != 0.0) { active = true; break; }
+  }
+  if (active) {
+    int pos = atomicAdd(compact_count, 1);
+    index[pos] = static_cast<int>(g);
+  }
+}
+
+__global__ void GgaCompactPhiKernel(
+    double* out, const double* phi, const int* index,
+    std::int64_t nbasis, std::int64_t np_compact, std::int64_t stride) {
+  std::int64_t pos = blockIdx.x * blockDim.x + threadIdx.x;
+  std::int64_t mu = blockIdx.y * blockDim.y + threadIdx.y;
+  if (pos >= np_compact || mu >= nbasis) return;
+  out[mu * np_compact + pos] = phi[mu * stride + index[pos]];
+}
+
+// Compact grad_phi: grad is [3][nbasis][stride], compact to [3][nbasis][np_compact]
+__global__ void GgaCompactGradKernel(
+    double* out, const double* grad, const int* index,
+    std::int64_t nbasis, std::int64_t np_compact, std::int64_t stride) {
+  std::int64_t pos = blockIdx.x * blockDim.x + threadIdx.x;
+  std::int64_t mu = blockIdx.y * blockDim.y + threadIdx.y;
+  std::int64_t comp = threadIdx.z;
+  if (pos >= np_compact || mu >= nbasis || comp >= 3) return;
+  std::int64_t basis_plane = nbasis * stride;
+  out[comp * nbasis * np_compact + mu * np_compact + pos] =
+      grad[comp * basis_plane + mu * stride + index[pos]];
+}
+
+__global__ void GgaCompactWvKernel(
+    double* out, const double* wv, const int* index, std::int64_t np_compact) {
+  std::int64_t pos = blockIdx.x * blockDim.x + threadIdx.x;
+  if (pos >= np_compact) return;
+  out[pos] = wv[index[pos]];
+}
+
+// Scale compacted columns: out[mu * np_c + pos] = wv[pos] * in[mu * np_c + pos]
+__global__ void ScaleCompactColumnsKernel(
+    double* out, const double* in, const double* wv,
+    std::int64_t nbasis, std::int64_t np_c) {
+  std::int64_t pos = blockIdx.x * blockDim.x + threadIdx.x;
+  std::int64_t mu = blockIdx.y * blockDim.y + threadIdx.y;
+  if (pos >= np_c || mu >= nbasis) return;
+  out[mu * np_c + pos] = wv[pos] * in[mu * np_c + pos];
+}
+
 // cuBLAS handle + temp buffers for GEMM-based GGA vmat.
+// Screen buffers are sized to np_compact (not full stride) after counting.
+// Full-path d_temp_g is allocated only if screening cannot be used.
 struct GgaVmatGemmCache {
   cublasHandle_t handle = nullptr;
-  double* d_temp_phi = nullptr;    // [nbasis * stride] scaled phi/grad_phi
-  double* d_temp_g = nullptr;      // [nbasis * stride] scaled grad_phi
-  double* d_W = nullptr;           // [nbasis * nbasis] temp result
+  double* d_temp_g = nullptr;      // [4 * nbasis * stride] full unscreened path
+  double* d_W = nullptr;           // [nbasis * nbasis] temp GEMM block (grad)
+  double* d_W4 = nullptr;          // [4 * nbasis * nbasis] full unscreened concat
+  // Grid screening buffers.
+  int* d_compact_index = nullptr;      // [stride]
+  double* d_phi_compact = nullptr;     // [nbasis * np_c]
+  double* d_grad_compact = nullptr;    // [3 * nbasis * np_c]
+  double* d_wv_rho_c = nullptr;        // [np_c]
+  double* d_wv_grad_c = nullptr;       // [3 * np_c]
+  double* d_temp_g_c = nullptr;        // [nbasis * np_c] single scaled plane
+  int* d_screen_count = nullptr;
+  std::int64_t np_compact = 0;
+  std::int64_t screen_cap = 0;         // capacity of compact buffers
+  bool screen_initialized = false;
+  bool compact_ready = false;          // phi/grad compacted for current index
   std::int64_t cached_nbasis = 0, cached_stride = 0;
+
+  void free_screen_data() {
+    if (d_phi_compact) cudaFree(d_phi_compact);
+    if (d_grad_compact) cudaFree(d_grad_compact);
+    if (d_wv_rho_c) cudaFree(d_wv_rho_c);
+    if (d_wv_grad_c) cudaFree(d_wv_grad_c);
+    if (d_temp_g_c) cudaFree(d_temp_g_c);
+    d_phi_compact = nullptr;
+    d_grad_compact = nullptr;
+    d_wv_rho_c = nullptr;
+    d_wv_grad_c = nullptr;
+    d_temp_g_c = nullptr;
+    screen_cap = 0;
+    compact_ready = false;
+  }
+
+  void free_screen_all() {
+    free_screen_data();
+    if (d_compact_index) cudaFree(d_compact_index);
+    if (d_screen_count) cudaFree(d_screen_count);
+    d_compact_index = nullptr;
+    d_screen_count = nullptr;
+    screen_initialized = false;
+    np_compact = 0;
+  }
 
   ~GgaVmatGemmCache() {
     if (handle) cublasDestroy(handle);
-    if (d_temp_phi) cudaFree(d_temp_phi);
     if (d_temp_g) cudaFree(d_temp_g);
     if (d_W) cudaFree(d_W);
+    free_screen_all();
   }
 
   bool ensure(std::int64_t nbasis, std::int64_t stride, cudaStream_t stream) {
     if (!handle) {
       if (cublasCreate(&handle) != CUBLAS_STATUS_SUCCESS) return false;
+      cublasSetMathMode(handle, CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION);
     }
     cublasSetStream(handle, stream);
     if (cached_nbasis != nbasis || cached_stride != stride) {
-      if (d_temp_phi) cudaFree(d_temp_phi);
       if (d_temp_g) cudaFree(d_temp_g);
       if (d_W) cudaFree(d_W);
-      cudaMalloc(&d_temp_phi, nbasis * stride * sizeof(double));
-      cudaMalloc(&d_temp_g, nbasis * stride * sizeof(double));
-      cudaMalloc(&d_W, nbasis * nbasis * sizeof(double));
+      d_temp_g = nullptr;
+      d_W = nullptr;
+      free_screen_all();
+      // Only W is always needed for both screen and full paths.
+      if (cudaMalloc(&d_W, nbasis * nbasis * sizeof(double)) != cudaSuccess) {
+        d_W = nullptr;
+        return false;
+      }
       cached_nbasis = nbasis;
       cached_stride = stride;
     }
-    return d_temp_phi && d_temp_g && d_W;
+    return d_W != nullptr;
+  }
+
+  // Phase-1: index + counter only (cheap).
+  bool ensure_screen_index(std::int64_t stride) {
+    if (d_compact_index && d_screen_count) return true;
+    free_screen_all();
+    if (cudaMalloc(&d_compact_index, stride * sizeof(int)) != cudaSuccess) {
+      d_compact_index = nullptr;
+      return false;
+    }
+    if (cudaMalloc(&d_screen_count, sizeof(int)) != cudaSuccess) {
+      cudaFree(d_compact_index);
+      d_compact_index = nullptr;
+      d_screen_count = nullptr;
+      return false;
+    }
+    return true;
+  }
+
+  // Phase-2: size compact buffers exactly to np_c (avoids multi-GB OOM).
+  bool ensure_screen_data(std::int64_t nbasis, std::int64_t np_c) {
+    if (np_c <= 0) return false;
+    if (screen_cap >= np_c && d_phi_compact && d_grad_compact &&
+        d_wv_rho_c && d_wv_grad_c && d_temp_g_c) {
+      return true;
+    }
+    free_screen_data();
+    if (cudaMalloc(&d_phi_compact, nbasis * np_c * sizeof(double)) != cudaSuccess ||
+        cudaMalloc(&d_grad_compact, 3 * nbasis * np_c * sizeof(double)) != cudaSuccess ||
+        cudaMalloc(&d_wv_rho_c, np_c * sizeof(double)) != cudaSuccess ||
+        cudaMalloc(&d_wv_grad_c, 3 * np_c * sizeof(double)) != cudaSuccess ||
+        cudaMalloc(&d_temp_g_c, nbasis * np_c * sizeof(double)) != cudaSuccess) {
+      free_screen_data();
+      fprintf(stderr, "[gga] screen data alloc FAILED nbasis=%ld np_c=%ld\n",
+              (long)nbasis, (long)np_c);
+      return false;
+    }
+    screen_cap = np_c;
+    return true;
+  }
+
+  bool ensure_full_temp(std::int64_t nbasis, std::int64_t stride) {
+    if (d_temp_g && d_W4) return true;
+    if (!d_temp_g) {
+      if (cudaMalloc(&d_temp_g, 4 * nbasis * stride * sizeof(double)) != cudaSuccess) {
+        d_temp_g = nullptr;
+        fprintf(stderr, "[gga] full temp alloc FAILED nbasis=%ld stride=%ld\n",
+                (long)nbasis, (long)stride);
+        return false;
+      }
+    }
+    if (!d_W4) {
+      if (cudaMalloc(&d_W4, 4 * nbasis * nbasis * sizeof(double)) != cudaSuccess) {
+        d_W4 = nullptr;
+        fprintf(stderr, "[gga] full W4 alloc FAILED nbasis=%ld\n", (long)nbasis);
+        return false;
+      }
+    }
+    return true;
   }
 };
 
@@ -398,56 +654,191 @@ Status BuildGgaVmatDevice(const GgaVmatDeviceIn& input, double* vmat,
       const int n = static_cast<int>(input.nbasis);
       const int k = static_cast<int>(input.np);
       const int lda = static_cast<int>(input.point_stride);
-      const double alpha = 1.0, beta0 = 0.0, beta1 = 1.0;
+      const double alpha = 1.0, beta0 = 0.0;
       const std::int64_t basis_plane = input.nbasis * input.point_stride;
+      const int n4 = 4 * n;
+      bool done = false;
 
-      // Step 1: temp_rho = wv_rho * phi;  V = temp_rho * Phi^T
-      {
-        dim3 block(32, 4);
-        dim3 grid((static_cast<unsigned int>(input.np) + block.x - 1) / block.x,
-                  (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
-        ScaleColumnsKernel<<<grid, block, 0, stream>>>(
-            gc.d_temp_phi, input.phi, input.wv_rho,
-            input.nbasis, input.np, input.point_stride);
+      const bool use_screen = [] {
+        const char* e = std::getenv("TIDES_GRID_SCREEN");
+        return (e == nullptr || e[0] != '0');
+      }();
+
+      if (use_screen && gc.ensure_screen_index(input.point_stride)) {
+        if (!gc.screen_initialized) {
+          cudaMemsetAsync(gc.d_screen_count, 0, sizeof(int), stream);
+          {
+            int threads = 256;
+            int blocks = (static_cast<int>(input.np) + threads - 1) / threads;
+            GgaBuildCompactionIndexKernel<<<blocks, threads, 0, stream>>>(
+                input.phi, input.nbasis, input.np, input.point_stride,
+                gc.d_compact_index, gc.d_screen_count);
+          }
+          int host_count = 0;
+          cudaMemcpyAsync(&host_count, gc.d_screen_count,
+                          sizeof(int), cudaMemcpyDeviceToHost, stream);
+          cudaStreamSynchronize(stream);
+          gc.np_compact = host_count;
+          gc.screen_initialized = true;
+
+          fprintf(stderr, "[screen] GGA np=%ld np_compact=%ld (%.1f%% active)\n",
+                  (long)input.np, (long)gc.np_compact,
+                  100.0 * gc.np_compact / input.np);
+        }
+
+        if (gc.np_compact > 0 && gc.np_compact < input.np &&
+            gc.ensure_screen_data(input.nbasis, gc.np_compact)) {
+          if (!gc.compact_ready) {
+            {
+              dim3 block(32, 4);
+              dim3 grid((static_cast<unsigned int>(gc.np_compact) + block.x - 1) / block.x,
+                        (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
+              GgaCompactPhiKernel<<<grid, block, 0, stream>>>(
+                  gc.d_phi_compact, input.phi, gc.d_compact_index,
+                  input.nbasis, gc.np_compact, input.point_stride);
+            }
+            {
+              dim3 block(32, 4, 3);
+              dim3 grid((static_cast<unsigned int>(gc.np_compact) + block.x - 1) / block.x,
+                        (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y,
+                        1);
+              GgaCompactGradKernel<<<grid, block, 0, stream>>>(
+                  gc.d_grad_compact, input.grad_phi, gc.d_compact_index,
+                  input.nbasis, gc.np_compact, input.point_stride);
+            }
+            gc.compact_ready = true;
+          }
+
+          const int k_c = static_cast<int>(gc.np_compact);
+          const std::int64_t bp_c = input.nbasis * gc.np_compact;
+          // d_temp_g_c is reused as a single [nbasis x np_c] scaled buffer
+          // (first plane of the 4-plane allocation). d_W stores one n x n block.
+          double* d_temp_c = gc.d_temp_g_c;
+          double* d_W1 = gc.d_W;  // first n x n block of d_W
+          bool ok = true;
+
+          cudaMemsetAsync(vmat, 0, n * n * sizeof(double), stream);
+
+          // --- rho term: V = (wv_rho * Phi) * Phi^T ---
+          {
+            int threads = 256;
+            int blocks = (k_c + threads - 1) / threads;
+            GgaCompactWvKernel<<<blocks, threads, 0, stream>>>(
+                gc.d_wv_rho_c, input.wv_rho, gc.d_compact_index, gc.np_compact);
+          }
+          {
+            dim3 block(32, 4);
+            dim3 grid((static_cast<unsigned int>(gc.np_compact) + block.x - 1) / block.x,
+                      (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
+            ScaleCompactColumnsKernel<<<grid, block, 0, stream>>>(
+                d_temp_c, gc.d_phi_compact, gc.d_wv_rho_c,
+                input.nbasis, gc.np_compact);
+          }
+          {
+            cublasStatus_t cs = cublasGemmEx(
+                gc.handle, CUBLAS_OP_T, CUBLAS_OP_N,
+                n, n, k_c,
+                &alpha,
+                d_temp_c, CUDA_R_64F, k_c,
+                gc.d_phi_compact, CUDA_R_64F, k_c,
+                &beta0,
+                vmat, CUDA_R_64F, n,
+                CUDA_R_64F, CUBLAS_GEMM_DEFAULT);
+            if (cs != CUBLAS_STATUS_SUCCESS) ok = false;
+          }
+
+          // --- grad terms: V += W + W^T where W = (wv_ga * Ga) * Phi^T ---
+          for (int a = 0; a < 3 && ok; ++a) {
+            {
+              int threads = 256;
+              int blocks = (k_c + threads - 1) / threads;
+              GgaCompactWvKernel<<<blocks, threads, 0, stream>>>(
+                  gc.d_wv_grad_c + a * gc.np_compact,
+                  input.wv_grad + a * input.point_stride,
+                  gc.d_compact_index, gc.np_compact);
+            }
+            {
+              dim3 block(32, 4);
+              dim3 grid((static_cast<unsigned int>(gc.np_compact) + block.x - 1) / block.x,
+                        (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
+              ScaleCompactColumnsKernel<<<grid, block, 0, stream>>>(
+                  d_temp_c,
+                  gc.d_grad_compact + a * bp_c,
+                  gc.d_wv_grad_c + a * gc.np_compact,
+                  input.nbasis, gc.np_compact);
+            }
+            {
+              cublasStatus_t cs = cublasGemmEx(
+                  gc.handle, CUBLAS_OP_T, CUBLAS_OP_N,
+                  n, n, k_c,
+                  &alpha,
+                  d_temp_c, CUDA_R_64F, k_c,
+                  gc.d_phi_compact, CUDA_R_64F, k_c,
+                  &beta0,
+                  d_W1, CUDA_R_64F, n,
+                  CUDA_R_64F, CUBLAS_GEMM_DEFAULT);
+              if (cs != CUBLAS_STATUS_SUCCESS) { ok = false; break; }
+            }
+            {
+              const int threads = 64;
+              const int blocks = (n + threads - 1) / threads;
+              SymmetrizeAddKernel<<<blocks, threads, 0, stream>>>(
+                  vmat, d_W1, n);
+            }
+          }
+          done = ok;
+        }
       }
-      cublasStatus_t cs = cublasDgemm(
-          gc.handle, CUBLAS_OP_T, CUBLAS_OP_N, n, n, k,
-          &alpha, input.phi, lda, gc.d_temp_phi, lda, &beta0,
-          vmat, n);
-      if (cs != CUBLAS_STATUS_SUCCESS) goto gga_fallback;
 
-      // Step 2: For each direction a, W = temp_ga * Phi^T, V += W + W^T
-      for (int a = 0; a < 3; ++a) {
-        const double* grad_a = input.grad_phi + a * basis_plane;
-        const double* wv_g_a = input.wv_grad + a * input.point_stride;
+      if (!done && gc.ensure_full_temp(input.nbasis, input.point_stride)) {
+        cudaMemsetAsync(vmat, 0, n * n * sizeof(double), stream);
 
         {
           dim3 block(32, 4);
           dim3 grid((static_cast<unsigned int>(input.np) + block.x - 1) / block.x,
                     (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
           ScaleColumnsKernel<<<grid, block, 0, stream>>>(
-              gc.d_temp_g, grad_a, wv_g_a,
+              gc.d_temp_g, input.phi, input.wv_rho,
               input.nbasis, input.np, input.point_stride);
         }
-        cs = cublasDgemm(
-            gc.handle, CUBLAS_OP_T, CUBLAS_OP_N, n, n, k,
-            &alpha, input.phi, lda, gc.d_temp_g, lda, &beta0,
-            gc.d_W, n);
-        if (cs != CUBLAS_STATUS_SUCCESS) goto gga_fallback;
+        for (int a = 0; a < 3; ++a) {
+          const double* grad_a = input.grad_phi + a * basis_plane;
+          const double* wv_g_a = input.wv_grad + a * input.point_stride;
+          double* dst = gc.d_temp_g + (a + 1) * basis_plane;
+          dim3 block(32, 4);
+          dim3 grid((static_cast<unsigned int>(input.np) + block.x - 1) / block.x,
+                    (static_cast<unsigned int>(input.nbasis) + block.y - 1) / block.y);
+          ScaleColumnsKernel<<<grid, block, 0, stream>>>(
+              dst, grad_a, wv_g_a,
+              input.nbasis, input.np, input.point_stride);
+        }
 
-        // V += W + W^T
-        {
+        cublasStatus_t cs = cublasGemmEx(
+            gc.handle, CUBLAS_OP_T, CUBLAS_OP_N,
+            n4, n, k,
+            &alpha,
+            gc.d_temp_g, CUDA_R_64F, lda,
+            input.phi, CUDA_R_64F, lda,
+            &beta0,
+            gc.d_W4, CUDA_R_64F, n4,
+            CUDA_R_64F, CUBLAS_GEMM_DEFAULT);
+        if (cs == CUBLAS_STATUS_SUCCESS) {
           const int threads = 64;
           const int blocks = (n + threads - 1) / threads;
-          SymmetrizeAddKernel<<<blocks, threads, 0, stream>>>(
-              vmat, gc.d_W, input.nbasis);
+          StridedAddKernel<<<blocks, threads, 0, stream>>>(
+              vmat, gc.d_W4, 0, n, n4);
+          for (int a = 1; a < 4; ++a) {
+            SymmetrizeAddStridedKernel<<<blocks, threads, 0, stream>>>(
+                vmat, gc.d_W4, a * n, n, n4);
+          }
+          done = true;
         }
       }
-      return Status::Ok();
+
+      if (done) return Status::Ok();
     }
   }
 
-gga_fallback:
   // Fallback: original per-(mu,nu) reduction kernel.
   {
     dim3 grid_dim(static_cast<unsigned int>(input.nbasis),

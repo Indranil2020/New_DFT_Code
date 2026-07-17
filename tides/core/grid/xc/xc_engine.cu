@@ -326,6 +326,10 @@ bool IsTier0(XcFunctionalId id) {
     case XcFunctionalId::kPbe:
     case XcFunctionalId::kPbesol:
     case XcFunctionalId::kRevPbe:
+    case XcFunctionalId::kRpbe:
+    case XcFunctionalId::kBlyp:
+    case XcFunctionalId::kB3lypLocal:
+    case XcFunctionalId::kPbe0Local:
       return true;
     default:
       return false;

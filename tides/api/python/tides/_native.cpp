@@ -159,10 +159,30 @@ static scf::NaoDriverResult NaoDriver_run(
     bool use_kpoints,
     std::array<int, 3> kpoint_grid,
     const std::string& xc_functional,
-    const std::string& pp_dir) {
+    const std::string& pp_dir,
+    bool allow_grid_refine,
+    double electronic_temp_k) {
     grid::xc::HostXcSpec spec{};
     if (xc_functional == "pbe" || xc_functional == "PBE") {
         spec.id = grid::xc::XcFunctionalId::kPbe;
+        spec.family = grid::xc::XcFamily::kGga;
+    } else if (xc_functional == "b3lyp" || xc_functional == "B3LYP") {
+        spec.id = grid::xc::XcFunctionalId::kB3lypLocal;
+        spec.family = grid::xc::XcFamily::kGga;
+    } else if (xc_functional == "pbe0" || xc_functional == "PBE0") {
+        spec.id = grid::xc::XcFunctionalId::kPbe0Local;
+        spec.family = grid::xc::XcFamily::kGga;
+    } else if (xc_functional == "blyp" || xc_functional == "BLYP") {
+        spec.id = grid::xc::XcFunctionalId::kBlyp;
+        spec.family = grid::xc::XcFamily::kGga;
+    } else if (xc_functional == "rpbe" || xc_functional == "RPBE") {
+        spec.id = grid::xc::XcFunctionalId::kRpbe;
+        spec.family = grid::xc::XcFamily::kGga;
+    } else if (xc_functional == "revpbe" || xc_functional == "revPBE") {
+        spec.id = grid::xc::XcFunctionalId::kRevPbe;
+        spec.family = grid::xc::XcFamily::kGga;
+    } else if (xc_functional == "pbesol" || xc_functional == "PBEsol") {
+        spec.id = grid::xc::XcFunctionalId::kPbesol;
         spec.family = grid::xc::XcFamily::kGga;
     } else {
         spec.id = grid::xc::XcFunctionalId::kLdaPw92;
@@ -176,21 +196,23 @@ static scf::NaoDriverResult NaoDriver_run(
                                     grid_h, grid_margin, max_iter, tol,
                                     &pps, spec, 1, 0,
                                     use_dual_grid,
-                                    0.0, false, false, false, false, false,
+                                    electronic_temp_k, false, false, false, false, false,
                                     use_mixed_precision,
                                     use_qtt_compression,
                                     use_cuda_graph,
-                                    use_kpoints, kpoint_grid);
+                                    use_kpoints, kpoint_grid, false, false,
+                                    nullptr, false, allow_grid_refine);
     }
     return scf::NaoDriver::Run(atomic_numbers, positions,
                                 grid_h, grid_margin, max_iter, tol,
                                 nullptr, spec, 1, 0,
                                 use_dual_grid,
-                                0.0, false, false, false, false, false,
+                                electronic_temp_k, false, false, false, false, false,
                                 use_mixed_precision,
                                 use_qtt_compression,
                                 use_cuda_graph,
-                                use_kpoints, kpoint_grid);
+                                use_kpoints, kpoint_grid, false, false,
+                                nullptr, false, allow_grid_refine);
 }
 
 // Standalone tile substrate GEMM: A @ B via TileMat + SpGemmFilteredFp64.
@@ -488,7 +510,9 @@ NB_MODULE(_native, m) {
            nb::arg("use_kpoints") = false,
            nb::arg("kpoint_grid") = std::array<int, 3>{1, 1, 1},
            nb::arg("xc_functional") = "lda",
-           nb::arg("pp_dir") = "")
+           nb::arg("pp_dir") = "",
+           nb::arg("allow_grid_refine") = false,
+           nb::arg("electronic_temp_k") = 0.0)
         .def_static("compute_forces", &NaoDriver_compute_forces,
             nb::arg("atomic_numbers"), nb::arg("positions"),
            nb::arg("grid_h") = 0.2835, nb::arg("grid_margin") = 3.7794,

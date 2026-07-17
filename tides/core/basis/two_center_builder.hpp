@@ -692,6 +692,21 @@ class NaoTwoCenterBuilder {
             const auto& fb = atoms[b].basis.functions[bj.fn];
             if (bi.l != fa.l || bj.l != fb.l) continue;
 
+            if (a == b) {
+              // On-site block: angular integral is δ_{l_a,l_b} δ_{m_a,m_b}.
+              if (bi.l == bj.l && bi.m == bj.m) {
+                const double s_val = OnsiteIntegral(fa, fb, false);
+                const double t_val = OnsiteIntegral(fa, fb, true);
+                result.S[i * n_basis + j] += s_val;
+                result.T[i * n_basis + j] += t_val;
+                if (j != i) {
+                  result.S[j * n_basis + i] += s_val;
+                  result.T[j * n_basis + i] += t_val;
+                }
+              }
+              continue;
+            }
+
             // Evaluate overlap.
             const auto& table_S = get_table(a, bi.fn, b, bj.fn, false);
             double s_val = MatrixElement(table_S, bi.l, bi.m, bj.l, bj.m, R, cos_theta, phi);
@@ -809,6 +824,34 @@ class NaoTwoCenterBuilder {
     }
 
     return 0.0;
+  }
+
+  // Exact on-site (R=1) radial integral on the full NAO radial grid.
+  // Used for same-atom pairs where the full SkRadialIntegrals table is
+  // overkill and dominates S/T assembly cost.
+  static double OnsiteIntegral(const NaoBasisFunction& fa,
+                              const NaoBasisFunction& fb,
+                              bool kinetic_b) {
+    const auto& r = fa.r;
+    const auto& Ra = fa.R;
+    std::vector<double> Rb;
+    if (kinetic_b) {
+      KineticRadial(fb, Rb);
+    } else {
+      Rb = fb.R;
+    }
+    double I = 0.0;
+    const double rcut = std::min(fa.r_cut, fb.r_cut);
+    for (std::size_t i = 0; i + 1 < r.size() && r[i] <= rcut; ++i) {
+      const double r_i = r[i];
+      const double r_next = r[i + 1];
+      const double rb_val = Interpolate(fb.r, Rb, r_i);
+      const double rb_val_next = Interpolate(fb.r, Rb, r_next);
+      const double f_i = Ra[i] * r_i * r_i * rb_val;
+      const double f_next = Ra[i + 1] * r_next * r_next * rb_val_next;
+      I += 0.5 * (f_i + f_next) * (r_next - r_i);
+    }
+    return I;
   }
 
   SkRadialIntegrator integrator_;

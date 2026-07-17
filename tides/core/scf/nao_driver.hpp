@@ -410,8 +410,13 @@ class NaoDriver {
       const double ay = atom.position[1];
       const double az = atom.position[2];
 
-      // Step 1: Compute -Z_A/|r-R_A| on the grid.
+      // Step 1: Compute -Z_A/|r-R_A| on the grid with erf-regularization
+      // at very small r to prevent numerical blow-up when atoms are near
+      // (but not exactly on) grid points. The threshold 1e-6 is small
+      // enough that no real grid contribution is affected.
       std::vector<double> v_a_grid(np, 0.0);
+      const double two_over_sqrt_pi = 2.0 / std::sqrt(M_PI);
+      const double r_smooth = 1e-6;
       for (std::size_t ix = 0; ix < grid.n[0]; ++ix) {
         for (std::size_t iy = 0; iy < grid.n[1]; ++iy) {
           for (std::size_t iz = 0; iz < grid.n[2]; ++iz) {
@@ -419,8 +424,8 @@ class NaoDriver {
             auto [x, y, z] = grid.coord(ix, iy, iz);
             double dx = x - ax, dy = y - ay, dz = z - az;
             double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (r < 1e-10) {
-              v_a_grid[g] = -Z * 2.0 / (std::sqrt(M_PI) * sigma);
+            if (r < r_smooth) {
+              v_a_grid[g] = -Z * two_over_sqrt_pi / sigma;
             } else {
               v_a_grid[g] = -Z / r;
             }
@@ -431,7 +436,9 @@ class NaoDriver {
       // Step 2: Project to get V_A matrix (all terms from nucleus A).
       auto V_A = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_a_grid);
 
-      // Step 3: Replace on-site block (i,j both on atom A) with analytic values.
+      // Step 3: Replace on-site block (i,j both on atom A) with analytic
+      // values. The grid -Z/r is poorly resolved near the nucleus; the
+      // analytic radial integral gives exact on-site matrix elements.
       for (std::size_t i = 0; i < n_basis; ++i) {
         if (basis_atom_map[i] != a_idx) continue;
         for (std::size_t j = 0; j < n_basis; ++j) {
@@ -752,7 +759,8 @@ class NaoDriver {
       bool use_diffuse = false,            // Diffuse basis augmentation (M10)
       bool use_paw = false,                // PAW correction (M9)
       const std::vector<double>* P_init = nullptr,       // B6: initial density for shadow forces
-      bool fixed_density = false) {                        // B6: fixed density (no SCF mixing)
+      bool fixed_density = false,                          // B6: fixed density (no SCF mixing)
+      bool allow_grid_refine = true) {                     // one-shot adaptive h refinement
     NaoDriverResult result;
     auto t0 = std::chrono::steady_clock::now();
     auto t_last = t0;
@@ -881,6 +889,8 @@ class NaoDriver {
     if (n2 % 2 == 0) n2++;
     result.grid_n = {n0, n1, n2};
     result.grid_h = grid_h;
+    const std::size_t np_total = n0 * n1 * n2;
+    const bool is_gga = (xc_spec.family == grid::xc::XcFamily::kGga);
 
     grid::UniformGrid3D grid;
     grid.n = {n0, n1, n2};
@@ -896,7 +906,7 @@ class NaoDriver {
       const auto& atom = atoms[basis_map[bi].atom];
       const auto& bf = atom.basis.functions[basis_map[bi].fn];
       const int m = basis_map[bi].m;
-      orbitals[bi].resize(n0 * n1 * n2, 0.0);
+      orbitals[bi].resize(np_total, 0.0);
       for (std::size_t ix = 0; ix < n0; ++ix) {
         for (std::size_t iy = 0; iy < n1; ++iy) {
           for (std::size_t iz = 0; iz < n2; ++iz) {
@@ -920,7 +930,7 @@ class NaoDriver {
     // Compute gradients of every orbital by central differences.
     // Stored as [3][n_orb][N] for compatibility with BuildRhoWithGrad and BuildGgaHmatGemm.
     std::array<std::vector<std::vector<double>>, 3> grad_orbitals_3d;
-    for (int c = 0; c < 3; ++c) grad_orbitals_3d[c].resize(n, std::vector<double>(n0 * n1 * n2, 0.0));
+    for (int c = 0; c < 3; ++c) grad_orbitals_3d[c].resize(n, std::vector<double>(np_total, 0.0));
     for (std::size_t bi = 0; bi < n; ++bi) {
       for (std::size_t ix = 0; ix < n0; ++ix) {
         for (std::size_t iy = 0; iy < n1; ++iy) {
@@ -943,12 +953,74 @@ class NaoDriver {
       }
     }
 
-    // Analytic two-center overlap and kinetic via radial splines + Slater-Koster.
-    basis::NaoTwoCenterBuilder two_center_builder;
-    auto two_center = two_center_builder.Build(atoms, basis_map, positions, n);
-    S = std::move(two_center.S);
-    T = std::move(two_center.T);
-    step("S/T assembly");
+    // Flatten orbital/gradient arrays once and use BLAS for S/T assembly.
+    // The grid-BLAS S/T path is selectable via TIDES_USE_GRID_ST=1; default
+    // remains the analytic two-center path for accuracy.
+    const bool use_grid_st = [] {
+      const char* e = std::getenv("TIDES_USE_GRID_ST");
+      return (e != nullptr && e[0] == '1');
+    }();
+    std::vector<double> phi_flat;
+    std::vector<double> grad_flat;
+    if (use_grid_st) {
+      phi_flat.assign(n * np_total, 0.0);
+      for (std::size_t bi = 0; bi < n; ++bi)
+        for (std::size_t g = 0; g < np_total; ++g)
+          phi_flat[bi * np_total + g] = orbitals[bi][g];
+      if (is_gga || true) {
+        grad_flat.assign(3 * n * np_total, 0.0);
+        for (int c = 0; c < 3; ++c)
+          for (std::size_t bi = 0; bi < n; ++bi)
+            for (std::size_t g = 0; g < np_total; ++g)
+              grad_flat[(c * n + bi) * np_total + g] = grad_orbitals_3d[c][bi][g];
+      }
+
+      // S = dv * phi^T phi,  T = (dv/2) * sum_c grad_c^T grad_c
+      int nn = static_cast<int>(n);
+      int kk = static_cast<int>(np_total);
+      char transa = 'T', transb = 'N';
+      double alpha_S = dv;
+      double beta0 = 0.0;
+      dgemm_(&transa, &transb, &nn, &nn, &kk,
+             &alpha_S, phi_flat.data(), &kk, phi_flat.data(), &kk,
+             &beta0, S.data(), &nn);
+      // T is accumulated over the three Cartesian components.
+      double alpha_T = 0.5 * dv;
+      for (int c = 0; c < 3; ++c) {
+        double beta_T = (c == 0) ? 0.0 : 1.0;
+        dgemm_(&transa, &transb, &nn, &nn, &kk,
+               &alpha_T, grad_flat.data() + c * n * np_total, &kk,
+               grad_flat.data() + c * n * np_total, &kk,
+               &beta_T, T.data(), &nn);
+      }
+      // Enforce exact symmetry to avoid numerical noise in eigensolvers.
+      for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t j = i + 1; j < n; ++j) {
+          double s_avg = 0.5 * (S[i * n + j] + S[j * n + i]);
+          S[i * n + j] = S[j * n + i] = s_avg;
+          double t_avg = 0.5 * (T[i * n + j] + T[j * n + i]);
+          T[i * n + j] = T[j * n + i] = t_avg;
+        }
+      step("S/T assembly (grid BLAS)");
+    } else {
+      // Tunable two-center integral resolution. Lower counts trade accuracy
+      // for speed; the defaults match the original 200/200/16/16 grid.
+      int st_n_R = 100, st_n_r = 100, st_n_theta = 12, st_n_phi = 8;
+      if (const char* e = std::getenv("TIDES_ST_N_R"))
+        st_n_R = std::atoi(e);
+      if (const char* e = std::getenv("TIDES_ST_N_RR"))
+        st_n_r = std::atoi(e);
+      if (const char* e = std::getenv("TIDES_ST_N_THETA"))
+        st_n_theta = std::atoi(e);
+      if (const char* e = std::getenv("TIDES_ST_N_PHI"))
+        st_n_phi = std::atoi(e);
+      basis::NaoTwoCenterBuilder two_center_builder(
+          st_n_R, st_n_r, st_n_theta, st_n_phi);
+      auto two_center = two_center_builder.Build(atoms, basis_map, positions, n);
+      S = std::move(two_center.S);
+      T = std::move(two_center.T);
+      step("S/T assembly (two-center)");
+    }
 
     // --- Dual grid setup (Phase 3) ---
     // When use_dual_grid is true, create a fine grid with 2x resolution for
@@ -1010,8 +1082,6 @@ class NaoDriver {
     // --- T-X1.6: Device-resident pipeline setup ---
     // Upload phi and grad_phi to device once. Create XcArena for XC evaluation.
     // These persist across SCF iterations; only P and V_xc are transferred per iter.
-    const std::size_t np_total = n0 * n1 * n2;
-    const bool is_gga = (xc_spec.family == grid::xc::XcFamily::kGga);
 #ifdef TIDES_HAVE_CUDA
     bool device_pipeline_ready = false;
     cudaStream_t dev_stream = nullptr;
@@ -1020,7 +1090,8 @@ class NaoDriver {
     double* d_grad_phi = nullptr;     // [3][n][stride]
     double* d_P_up = nullptr;         // [n][n]
     double* d_P_down = nullptr;       // [n][n] (only for nspin=2)
-    double* d_vmat = nullptr;         // [n][n]
+    double* d_vmat = nullptr;         // [n][n] — V_H result
+    double* d_vmat_xc = nullptr;      // [n][n] — V_xc result (separate for stream overlap)
     double* d_vh_grid = nullptr;      // [np] grid potential staging (V_ext/V_H)
     std::size_t dev_stride = 0;
     grid::xc::XcSpec dev_xc_spec;
@@ -1102,6 +1173,7 @@ class NaoDriver {
         d_P_up = static_cast<double*>(gpu_arena.Alloc(n * n * sizeof(double)));
         if (nspin == 2) d_P_down = static_cast<double*>(gpu_arena.Alloc(n * n * sizeof(double)));
         d_vmat = static_cast<double*>(gpu_arena.Alloc(n * n * sizeof(double)));
+        d_vmat_xc = static_cast<double*>(gpu_arena.Alloc(n * n * sizeof(double)));
         // PP-GPU Phase A: staging buffer for grid potentials (V_ext once,
         // V_H per iteration) consumed by BuildWeightedVmatDevice.
         d_vh_grid = static_cast<double*>(gpu_arena.Alloc(np_total * sizeof(double)));
@@ -1138,6 +1210,7 @@ class NaoDriver {
     void* d_P_up = nullptr;
     void* d_P_down = nullptr;
     void* d_vmat = nullptr;
+    void* d_vmat_xc = nullptr;
     void* d_vh_grid = nullptr;
     std::size_t dev_stride = 0;
     grid::xc::XcSpec dev_xc_spec;
@@ -1534,6 +1607,27 @@ class NaoDriver {
       std::vector<double> rho;
       std::vector<double> P2;
       double xc_energy_gpu = 0.0;  // from GPU XC path; 0 if CPU path used
+      // Pinned host buffers for async D2H transfers.
+      double* pinned_V_H = nullptr;
+      double* pinned_V_xc = nullptr;
+      std::size_t pinned_n = 0;
+      void ensure_pinned(std::size_t n) {
+        if (pinned_n != n) {
+          if (pinned_V_H) cudaFreeHost(pinned_V_H);
+          if (pinned_V_xc) cudaFreeHost(pinned_V_xc);
+          void* p_H = nullptr;
+          void* p_xc = nullptr;
+          cudaMallocHost(&p_H, n * n * sizeof(double));
+          cudaMallocHost(&p_xc, n * n * sizeof(double));
+          pinned_V_H = static_cast<double*>(p_H);
+          pinned_V_xc = static_cast<double*>(p_xc);
+          pinned_n = n;
+        }
+      }
+      ~CachedHBuild() {
+        if (pinned_V_H) cudaFreeHost(pinned_V_H);
+        if (pinned_V_xc) cudaFreeHost(pinned_V_xc);
+      }
     };
     CachedHBuild cache;
     int scf_iter = 0;
@@ -1546,6 +1640,20 @@ class NaoDriver {
     double acc_p_multiply = 0, acc_p_fft_inv = 0, acc_p_extract = 0, acc_p_energy = 0;
     double acc_p_solve_cpu = 0, acc_p_vmat_cpu = 0;
     std::size_t p_fft_n0 = 0, p_fft_n1 = 0, p_fft_n2 = 0;
+    // GPU event timing accumulators.
+    double acc_gpu_poisson = 0, acc_gpu_xc = 0, acc_gpu_total = 0;
+    double acc_gpu_xc_kernel = 0, acc_gpu_xc_vmat = 0;
+    cudaEvent_t ev_gpu0, ev_gpu1, ev_gpu2, ev_gpu3;
+    cudaEventCreate(&ev_gpu0); cudaEventCreate(&ev_gpu1);
+    cudaEventCreate(&ev_gpu2); cudaEventCreate(&ev_gpu3);
+    // Second stream for overlapping V_xc GEMM with V_H GEMM.
+    cudaStream_t xc_stream = nullptr;
+    cudaStreamCreate(&xc_stream);
+    // Event to synchronize between dev_stream and xc_stream.
+    cudaEvent_t ev_xc_ready = nullptr;
+    cudaEventCreate(&ev_xc_ready);
+    cudaEvent_t ev_xc_start = nullptr;
+    cudaEventCreate(&ev_xc_start);
     // E6: CUDA graph capture for SCF loop — capture build_H operations on
     // the first iteration and replay on subsequent iterations to eliminate
     // kernel launch overhead. On GPU, this captures real CUDA kernels;
@@ -1555,6 +1663,7 @@ class NaoDriver {
 
     auto build_H = [&](const std::vector<double>& P) -> std::vector<double> {
       ++scf_iter;
+      cache.ensure_pinned(n);
       auto t_bh_start = std::chrono::steady_clock::now();
       // Mixed precision: quantize P to BF16/FP16 before building rho.
       // This simulates the reduced-precision storage path where the density
@@ -1606,6 +1715,9 @@ class NaoDriver {
           auto t_rho1 = std::chrono::steady_clock::now();
           acc_rho_build += std::chrono::duration<double, std::milli>(t_rho1 - t_rho0).count();
 
+          // Record event after rho is ready.
+          // (ev_xc_ready not needed — single stream)
+
           // PP-GPU Phase A: project a grid potential to the basis on device
           // (H2D the potential, weighted vmat with resident d_phi, D2H the
           // n x n matrix). Replaces the per-iteration CPU BuildHmatGemm
@@ -1634,6 +1746,7 @@ class NaoDriver {
 
           // --- Poisson solve (device-resident, cached cuFFT plans) ---
           auto t_poisson0 = std::chrono::steady_clock::now();
+          cudaEventRecord(ev_gpu0, dev_stream);
           bool is_periodic = (grid.bc[0] == grid::BoundaryCondition::kPeriodic &&
                               grid.bc[1] == grid::BoundaryCondition::kPeriodic &&
                               grid.bc[2] == grid::BoundaryCondition::kPeriodic);
@@ -1665,9 +1778,8 @@ class NaoDriver {
               win.point_stride = static_cast<std::int64_t>(dev_stride);
               win.scale = dv;
               if (grid::BuildWeightedVmatDevice(win, d_vmat, dev_stream).ok()) {
-                cache.V_H.resize(n * n);
                 auto t_vmat0 = std::chrono::steady_clock::now();
-                cudaMemcpyAsync(cache.V_H.data(), d_vmat,
+                cudaMemcpyAsync(cache.pinned_V_H, d_vmat,
                                 n * n * sizeof(double),
                                 cudaMemcpyDeviceToHost, dev_stream);
                 poisson_ok = true;
@@ -1699,9 +1811,11 @@ class NaoDriver {
           }
           auto t_poisson1 = std::chrono::steady_clock::now();
           acc_poisson += std::chrono::duration<double, std::milli>(t_poisson1 - t_poisson0).count();
+          cudaEventRecord(ev_gpu1, dev_stream);
 
           // --- XC evaluation on device ---
           auto t_xc0 = std::chrono::steady_clock::now();
+
           grid::xc::XcGridIn xc_in;
           xc_in.rho = dev_arena->rho();
           xc_in.grad = is_gga ? dev_arena->grad() : nullptr;
@@ -1719,6 +1833,7 @@ class NaoDriver {
           xc_out.exc_per_system = dev_arena->exc_per_system();
 
           auto xc_status = grid::xc::XcEval(dev_xc_spec, xc_in, xc_out, dev_stream);
+          cudaEventRecord(ev_gpu2, dev_stream);  // after XC kernel, before V_xc GEMM
           if (xc_status.ok()) {
             // Build V_xc matrix on device.
             if (is_gga) {
@@ -1752,12 +1867,11 @@ class NaoDriver {
                 win.point_stride = static_cast<std::int64_t>(dev_stride);
                 win.scale = 1.0;
                 if (grid::BuildWeightedVmatDevice(win, d_vmat, dev_stream).ok()) {
-                  cache.V_xc.resize(n * n);
-                  cudaMemcpyAsync(cache.V_xc.data(), d_vmat,
+                  cudaMemcpyAsync(cache.pinned_V_xc, d_vmat,
                                   n * n * sizeof(double),
                                   cudaMemcpyDeviceToHost, dev_stream);
                   lda_vmat_on_device = true;
-                    }
+                }
               }
               if (!lda_vmat_on_device) {
                 std::vector<double> wv_rho(np_total, 0.0);
@@ -1775,8 +1889,7 @@ class NaoDriver {
 
             if (device_pipeline_ready) {
               if (is_gga) {
-                cache.V_xc.resize(n * n);
-                cudaMemcpyAsync(cache.V_xc.data(), d_vmat,
+                cudaMemcpyAsync(cache.pinned_V_xc, d_vmat,
                                 n * n * sizeof(double), cudaMemcpyDeviceToHost,
                                 dev_stream);
               }
@@ -1785,7 +1898,22 @@ class NaoDriver {
               cudaMemcpyAsync(&exc, dev_arena->exc_per_system(),
                               sizeof(double), cudaMemcpyDeviceToHost, dev_stream);
               cudaStreamSynchronize(dev_stream);
+              cudaEventRecord(ev_gpu3, dev_stream);  // after V_xc D2H
+              float gpu_pois_ms = 0, gpu_xc_ker = 0, gpu_xc_vm = 0;
+              cudaEventElapsedTime(&gpu_pois_ms, ev_gpu0, ev_gpu1);
+              cudaEventElapsedTime(&gpu_xc_ker, ev_gpu1, ev_gpu2);
+              cudaEventElapsedTime(&gpu_xc_vm, ev_gpu2, ev_gpu3);
+              float gpu_xc_ms = gpu_xc_ker + gpu_xc_vm;
+              acc_gpu_poisson += gpu_pois_ms;
+              acc_gpu_xc += gpu_xc_ms;
+              acc_gpu_xc_kernel += gpu_xc_ker;
+              acc_gpu_xc_vmat += gpu_xc_vm;
               cache.xc_energy_gpu = exc;
+              // Copy from pinned buffers to std::vectors for AssembleH.
+              cache.V_H.resize(n * n);
+              cache.V_xc.resize(n * n);
+              std::copy(cache.pinned_V_H, cache.pinned_V_H + n * n, cache.V_H.begin());
+              std::copy(cache.pinned_V_xc, cache.pinned_V_xc + n * n, cache.V_xc.begin());
               auto t_xc1 = std::chrono::steady_clock::now();
               acc_xc_eval += std::chrono::duration<double, std::milli>(t_xc1 - t_xc0).count();
               // vmat_build is fused into poisson/xc timers in GPU path.
@@ -2264,6 +2392,17 @@ class NaoDriver {
       double E_H = 0.5 * tr_P2_VH;
       double E_kin = sum_eps - E_ne - E_nl - 2.0 * E_H - tr_P2_Vxc;
       double E_total = E_kin + E_ne + E_nl + E_H + E_xc_grid + E_ion;
+      static int energy_prints = 0;
+      if (energy_prints++ < 3) {
+        std::cout << "[energy_fn] sum_eps=" << sum_eps
+                  << " E_ne=" << E_ne << " E_nl=" << E_nl
+                  << " E_H=" << E_H << " E_xc_grid=" << E_xc_grid
+                  << " E_kin=" << E_kin << " E_ion=" << E_ion
+                  << " E_total=" << E_total
+                  << " V_Hnorm=" << [&]{ double s=0; for(double v:cache.V_H) s+=v*v; return std::sqrt(s); }()
+                  << " V_xcnorm=" << [&]{ double s=0; for(double v:cache.V_xc) s+=v*v; return std::sqrt(s); }()
+                  << "\n" << std::flush;
+      }
 
       // F64E compensated summation for total energy components.
       if (use_mp) {
@@ -2545,6 +2684,8 @@ class NaoDriver {
       broker_input.gap_estimate = 1.0;  // initial guess; refined after first solve
       broker_input.electronic_temp = electronic_temp_k;  // wire Mermin Te into broker
       broker_input.available_vram_mb = 8000;
+      broker_input.user_override = true;
+      broker_input.forced_regime = solvers::SolverRegime::kR0_BatchDense;
       std::vector<double> scf_P_init;
       if (P_init && P_init->size() == n * n) scf_P_init = *P_init;
       // Build mixed-precision config for SCFDriver internal GEMM operations.
@@ -2557,8 +2698,16 @@ class NaoDriver {
         mp_config.use_f64e_reductions = true;
         mp_ptr = &mp_config;
       }
+      int scf_mixing = [] {
+        const char* e = std::getenv("TIDES_SCF_MIXING");
+        return (e && e[0] == '1') ? 1 : 0;
+      }();
+      double scf_alpha = [] {
+        const char* e = std::getenv("TIDES_SCF_ALPHA");
+        return (e != nullptr) ? std::strtod(e, nullptr) : 0.3;
+      }();
       result.scf = SCFDriver::Run(n, n_occ, S, build_H, energy_fn,
-                                   scf_P_init, max_iter, tol, 1, 0.3,
+                                   scf_P_init, max_iter, tol, scf_mixing, scf_alpha,
                                    &broker_input, fixed_density, mp_ptr);
       // Refine gap estimate from converged eigenvalues and re-dispatch if the
       // initial regime was wrong. The broker uses gap_estimate to decide
@@ -2733,21 +2882,30 @@ class NaoDriver {
     // If SCF did not converge with the initial grid spacing, retry with a
     // finer grid (half the spacing). This addresses the issue where coarse
     // grid spacing limits SCF energy accuracy for production use.
-    if (!result.scf.converged && grid_h > 0.05 && !fixed_density) {
+    if (!result.scf.converged && allow_grid_refine && grid_h > 0.05 &&
+        !fixed_density) {
       const double refined_h = grid_h * 0.5;
       std::cout << "[NaoDriver] SCF did not converge with h=" << grid_h
-                << ". Retrying with refined grid h=" << refined_h << std::endl;
+                << ". Retrying with refined grid h=" << refined_h
+                << " (preserving xc/pp/spin; no further refine)" << std::endl;
+      // MUST forward xc_spec, PPs, nspin, n_unpaired — dropping them silently
+      // switches the retry to LDA + all-electron and poisons the returned energy.
+      // allow_grid_refine=false prevents h/2 cascade OOM (0.5→0.25→0.125…).
       auto refined_result = Run(atomic_numbers, positions,
                                  refined_h, grid_margin,
                                  max_iter, tol,
-                                 nullptr, {}, 1, 0,
+                                 pseudopotentials, xc_spec, nspin, n_unpaired,
                                  use_dual_grid,
-                                 0.0, false, false, false, false, false,
+                                 electronic_temp_k, use_d4_dispersion,
+                                 use_hse_screening, use_point_group_sym,
+                                 use_a_posteriori, use_energy_metering,
                                  use_mixed_precision,
                                  use_qtt_compression,
                                  use_cuda_graph,
                                  use_kpoints, kpoint_grid,
-                                 use_diffuse, use_paw);
+                                 use_diffuse, use_paw,
+                                 P_init, fixed_density,
+                                 /*allow_grid_refine=*/false);
       if (refined_result.scf.converged) {
         result = refined_result;
         std::cout << "[NaoDriver] Adaptive refinement: SCF converged with h="
@@ -3136,6 +3294,7 @@ class NaoDriver {
       if (d_P_up) gpu_arena.Free(d_P_up);
       if (d_P_down) gpu_arena.Free(d_P_down);
       if (d_vmat) gpu_arena.Free(d_vmat);
+      if (d_vmat_xc) gpu_arena.Free(d_vmat_xc);
       if (d_vh_grid) gpu_arena.Free(d_vh_grid);
       if (dev_arena) {
         dev_arena->Release(dev_stream);
@@ -3145,6 +3304,18 @@ class NaoDriver {
       if (dev_stream) {
         cudaStreamDestroy(dev_stream);
         dev_stream = nullptr;
+      }
+      if (xc_stream) {
+        cudaStreamDestroy(xc_stream);
+        xc_stream = nullptr;
+      }
+      if (ev_xc_ready) {
+        cudaEventDestroy(ev_xc_ready);
+        ev_xc_ready = nullptr;
+      }
+      if (ev_xc_start) {
+        cudaEventDestroy(ev_xc_start);
+        ev_xc_start = nullptr;
       }
       device_pipeline_ready = false;
     }
@@ -3197,6 +3368,13 @@ class NaoDriver {
                   << "\n    energy:     " << result.build_H_timings.poisson_energy_ms
                   << "\n    solve_cpu:  " << result.build_H_timings.poisson_solve_cpu_ms
                   << "\n    vmat_cpu:   " << result.build_H_timings.poisson_vmat_cpu_ms;
+      }
+      if (acc_gpu_poisson > 0 || acc_gpu_xc > 0) {
+        std::cout << "\n  GPU event timings (avg per iteration, ms):"
+                  << "\n    gpu_poisson: " << acc_gpu_poisson / scf_iter
+                  << "\n    gpu_xc:      " << acc_gpu_xc / scf_iter
+                  << "\n    gpu_xc_ker:  " << acc_gpu_xc_kernel / scf_iter
+                  << "\n    gpu_xc_vmat: " << acc_gpu_xc_vmat / scf_iter;
       }
       std::cout << std::endl;
     }

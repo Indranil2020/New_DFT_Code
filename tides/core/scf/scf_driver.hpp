@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <vector>
@@ -130,7 +131,7 @@ class SCFDriver {
     // Diagonalize S = V Λ V^T, filter eigenvalues below threshold, and form
     // X = V Λ^{-1/2} V^T (truncated to retained subspace). This handles
     // near-linear dependence in NAO basis sets (small S eigenvalues).
-    const double s_filter = 1e-8;  // relative threshold: discard evals < s_filter * max_eval
+    const double s_filter = 1e-6;  // relative threshold: discard evals < s_filter * max_eval
     std::vector<double> S_copy(S);
     std::vector<double> s_eval(n, 0.0);
     std::vector<double> s_evec(n * n, 0.0);  // column-major eigenvectors
@@ -156,6 +157,10 @@ class SCFDriver {
     std::size_t n_retained = 0;
     for (std::size_t i = 0; i < n; ++i)
       if (s_eval[i] > s_thresh) ++n_retained;
+    std::cout << "[SCFDriver] S eigenvalue filter: n=" << n
+              << " n_retained=" << n_retained
+              << " s_max=" << s_max << " s_min=" << s_eval[0]
+              << "\n" << std::flush;
     // Build X = V_retained Λ^{-1/2} (n x n_retained, column-major)
     // We store X as row-major n x n_retained for convenience.
     // s_evec is column-major: evec[j + i*nn] = component j of eigvec i.
@@ -302,7 +307,7 @@ class SCFDriver {
       // dgemm is faster (tile overhead exceeds benefit).
       auto t_hx0 = std::chrono::steady_clock::now();
       std::vector<double> tmp(n * n_retained, 0.0);
-      if (n >= 64) {
+      if (false) {
         // Tile-based H@X: build tile pattern for H, then multiply each tile
         // block. B8: Use GPU grouped GEMM when CUDA is available; fall back
         // to CPU per-tile BLAS dgemm otherwise.
@@ -479,7 +484,7 @@ class SCFDriver {
                 double alpha = 1.0;
                 double beta = (s == 0) ? 0.0 : 1.0;
                 dgemm_(&transa, &transb, &m, &nn, &kk, &alpha,
-                       slice, &m, tmp.data(), &m, &beta, Hp.data(), &m);
+                       slice, &kk, tmp.data(), &m, &beta, Hp.data(), &m);
               }
               mp_done = true;
             }
@@ -496,13 +501,52 @@ class SCFDriver {
           // tmp is (n x n_retained) row-major = n_retained x n col-major.
           // dgemm('T','T'): A^T (n_retained x n) * B^T (n x n_retained) = Hp (n_retained x n_retained)
           dgemm_(&transa, &transb, &m, &nn, &kk, &alpha,
-                 Xt.data(), &m,
+                 Xt.data(), &kk,
                  tmp.data(), &m,
                  &beta, Hp.data(), &m);
         }
       }
       auto t_xthp1 = std::chrono::steady_clock::now();
       acc_gemm_xthp += std::chrono::duration<double, std::milli>(t_xthp1 - t_xthp0).count();
+
+      // Level shift: raise virtual-orbital eigenvalues relative to the
+      // current occupied subspace. This removes near-degeneracy oscillations
+      // (e.g. benzene pi manifold) without changing the converged energy.
+      {
+        const char* ls_env = std::getenv("TIDES_LEVEL_SHIFT");
+        double level_shift = (ls_env != nullptr) ? std::strtod(ls_env, nullptr) : 0.0;
+        if (level_shift > 0.0) {
+          // P' = X^T S P S X  (projector onto current P in orthogonal basis).
+          std::vector<double> SP(n * n, 0.0);
+          for (std::size_t i = 0; i < n; ++i)
+            for (std::size_t k = 0; k < n; ++k)
+              if (S[i * n + k] != 0.0)
+                for (std::size_t j = 0; j < n; ++j)
+                  SP[i * n + j] += S[i * n + k] * P[k * n + j];
+          std::vector<double> SPS(n * n, 0.0);
+          for (std::size_t i = 0; i < n; ++i)
+            for (std::size_t j = 0; j < n; ++j) {
+              double s = 0.0;
+              for (std::size_t k = 0; k < n; ++k)
+                s += SP[i * n + k] * S[k * n + j];
+              SPS[i * n + j] = s;
+            }
+          std::vector<double> Pp(n_retained * n_retained, 0.0);
+          for (std::size_t k = 0; k < n_retained; ++k)
+            for (std::size_t l = 0; l < n_retained; ++l) {
+              double s = 0.0;
+              for (std::size_t i = 0; i < n; ++i)
+                for (std::size_t j = 0; j < n; ++j)
+                  s += Xt[k * n + i] * SPS[i * n + j] * X[j * n_retained + l];
+              Pp[k * n_retained + l] = s;
+            }
+          for (std::size_t k = 0; k < n_retained; ++k)
+            for (std::size_t l = 0; l < n_retained; ++l) {
+              double q = (k == l) ? 1.0 : 0.0;
+              Hp[k * n_retained + l] += level_shift * (q - Pp[k * n_retained + l]);
+            }
+        }
+      }
 
       // Solve standard eigenproblem H' y = e y (n_retained x n_retained)
       auto t_eig0 = std::chrono::steady_clock::now();
@@ -719,6 +763,37 @@ class SCFDriver {
       res.energy_history.push_back(E);
 
       // Convergence check.
+      if (n >= 96 || iter < 3) {
+        double p_trace = 0.0, p_s_trace = 0.0, idem_err = 0.0;
+        for (std::size_t i = 0; i < n; ++i)
+          for (std::size_t j = 0; j < n; ++j)
+            p_s_trace += P_new[i * n + j] * S[j * n + i];
+        for (std::size_t i = 0; i < n; ++i) p_trace += P_new[i * n + i];
+        std::vector<double> PS(n * n, 0.0);
+        for (std::size_t i = 0; i < n; ++i)
+          for (std::size_t j = 0; j < n; ++j) {
+            double s = 0.0;
+            for (std::size_t k = 0; k < n; ++k)
+              s += P_new[i * n + k] * S[k * n + j];
+            PS[i * n + j] = s;
+          }
+        for (std::size_t i = 0; i < n; ++i)
+          for (std::size_t j = 0; j < n; ++j) {
+            double psps = 0.0;
+            for (std::size_t k = 0; k < n; ++k)
+              psps += PS[i * n + k] * PS[k * n + j];
+            double diff = psps - PS[i * n + j];
+            idem_err += diff * diff;
+          }
+        idem_err = std::sqrt(idem_err);
+        std::cout << "[SCFDriver] iter=" << iter
+                  << " E=" << E
+                  << " E_prev=" << E_prev
+                  << " P_trace=" << p_trace
+                  << " P*S_trace=" << p_s_trace
+                  << " PSP_err=" << idem_err
+                  << "\n" << std::flush;
+      }
       if (std::fabs(E - E_prev) < tol) {
         res.converged = true;
         res.energy = E;
