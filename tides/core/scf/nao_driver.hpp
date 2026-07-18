@@ -558,35 +558,168 @@ class NaoDriver {
       // Step 2: Project to get V_A matrix (all terms from atom A's V_loc).
       auto V_A = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_a_grid);
 
+      // Env gate for the analytic on-site replacement diagnostic.
+      // TIDES_PP_ONSITE=0 keeps the grid-projected on-site values (matching GPU).
+      // TIDES_PP_ONSITE=1 (default) zeroes the on-site block and refills it with
+      // the radial integral, which is supposed to improve grid convergence.
+      const bool enable_pp_onsite = [&] {
+        const char* e = std::getenv("TIDES_PP_ONSITE");
+        return (e == nullptr) || (e[0] != '0');
+      }();
+
       // Step 3: Zero out on-site block, then fill with analytic radial integrals.
-      for (std::size_t i = 0; i < n_basis; ++i) {
-        if (basis_atom_map[i] != a_idx) continue;
-        for (std::size_t j = 0; j < n_basis; ++j) {
-          if (basis_atom_map[j] != a_idx) continue;
-          V_A[i * n_basis + j] = 0.0;
+      if (enable_pp_onsite) {
+        for (std::size_t i = 0; i < n_basis; ++i) {
+          if (basis_atom_map[i] != a_idx) continue;
+          for (std::size_t j = 0; j < n_basis; ++j) {
+            if (basis_atom_map[j] != a_idx) continue;
+            V_A[i * n_basis + j] = 0.0;
+          }
         }
       }
 
-      // Semi-on-site correction: for same-l, same-m terms (i,j on atom B ≠ A,
-      // V_loc from atom A), replace grid values with analytic ones.
-      for (std::size_t b_idx = 0; b_idx < atoms.size(); ++b_idx) {
-        if (b_idx == a_idx) continue;
-        const auto& atom_b = atoms[b_idx];
-        double bx = atom_b.position[0];
-        double by = atom_b.position[1];
-        double bz = atom_b.position[2];
-        double R_AB = std::sqrt((ax-bx)*(ax-bx) + (ay-by)*(ay-by) + (az-bz)*(az-bz));
-        if (R_AB < 1e-10) continue;
+      // Env gate for the semi-on-site correction diagnostic.
+      // TIDES_PP_SEMIONSITE=0 disables it, leaving the analytic on-site block
+      // plus the raw grid projection for cross-atom terms. This matches the
+      // GPU PP path and tests whether the semi-on-site replacement is the
+      // source of the route-specific energy error.
+      const bool enable_pp_semi_onsite = [&] {
+        const char* e = std::getenv("TIDES_PP_SEMIONSITE");
+        return (e == nullptr) || (e[0] != '0');
+      }();
 
+      if (enable_pp_semi_onsite) {
+        // Semi-on-site correction: for same-l, same-m terms (i,j on atom B ≠ A,
+        // V_loc from atom A), replace grid values with analytic ones.
+        for (std::size_t b_idx = 0; b_idx < atoms.size(); ++b_idx) {
+          if (b_idx == a_idx) continue;
+          const auto& atom_b = atoms[b_idx];
+          double bx = atom_b.position[0];
+          double by = atom_b.position[1];
+          double bz = atom_b.position[2];
+          double R_AB = std::sqrt((ax-bx)*(ax-bx) + (ay-by)*(ay-by) + (az-bz)*(az-bz));
+          if (R_AB < 1e-10) continue;
+
+          for (std::size_t i = 0; i < n_basis; ++i) {
+            if (basis_atom_map[i] != b_idx) continue;
+            for (std::size_t j = i; j < n_basis; ++j) {
+              if (basis_atom_map[j] != b_idx) continue;
+              if (basis_l[i] != basis_l[j]) continue;
+              if (basis_m[i] != basis_m[j]) continue;
+
+              const auto& fn_i = atom_b.basis.functions[basis_fn_map[i]];
+              const auto& fn_j = atom_b.basis.functions[basis_fn_map[j]];
+              const auto& nao_rg = fn_i.r;
+              const auto& Ri_vals = fn_i.R;
+              const auto& Rj_vals = fn_j.R;
+              std::size_t n_r = std::min(Ri_vals.size(), Rj_vals.size());
+              if (n_r < 2) continue;
+
+              double dr = nao_rg[1] - nao_rg[0];
+              double integral = 0.0;
+
+              if (basis_l[i] == 0 && basis_l[j] == 0) {
+                static const double gl_x[] = {-0.861136, -0.339981, 0.339981, 0.861136};
+                static const double gl_w[] = {0.347855, 0.652145, 0.652145, 0.347855};
+                const int n_gl = 4;
+
+                for (std::size_t k = 0; k < n_r; ++k) {
+                  double r = nao_rg[k];
+                  double ri = Ri_vals[k];
+                  double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
+                  double v_avg = 0.0;
+                  for (int q = 0; q < n_gl; ++q) {
+                    double x = gl_x[q];
+                    double r_prime = std::sqrt(r*r + R_AB*R_AB - 2.0*r*R_AB*x);
+                    double v_loc_r = 0.0;
+                    if (r_prime < 1e-10) {
+                      v_loc_r = pp_vl[0];
+                    } else if (r_prime <= pp_rg.back()) {
+                      auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r_prime);
+                      if (it != pp_rg.begin() && it != pp_rg.end()) {
+                        std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+                        double t = (r_prime - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
+                        v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
+                      } else if (it == pp_rg.end()) {
+                        v_loc_r = pp_vl.back();
+                      }
+                    }
+                    v_avg += gl_w[q] * v_loc_r;
+                  }
+                  v_avg *= 0.5;
+                  double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
+                  integral += w * ri * rj * v_avg * r * r * dr;
+                }
+              } else {
+                // For higher l, the phi integration of |Y_lm|^2 gives:
+                //   m=0: 2π * |Y_l0|^2 (phi-independent)
+                //   m≠0: π * N^2 * (P_l^|m|)^2 (from cos^2 or sin^2 averaged)
+                // We evaluate Y_{l,|m|}(θ, 0) = N * P_l^|m| * cos(0) = N * P_l^|m|
+                // and use phi_factor = (m == 0) ? 2π : π.
+                static const double gl8_x[] = {
+                  -0.96029, -0.796666, -0.525532, -0.183435,
+                  0.183435, 0.525532, 0.796666, 0.96029
+                };
+                static const double gl8_w[] = {
+                  0.101228, 0.222381, 0.313707, 0.362684,
+                  0.362684, 0.313707, 0.222381, 0.101228
+                };
+                const int n_gl = 8;
+                int l_i = basis_l[i];
+                int m_i = basis_m[i];
+                int am_i = std::abs(m_i);
+                double phi_factor = (m_i == 0) ? 2.0 * M_PI : M_PI;
+
+                for (std::size_t k = 0; k < n_r; ++k) {
+                  double r = nao_rg[k];
+                  double ri = Ri_vals[k];
+                  double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
+                  double angular_integral = 0.0;
+                  for (int q = 0; q < n_gl; ++q) {
+                    double x = gl8_x[q];
+                    double r_prime = std::sqrt(r*r + R_AB*R_AB - 2.0*r*R_AB*x);
+                    double v_loc_r = 0.0;
+                    if (r_prime < 1e-10) {
+                      v_loc_r = pp_vl[0];
+                    } else if (r_prime <= pp_rg.back()) {
+                      auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r_prime);
+                      if (it != pp_rg.begin() && it != pp_rg.end()) {
+                        std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+                        double t = (r_prime - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
+                        v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
+                      } else if (it == pp_rg.end()) {
+                        v_loc_r = pp_vl.back();
+                      }
+                    }
+                    double theta = std::acos(x);
+                    double y_lm = basis::RealSphericalHarmonics::Eval(l_i, am_i, theta, 0.0);
+                    angular_integral += gl8_w[q] * y_lm * y_lm * v_loc_r;
+                  }
+                  double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
+                  integral += w * ri * rj * phi_factor * angular_integral * r * r * dr;
+                }
+              }
+
+              // Replace grid value with analytic value.
+              V_A[i * n_basis + j] = integral;
+              if (j != i) V_A[j * n_basis + i] = integral;
+            }
+          }
+        }
+      }
+
+      // Analytic on-site: <phi_i^A | V_loc^A | phi_j^A>
+      // = delta_{l_i,l_j} delta_{m_i,m_j} * integral R_i(r) V_loc(r) R_j(r) r^2 dr
+      if (enable_pp_onsite) {
         for (std::size_t i = 0; i < n_basis; ++i) {
-          if (basis_atom_map[i] != b_idx) continue;
+          if (basis_atom_map[i] != a_idx) continue;
           for (std::size_t j = i; j < n_basis; ++j) {
-            if (basis_atom_map[j] != b_idx) continue;
+            if (basis_atom_map[j] != a_idx) continue;
             if (basis_l[i] != basis_l[j]) continue;
             if (basis_m[i] != basis_m[j]) continue;
 
-            const auto& fn_i = atom_b.basis.functions[basis_fn_map[i]];
-            const auto& fn_j = atom_b.basis.functions[basis_fn_map[j]];
+            const auto& fn_i = atom.basis.functions[basis_fn_map[i]];
+            const auto& fn_j = atom.basis.functions[basis_fn_map[j]];
             const auto& nao_rg = fn_i.r;
             const auto& Ri_vals = fn_i.R;
             const auto& Rj_vals = fn_j.R;
@@ -595,139 +728,31 @@ class NaoDriver {
 
             double dr = nao_rg[1] - nao_rg[0];
             double integral = 0.0;
-
-            if (basis_l[i] == 0 && basis_l[j] == 0) {
-              static const double gl_x[] = {-0.861136, -0.339981, 0.339981, 0.861136};
-              static const double gl_w[] = {0.347855, 0.652145, 0.652145, 0.347855};
-              const int n_gl = 4;
-
-              for (std::size_t k = 0; k < n_r; ++k) {
-                double r = nao_rg[k];
-                double ri = Ri_vals[k];
-                double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
-                double v_avg = 0.0;
-                for (int q = 0; q < n_gl; ++q) {
-                  double x = gl_x[q];
-                  double r_prime = std::sqrt(r*r + R_AB*R_AB - 2.0*r*R_AB*x);
-                  double v_loc_r = 0.0;
-                  if (r_prime < 1e-10) {
-                    v_loc_r = pp_vl[0];
-                  } else if (r_prime <= pp_rg.back()) {
-                    auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r_prime);
-                    if (it != pp_rg.begin() && it != pp_rg.end()) {
-                      std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
-                      double t = (r_prime - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
-                      v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
-                    } else if (it == pp_rg.end()) {
-                      v_loc_r = pp_vl.back();
-                    }
-                  }
-                  v_avg += gl_w[q] * v_loc_r;
+            for (std::size_t k = 0; k < n_r; ++k) {
+              double r = nao_rg[k];
+              double ri = Ri_vals[k];
+              double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
+              // Interpolate V_loc from PP radial grid at r
+              double v_loc_r = 0.0;
+              if (r < 1e-10) {
+                v_loc_r = pp_vl[0];
+              } else if (r <= pp_rg.back()) {
+                auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r);
+                if (it != pp_rg.begin() && it != pp_rg.end()) {
+                  std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+                  double t = (r - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
+                  v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
+                } else if (it == pp_rg.end()) {
+                  v_loc_r = pp_vl.back();
                 }
-                v_avg *= 0.5;
-                double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
-                integral += w * ri * rj * v_avg * r * r * dr;
               }
-            } else {
-              // For higher l, the phi integration of |Y_lm|^2 gives:
-              //   m=0: 2π * |Y_l0|^2 (phi-independent)
-              //   m≠0: π * N^2 * (P_l^|m|)^2 (from cos^2 or sin^2 averaged)
-              // We evaluate Y_{l,|m|}(θ, 0) = N * P_l^|m| * cos(0) = N * P_l^|m|
-              // and use phi_factor = (m == 0) ? 2π : π.
-              static const double gl8_x[] = {
-                -0.96029, -0.796666, -0.525532, -0.183435,
-                0.183435, 0.525532, 0.796666, 0.96029
-              };
-              static const double gl8_w[] = {
-                0.101228, 0.222381, 0.313707, 0.362684,
-                0.362684, 0.313707, 0.222381, 0.101228
-              };
-              const int n_gl = 8;
-              int l_i = basis_l[i];
-              int m_i = basis_m[i];
-              int am_i = std::abs(m_i);
-              double phi_factor = (m_i == 0) ? 2.0 * M_PI : M_PI;
-
-              for (std::size_t k = 0; k < n_r; ++k) {
-                double r = nao_rg[k];
-                double ri = Ri_vals[k];
-                double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
-                double angular_integral = 0.0;
-                for (int q = 0; q < n_gl; ++q) {
-                  double x = gl8_x[q];
-                  double r_prime = std::sqrt(r*r + R_AB*R_AB - 2.0*r*R_AB*x);
-                  double v_loc_r = 0.0;
-                  if (r_prime < 1e-10) {
-                    v_loc_r = pp_vl[0];
-                  } else if (r_prime <= pp_rg.back()) {
-                    auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r_prime);
-                    if (it != pp_rg.begin() && it != pp_rg.end()) {
-                      std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
-                      double t = (r_prime - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
-                      v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
-                    } else if (it == pp_rg.end()) {
-                      v_loc_r = pp_vl.back();
-                    }
-                  }
-                  double theta = std::acos(x);
-                  double y_lm = basis::RealSphericalHarmonics::Eval(l_i, am_i, theta, 0.0);
-                  angular_integral += gl8_w[q] * y_lm * y_lm * v_loc_r;
-                }
-                double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
-                integral += w * ri * rj * phi_factor * angular_integral * r * r * dr;
-              }
+              double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
+              integral += w * ri * rj * v_loc_r * r * r * dr;
             }
 
-            // Replace grid value with analytic value.
-            V_A[i * n_basis + j] = integral;
-            if (j != i) V_A[j * n_basis + i] = integral;
+            V_A[i * n_basis + j] += integral;
+            if (j != i) V_A[j * n_basis + i] += integral;
           }
-        }
-      }
-
-      // Analytic on-site: <phi_i^A | V_loc^A | phi_j^A>
-      // = delta_{l_i,l_j} delta_{m_i,m_j} * integral R_i(r) V_loc(r) R_j(r) r^2 dr
-      for (std::size_t i = 0; i < n_basis; ++i) {
-        if (basis_atom_map[i] != a_idx) continue;
-        for (std::size_t j = i; j < n_basis; ++j) {
-          if (basis_atom_map[j] != a_idx) continue;
-          if (basis_l[i] != basis_l[j]) continue;
-          if (basis_m[i] != basis_m[j]) continue;
-
-          const auto& fn_i = atom.basis.functions[basis_fn_map[i]];
-          const auto& fn_j = atom.basis.functions[basis_fn_map[j]];
-          const auto& nao_rg = fn_i.r;
-          const auto& Ri_vals = fn_i.R;
-          const auto& Rj_vals = fn_j.R;
-          std::size_t n_r = std::min(Ri_vals.size(), Rj_vals.size());
-          if (n_r < 2) continue;
-
-          double dr = nao_rg[1] - nao_rg[0];
-          double integral = 0.0;
-          for (std::size_t k = 0; k < n_r; ++k) {
-            double r = nao_rg[k];
-            double ri = Ri_vals[k];
-            double rj = (k < Rj_vals.size()) ? Rj_vals[k] : 0.0;
-            // Interpolate V_loc from PP radial grid at r
-            double v_loc_r = 0.0;
-            if (r < 1e-10) {
-              v_loc_r = pp_vl[0];
-            } else if (r <= pp_rg.back()) {
-              auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r);
-              if (it != pp_rg.begin() && it != pp_rg.end()) {
-                std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
-                double t = (r - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
-                v_loc_r = (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
-              } else if (it == pp_rg.end()) {
-                v_loc_r = pp_vl.back();
-              }
-            }
-            double w = (k == 0 || k == n_r - 1) ? 0.5 : 1.0;
-            integral += w * ri * rj * v_loc_r * r * r * dr;
-          }
-
-          V_A[i * n_basis + j] += integral;
-          if (j != i) V_A[j * n_basis + i] += integral;
         }
       }
 
