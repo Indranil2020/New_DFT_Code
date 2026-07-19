@@ -43,6 +43,7 @@
 #include "basis/pseudo/pp_loader.hpp"
 #include "scf/scf_driver.hpp"
 #include "scf/energy_assembly.hpp"
+#include "scf/hmat_dump.hpp"
 #include "scf/stress.hpp"
 #include "dynamics/xlbomd/xlbomd.hpp"
 #include "grid/dual_grid.hpp"
@@ -1519,7 +1520,16 @@ class NaoDriver {
     // that causes poor convergence. The erf split removes the singularity.
     // For pseudopotential calculations, use the device path (v_local is smooth).
 #ifdef TIDES_HAVE_CUDA
-    if (use_pp && device_pipeline_ready && grid::PpDeviceEnabled()) {
+    // V_ext construction: both pipelines share the CPU analytic PP path
+    // (BuildAnalyticVextPP) so CPU and GPU runs see the same Hamiltonian.
+    // The device grid projection lacks the analytic on-site/semi-on-site
+    // corrections and is kept only as an A/B oracle via TIDES_PP_DEVICE_VEXT=1.
+    const bool pp_device_vext = [] {
+      const char* e = std::getenv("TIDES_PP_DEVICE_VEXT");
+      return e && e[0] == '1';
+    }();
+    if (use_pp && device_pipeline_ready && grid::PpDeviceEnabled() &&
+        pp_device_vext) {
       auto pp_tables_host = scf::FlattenVlocTables(
           atom_positions_v, atom_charges_v,
           use_pp ? pseudopotentials : nullptr);
@@ -1876,6 +1886,7 @@ class NaoDriver {
       std::vector<double> rho;
       std::vector<double> P2;
       double xc_energy_gpu = 0.0;  // from GPU XC path; 0 if CPU path used
+      bool hmat_dumped = false;    // P0.6: first-iteration V_H/V_xc written
       // Pinned host buffers for async D2H transfers.
       double* pinned_V_H = nullptr;
       double* pinned_V_xc = nullptr;
@@ -2191,6 +2202,11 @@ class NaoDriver {
               // H = T + V_ext + V_H + V_xc (+ V_nl if pseudopotentials).
               auto t_asm0 = std::chrono::steady_clock::now();
               cache.H = tides::ham::AssembleH(n, T, V_ext, cache.V_H, cache.V_xc, V_nl);
+              if (const char* dd = scf::dump::HmatDumpDir(); dd && !cache.hmat_dumped) {
+                scf::dump::WriteMatrixTxt(dd, "V_H_iter1.txt", cache.V_H);
+                scf::dump::WriteMatrixTxt(dd, "V_xc_iter1.txt", cache.V_xc);
+                cache.hmat_dumped = true;
+              }
               // M9: PAW on-site correction (device path).
               if (use_paw) {
                 std::vector<double> atom_pos_flat(3 * atoms.size(), 0.0);
@@ -2362,17 +2378,19 @@ class NaoDriver {
           cache.xc.eps_xc = eps_xc_grid;
           cache.xc_energy_gpu = xc_out.xc_energy;
           if (is_gga) {
+            // Fully weighted planes, matching the GPU XC kernel convention
+            // (reduce.cuh): wv_grad_c = 2*dv*vsigma*grad_rho_c.
             std::vector<double> wv_rho(np), wv_gx(np), wv_gy(np), wv_gz(np);
             for (std::size_t g = 0; g < np; ++g) {
               wv_rho[g] = dv * vxc_grid[g];
-              wv_gx[g] = dv * vsigma_grid[g] * grad_rho_x[g];
-              wv_gy[g] = dv * vsigma_grid[g] * grad_rho_y[g];
-              wv_gz[g] = dv * vsigma_grid[g] * grad_rho_z[g];
+              const double wvs2 = 2.0 * dv * vsigma_grid[g];
+              wv_gx[g] = wvs2 * grad_rho_x[g];
+              wv_gy[g] = wvs2 * grad_rho_y[g];
+              wv_gz[g] = wvs2 * grad_rho_z[g];
             }
             cache.V_xc = grid::VmatBuilder::BuildGgaHmatGemm(
                 grid, orbitals, grad_orbitals_3d,
-                wv_rho, wv_gx, wv_gy, wv_gz,
-                grad_rho_x, grad_rho_y, grad_rho_z);
+                wv_rho, wv_gx, wv_gy, wv_gz);
           } else {
             cache.V_xc = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, cache.xc.vxc);
           }
@@ -2389,6 +2407,11 @@ class NaoDriver {
       // H = T + V_ext + V_H + V_xc (+ V_nl if pseudopotentials).
       auto t_asm0_cpu = std::chrono::steady_clock::now();
       cache.H = tides::ham::AssembleH(n, T, V_ext, cache.V_H, cache.V_xc, V_nl);
+      if (const char* dd = scf::dump::HmatDumpDir(); dd && !cache.hmat_dumped) {
+        scf::dump::WriteMatrixTxt(dd, "V_H_iter1.txt", cache.V_H);
+        scf::dump::WriteMatrixTxt(dd, "V_xc_iter1.txt", cache.V_xc);
+        cache.hmat_dumped = true;
+      }
       // Gap 5: HSE screened exchange — fold short-range exact exchange into
       // the SCF Hamiltonian (not just a post-SCF correction).  When
       // use_hse_screening is active, V_x_SR is added to H so the SCF
@@ -2467,6 +2490,9 @@ class NaoDriver {
       // captured graph to eliminate kernel launch overhead.
       if (use_cuda_graph && !cuda_graph_captured && scf_iter == 1) {
         cuda_graph.BeginCapture();
+        // Shared between the xc_eval and build_vmat records: vsigma is produced
+        // by the XC evaluation and consumed by the GGA vmat plane build.
+        std::vector<double> graph_vsigma;
         // Record the actual operations that build_H performs.
         // On GPU these would be real CUDA kernel launches; on CPU we record
         // the operation sequence for structure verification and replay.
@@ -2503,10 +2529,10 @@ class NaoDriver {
             xc_in.grad_rho_z = grad_rho_z.data();
             std::vector<double> vxc_grid(np, 0.0);
             std::vector<double> eps_xc_grid(np, 0.0);
-            std::vector<double> vsigma_grid(np, 0.0);
+            graph_vsigma.assign(np, 0.0);
             grid::xc::HostXcGridOut xc_out;
             xc_out.vxc = vxc_grid.data();
-            xc_out.vsigma = vsigma_grid.data();
+            xc_out.vsigma = graph_vsigma.data();
             xc_out.eps_xc = eps_xc_grid.data();
             xc_out.xc_energy = 0.0;
             std::string xc_err;
@@ -2515,6 +2541,7 @@ class NaoDriver {
               cache.xc.eps_xc = eps_xc_grid;
             } else {
               cache.xc = grid::XCGridEvaluator::EvaluateLDA(grid, cache.rho);
+              graph_vsigma.assign(np, 0.0);
             }
           } else {
             cache.xc = grid::XCGridEvaluator::EvaluateLDA(grid, cache.rho);
@@ -2525,17 +2552,26 @@ class NaoDriver {
           const auto [h0, h1, h2] = grid.h;
           const double dv = h0 * h1 * h2;
           if (is_gga) {
+            // Fully weighted planes (see reduce.cuh convention):
+            // wv_grad_c = 2*dv*vsigma*grad_rho_c. graph_vsigma comes from the
+            // xc_eval record above (zeroed on the LDA fallback).
             std::vector<double> wv_rho(np, 0.0);
             std::vector<double> wv_gx(np, 0.0);
             std::vector<double> wv_gy(np, 0.0);
             std::vector<double> wv_gz(np, 0.0);
+            const bool have_vsigma = graph_vsigma.size() == np;
             for (std::size_t g = 0; g < np; ++g) {
               wv_rho[g] = dv * cache.xc.vxc[g];
+              if (have_vsigma) {
+                const double wvs2 = 2.0 * dv * graph_vsigma[g];
+                wv_gx[g] = wvs2 * grad_rho_x[g];
+                wv_gy[g] = wvs2 * grad_rho_y[g];
+                wv_gz[g] = wvs2 * grad_rho_z[g];
+              }
             }
             cache.V_xc = grid::VmatBuilder::BuildGgaHmatGemm(
                 grid, orbitals, grad_orbitals_3d,
-                wv_rho, wv_gx, wv_gy, wv_gz,
-                grad_rho_x, grad_rho_y, grad_rho_z);
+                wv_rho, wv_gx, wv_gy, wv_gz);
           } else {
             cache.V_xc = grid::VmatBuilder::BuildHmatGemm(
                 grid, orbitals, cache.xc.vxc);
@@ -2943,6 +2979,38 @@ class NaoDriver {
       }
       return {H_up, H_down};
     };
+
+    // P0.6: per-term dump for external oracles and CPU/GPU pipeline diffs.
+    if (const char* dump_dir = scf::dump::HmatDumpDir()) {
+      const std::string dir(dump_dir);
+      std::vector<int> d_z(atoms.size());
+      std::vector<std::array<double, 3>> d_pos(atoms.size());
+      for (std::size_t a = 0; a < atoms.size(); ++a) {
+        d_z[a] = atoms[a].Z;
+        d_pos[a] = {atoms[a].position[0], atoms[a].position[1],
+                    atoms[a].position[2]};
+      }
+      std::vector<std::size_t> d_atom(n), d_fn(n);
+      std::vector<int> d_l(n), d_m(n);
+      for (std::size_t bi = 0; bi < n; ++bi) {
+        d_atom[bi] = basis_map[bi].atom;
+        d_l[bi] = basis_map[bi].l;
+        d_m[bi] = basis_map[bi].m;
+        d_fn[bi] = basis_map[bi].fn;
+      }
+      scf::dump::WriteMeta(dir, n, grid_h, d_z, d_pos, d_atom, d_l, d_m, d_fn);
+      scf::dump::WriteMatrixTxt(dir, "S.txt", S);
+      scf::dump::WriteMatrixTxt(dir, "T.txt", T);
+      scf::dump::WriteMatrixTxt(dir, "V_ext.txt", V_ext);
+      scf::dump::WriteMatrixTxt(dir, "V_nl.txt", V_nl);
+      for (std::size_t a = 0; a < atoms.size(); ++a) {
+        for (std::size_t k = 0; k < atoms[a].basis.functions.size(); ++k) {
+          scf::dump::WriteRadial(dir, a, k, atoms[a].basis.functions[k].r,
+                                 atoms[a].basis.functions[k].R);
+        }
+      }
+      std::cout << "[NaoDriver] P0.6 dump written to " << dir << std::endl;
+    }
 
     if (nspin == 1) {
       std::cout << "[NaoDriver] launching SCF (n=" << n << ", n_occ=" << n_occ << ")" << std::endl;

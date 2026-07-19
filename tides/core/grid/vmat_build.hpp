@@ -249,10 +249,15 @@ class VmatBuilder {
 
   // GGA adjoint: builds V_xc matrix from GGA XC outputs.
   // V_ij = Σ_g [wv_rho(g) * φ_i(g) * φ_j(g)
-  //            + 2*wv_sigma(g) * (∇ρ·∇φ_i * φ_j + φ_i * ∇ρ·∇φ_j)]
-  // wv_rho and wv_grad already include quadrature weights (dv).
+  //            + wv_grad(g) · (∇φ_i * φ_j + φ_i * ∇φ_j)]
+  // wv_rho and wv_grad are FULLY weighted planes, matching the GPU XC kernel
+  // convention (xc/kernels/reduce.cuh):
+  //   wv_rho(g)    = dv * vrho(g)
+  //   wv_grad_c(g) = 2 * dv * vsigma(g) * grad_rho_c(g)
+  // The builder applies the planes as-is — it must NOT multiply by grad_rho
+  // again (a previous version did, giving a (∇ρ)² term that diverged for
+  // steep core densities).
   // grad_orbitals: [3][n_orb][N] — gradient of each orbital in x, y, z.
-  // grad_rho: [3][N] — density gradient components.
   static std::vector<double> BuildGgaHmatGemm(
       const UniformGrid3D& grid,
       const std::vector<std::vector<double>>& orbitals,
@@ -260,39 +265,24 @@ class VmatBuilder {
       const std::vector<double>& wv_rho,
       const std::vector<double>& wv_grad_x,
       const std::vector<double>& wv_grad_y,
-      const std::vector<double>& wv_grad_z,
-      const std::vector<double>& grad_rho_x,
-      const std::vector<double>& grad_rho_y,
-      const std::vector<double>& grad_rho_z) {
+      const std::vector<double>& wv_grad_z) {
     const std::size_t N = grid.total_points();
     const std::size_t n_orb = orbitals.size();
     if (n_orb == 0 || N == 0) return {};
 
     std::vector<double> H(n_orb * n_orb, 0.0);
 
-    // LDA-like term: wv_rho * φ_i * φ_j (same as BuildHmat with wv_rho as v).
-    // Plus gradient term: 2*wv_sigma * (∇ρ·∇φ_i * φ_j + φ_i * ∇ρ·∇φ_j)
-    // = 2*wv_sigma * ∇ρ · (∇φ_i * φ_j + φ_i * ∇φ_j)
-    // We compute it as: for each component c:
-    //   2 * wv_grad_c * grad_rho_c contributes to:
-    //   H_ij += Σ_g 2*wv_grad_c(g)*grad_rho_c(g) * (∇φ_i,c * φ_j + φ_i * ∇φ_j,c)
-    // This is two dgemms per component plus the LDA dgemm.
-
     // Term 1: LDA-like (wv_rho as potential)
     auto H_rho = BuildHmatGemm(grid, orbitals, wv_rho);
 
     // Term 2: gradient contributions.
-    // For component c, define: wgc(g) = 2 * wv_grad_c(g) * grad_rho_c(g)
-    // Then: H_grad_ij += Σ_g wgc(g) * [∇φ_i,c(g) * φ_j(g) + φ_i(g) * ∇φ_j,c(g)]
-    // = dgemm(GradPhi_w, Phi^T) + dgemm(Phi_w, GradPhi^T) where _w means scaled by wgc.
+    //   H_grad_ij += Σ_g wv_grad_c(g) * [∇φ_i,c(g) * φ_j(g) + φ_i(g) * ∇φ_j,c(g)]
+    // = dgemm(GradPhi_w, Phi^T) + dgemm(Phi_w, GradPhi^T) where _w means scaled
+    // by wv_grad_c.
     for (int c = 0; c < 3; ++c) {
-      const auto& gc = (c == 0) ? grad_rho_x : (c == 1) ? grad_rho_y : grad_rho_z;
-      const auto& wgc = (c == 0) ? wv_grad_x : (c == 1) ? wv_grad_y : wv_grad_z;
-
-      // wgc_scaled(g) = 2 * wv_grad_c(g) * grad_rho_c(g)
-      std::vector<double> wgc_scaled(N, 0.0);
-      for (std::size_t g = 0; g < N; ++g)
-        wgc_scaled[g] = 2.0 * wgc[g] * gc[g];
+      const auto& wgc_scaled = (c == 0)   ? wv_grad_x
+                               : (c == 1) ? wv_grad_y
+                                          : wv_grad_z;
 
       // Flatten grad_orbitals for this component and scale by wgc_scaled.
       std::vector<double> GradPhi(n_orb * N, 0.0);
