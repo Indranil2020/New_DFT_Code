@@ -238,3 +238,11 @@ wp9:
     basis_norm: 1.0e-4             # |norm - 1| within r_cut
     ghost_free: true               # via T2.3 detector
     recipe_hash: "deterministic FNV-1a"
+
+# --- P0.6: Per-term H dump harness (PySCF comparison) ---
+# Task p06a-pyscf-harness: element-wise S/T/V_ext vs PySCF on fitted Gaussian basis.
+# Effective per-run tolerance = max(nominal, 10x max_fit_residual).
+p0_6:
+  s_max: 1.0e-5
+  t_max: 1.0e-5
+  vext_max: 1.0e-4
