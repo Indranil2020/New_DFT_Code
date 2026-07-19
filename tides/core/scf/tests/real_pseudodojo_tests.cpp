@@ -143,7 +143,10 @@ int TestSiWithRealPP() {
   std::vector<double> pos = {0.0, 0.0, 0.0};
   std::vector<Pseudopotential> pps = {pp};
 
-  auto result = NaoDriver::Run(Z, pos, 0.3, 6.0, 100, 1e-6, &pps);
+  // Si valence is 3s^2 3p^2 (open shell, degenerate p). Use a small Mermin
+  // smearing to allow fractional p occupations and avoid RKS oscillation.
+  auto result = NaoDriver::Run(Z, pos, 0.3, 6.0, 100, 1e-6, &pps,
+                               {}, 1, 0, true, 5000.0);
   std::cout << "  SCF converged=" << result.scf.converged
             << " iters=" << result.scf.n_iterations
             << " energy=" << result.scf.energy << "\n";

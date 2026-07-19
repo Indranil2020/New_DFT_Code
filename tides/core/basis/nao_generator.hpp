@@ -461,36 +461,22 @@ class NaoGenerator {
   // Build valence-only closed-shell config for pseudopotential calculations.
   // Z_valence is the number of valence electrons from the PP.
   // l_max is the max angular momentum from the PP.
-  // Fills valence shells starting from n=2 for Z_valence > 2 (skipping core).
+  // In a pseudopotential the core is removed, so the valence orbitals are the
+  // lowest bound states for each l: n = l + 1 (i.e. 1s, 2p, 3d, ...).  We fill
+  // them in order of increasing l (s, p, d) up to Z_valence electrons.
   static tides::atomgen::AtomConfig MakeValenceClosedShell(
       int Z_valence, int l_max) {
     tides::atomgen::AtomConfig cfg;
-    cfg.Z = Z_valence;  // Use Z_valence for the solver (affects only info)
+    cfg.Z = Z_valence;
     int remaining = Z_valence;
-    struct Orb { int n; int l; };
-    // For H/He (Z_val <= 2), start from 1s.
-    // For Li..Ne (Z_val <= 8 with core), start from 2s.
-    // For Na..Ar (Z_val <= 8 with core), start from 3s.
-    // Heuristic: if Z_val <= 2, fill from 1s; else from 2s.
-    const Orb* order;
-    const Orb order_h[] = {{1,0}};
-    const Orb order_2nd[] = {{2,0},{2,1}};
-    const Orb order_3rd[] = {{3,0},{3,1}};
-    if (Z_valence <= 2) {
-      order = order_h;
-    } else if (Z_valence <= 8) {
-      order = order_2nd;
-    } else {
-      order = order_3rd;
-    }
-    // Fill shells up to l_max.
-    for (int i = 0; i < 2 && remaining > 0; ++i) {
-      const auto& o = order[i];
-      if (o.l > l_max && l_max > 0) continue;
-      const int cap = 2 * (2 * o.l + 1);
+    for (int l = 0; l <= l_max && remaining > 0; ++l) {
+      const int n = l + 1;
+      const int cap = 2 * (2 * l + 1);
       const int occ = std::min(remaining, cap);
-      cfg.shells.push_back({o.n, o.l, occ});
-      remaining -= occ;
+      if (occ > 0) {
+        cfg.shells.push_back({n, l, occ});
+        remaining -= occ;
+      }
     }
     return cfg;
   }

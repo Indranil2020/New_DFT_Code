@@ -330,6 +330,57 @@ static void ApplySemiOnsitePotentialBlock(
   }
 }
 
+// PP V_loc helpers: detect whether the first grid point lies on a -Z_eff/r
+// Coulomb tail, and evaluate the full potential or its erf-regularized
+// long-range part (used on the Cartesian grid).
+static void GetPpCoulombParams(const basis::Pseudopotential& pp,
+                                double& z_eff, bool& is_coulombic) {
+  z_eff = 0.0;
+  is_coulombic = false;
+  if (pp.r_grid.empty() || pp.v_local.empty()) return;
+  const double r0 = pp.r_grid.front();
+  if (r0 > 1e-15) {
+    const double product = -r0 * pp.v_local[0];
+    const double lo = 0.4 * static_cast<double>(pp.Z_valence) + 0.2;
+    const double hi = 2.0 * static_cast<double>(pp.Z_valence) + 2.0;
+    if (product > lo && product < hi) {
+      z_eff = product;
+      is_coulombic = true;
+    }
+  }
+}
+
+static double EvalPpVlocFull(double rr,
+                             const std::vector<double>& pp_rg,
+                             const std::vector<double>& pp_vl,
+                             double z_eff, bool is_coulombic) {
+  if (rr < 1e-15) return pp_vl.empty() ? 0.0 : pp_vl[0];
+  if (rr <= pp_rg.front()) {
+    if (is_coulombic) return -z_eff / rr;
+    return pp_vl[0];
+  }
+  if (rr > pp_rg.back()) return 0.0;
+  auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), rr);
+  if (it != pp_rg.begin() && it != pp_rg.end()) {
+    const std::size_t j = static_cast<std::size_t>(it - pp_rg.begin() - 1);
+    const double t = (rr - pp_rg[j]) / (pp_rg[j + 1] - pp_rg[j]);
+    return (1.0 - t) * pp_vl[j] + t * pp_vl[j + 1];
+  }
+  return pp_vl.back();
+}
+
+static double EvalPpVlocLong(double rr,
+                             const std::vector<double>& pp_rg,
+                             const std::vector<double>& pp_vl,
+                             double z_eff, bool is_coulombic, double sigma) {
+  if (rr < 1e-15) {
+    if (is_coulombic) return -2.0 * z_eff / (std::sqrt(M_PI) * sigma);
+    return 0.0;
+  }
+  const double v_full = EvalPpVlocFull(rr, pp_rg, pp_vl, z_eff, is_coulombic);
+  return v_full * std::erf(rr / sigma);
+}
+
 static void ApplySemiOnsiteVlocBlock(
     std::vector<double>& V_A,
     std::size_t n_basis,
@@ -343,17 +394,11 @@ static void ApplySemiOnsiteVlocBlock(
     const basis::Pseudopotential& pp_a) {
   const auto& pp_rg = pp_a.r_grid;
   const auto& pp_vl = pp_a.v_local;
-  const double pp_r_max = pp_rg.back();
+  double z_eff = 0.0;
+  bool is_coulombic = false;
+  GetPpCoulombParams(pp_a, z_eff, is_coulombic);
   auto eval_vloc = [&](double rr) -> double {
-    if (rr < 1e-10) return pp_vl[0];
-    if (rr > pp_r_max) return 0.0;
-    auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), rr);
-    if (it != pp_rg.begin() && it != pp_rg.end()) {
-      const std::size_t j = static_cast<std::size_t>(it - pp_rg.begin() - 1);
-      const double t = (rr - pp_rg[j]) / (pp_rg[j + 1] - pp_rg[j]);
-      return (1.0 - t) * pp_vl[j] + t * pp_vl[j + 1];
-    }
-    return pp_vl.back();
+    return EvalPpVlocFull(rr, pp_rg, pp_vl, z_eff, is_coulombic);
   };
   ApplySemiOnsitePotentialBlock(V_A, n_basis, atoms, a_idx, b_idx,
                               basis_atom_map, basis_l, basis_m,
@@ -769,10 +814,19 @@ class NaoDriver {
         pp = &(*pseudopotentials)[a_idx];
       if (!pp || pp->v_local.empty() || pp->r_grid.empty()) continue;
 
-      // Step 1: Compute V_loc^A(|r-R_A|) on the Cartesian grid (for cross-atom).
-      std::vector<double> v_a_grid(np, 0.0);
+      // Erf-split parameters for this PP.  The grid carries the smooth
+      // long-range part V_loc(r)*erf(r/sigma); the short-range part is added
+      // back analytically for the on-site and on-B blocks.  This prevents the
+      // Cartesian grid from seeing the deep local-potential well near r=0.
       const auto& pp_rg = pp->r_grid;
       const auto& pp_vl = pp->v_local;
+      double z_eff = 0.0;
+      bool is_coulombic = false;
+      GetPpCoulombParams(*pp, z_eff, is_coulombic);
+      const double sigma = grid.h[0];
+
+      // Step 1: Compute V_loc,long^A(|r-R_A|) on the Cartesian grid.
+      std::vector<double> v_a_grid(np, 0.0);
       for (std::size_t ix = 0; ix < grid.n[0]; ++ix) {
         for (std::size_t iy = 0; iy < grid.n[1]; ++iy) {
           for (std::size_t iz = 0; iz < grid.n[2]; ++iz) {
@@ -780,24 +834,16 @@ class NaoDriver {
             auto [x, y, z] = grid.coord(ix, iy, iz);
             double dx = x - ax, dy = y - ay, dz = z - az;
             double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (r < 1e-10) {
-              v_a_grid[g] = pp_vl[0];
-            } else if (r <= pp_rg.back()) {
-              auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), r);
-              if (it != pp_rg.begin() && it != pp_rg.end()) {
-                std::size_t j = static_cast<std::size_t>(it - pp_rg.begin() - 1);
-                double t = (r - pp_rg[j]) / (pp_rg[j + 1] - pp_rg[j]);
-                v_a_grid[g] = (1.0 - t) * pp_vl[j] + t * pp_vl[j + 1];
-              } else if (it == pp_rg.end()) {
-                v_a_grid[g] = pp_vl.back();
-              }
-            }
+            v_a_grid[g] = EvalPpVlocLong(r, pp_rg, pp_vl, z_eff,
+                                         is_coulombic, sigma);
           }
         }
       }
 
       // Step 2: Project to get V_A matrix (all terms from atom A's V_loc).
-      auto V_A = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_a_grid);
+      // Use the direct triple-loop matrix build; the GEMM path overcounts on
+      // the CPU reference path for this orbital-product matmul.
+      auto V_A = grid::VmatBuilder::BuildHmat(grid, orbitals, v_a_grid);
 
       // Env gate for the analytic on-site replacement diagnostic.
       // TIDES_PP_ONSITE=0 keeps the grid-projected on-site values (matching GPU).
@@ -865,17 +911,12 @@ class NaoDriver {
               const double ri_next = Ri_vals[k + 1];
               const double rj = Rj_vals[k];
               const double rj_next = Rj_vals[k + 1];
-              // Interpolate V_loc from PP radial grid at r and r_next
+              // Interpolate V_loc from PP radial grid at r and r_next.
+              // Use the full potential (not the erf-split long-range) because
+              // the on-site block is replaced entirely by this analytic radial
+              // quadrature.
               auto eval_vloc = [&](double rr) {
-                if (rr < 1e-10) return pp_vl[0];
-                if (rr > pp_rg.back()) return 0.0;
-                auto it = std::upper_bound(pp_rg.begin(), pp_rg.end(), rr);
-                if (it != pp_rg.begin() && it != pp_rg.end()) {
-                  const std::size_t jj = static_cast<std::size_t>(it - pp_rg.begin() - 1);
-                  const double t = (rr - pp_rg[jj]) / (pp_rg[jj + 1] - pp_rg[jj]);
-                  return (1.0 - t) * pp_vl[jj] + t * pp_vl[jj + 1];
-                }
-                return pp_vl.back();
+                return EvalPpVlocFull(rr, pp_rg, pp_vl, z_eff, is_coulombic);
               };
               const double v_loc_r = eval_vloc(r);
               const double v_loc_r_next = eval_vloc(r_next);
