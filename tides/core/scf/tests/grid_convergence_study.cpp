@@ -12,6 +12,8 @@
 
 #include <cmath>
 #include <array>
+#include <cstdlib>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <vector>
@@ -42,8 +44,17 @@ int RunConvergenceStudy() {
             << std::setw(12) << "wall_ms"
             << "\n";
 
+  // Locate the bundled pseudopotential library relative to this source file
+  // so the test works when run from the build directory.
+  namespace fs = std::filesystem;
+  const char* src_dir_env = std::getenv("TIDES_SRC_DIR");
+  fs::path src_root = (src_dir_env && src_dir_env[0] != '\0')
+                          ? fs::path(src_dir_env)
+                          : fs::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
+  std::string pp_dir = (src_root / "external" / "pseudopotentials" / "pseudodojo-pbe-sr").string();
+
   // Load H pseudopotential for PP-based calculation.
-  auto pp_result = tides::basis::PpLoader::Load("H");
+  auto pp_result = tides::basis::PpLoader::Load("H", pp_dir);
   if (!pp_result.ok()) {
     std::cerr << "Failed to load H pseudopotential: "
               << pp_result.status().message() << "\n";

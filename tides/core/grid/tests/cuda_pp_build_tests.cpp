@@ -20,6 +20,8 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <random>
 #include <vector>
@@ -30,6 +32,19 @@ namespace {
 
 using tides::basis::PpLoader;
 using tides::basis::Pseudopotential;
+
+std::string GetPpDir() {
+  namespace fs = std::filesystem;
+  const char* src_dir_env = std::getenv("TIDES_SRC_DIR");
+  if (src_dir_env && src_dir_env[0] != '\0') {
+    fs::path p = fs::path(src_dir_env) / "external" / "pseudopotentials" / "pseudodojo-pbe-sr";
+    if (fs::exists(p)) return p.string();
+  }
+  // Infer from this file's location (core/grid/tests/<file>). Four parents -> source root.
+  fs::path p = fs::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
+               / "external" / "pseudopotentials" / "pseudodojo-pbe-sr";
+  return p.string();
+}
 using tides::grid::BuildVlocDevice;
 using tides::grid::BuildWeightedVmatDevice;
 using tides::grid::FreePpVlocTables;
@@ -143,7 +158,7 @@ int TestVlocSynthetic() {
 
 int TestVlocRealPP() {
   std::string err;
-  auto pps = PpLoader::LoadMany({"C", "H", "Si"}, "", &err);
+  auto pps = PpLoader::LoadMany({"C", "H", "Si"}, GetPpDir(), &err);
   if (pps.empty()) {
     std::cout << "vloc_real_pp: SKIPPED (PP library unavailable: " << err
               << ")\n";

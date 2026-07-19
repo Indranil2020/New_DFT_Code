@@ -24,6 +24,7 @@ os.environ['TIDES_SRC_DIR'] = TIDES_SRC
 sys.path.insert(0, os.path.join(TIDES_SRC, 'api', 'python'))
 
 BOHR = 1.8897261254535
+PP_DIR = os.path.join(TIDES_SRC, 'external/pseudopotentials/pseudodojo-pbe-sr')
 PYSCF_REF = {
     ('CH4', 'AE'): -40.4146, ('H2O', 'AE'): -76.2725,
     ('CH4', 'PP'): -7.9459,  ('H2O', 'PP'): -16.9454,
@@ -52,20 +53,16 @@ def run_route(Z, pos, use_pp, use_gpu, max_iter):
         os.environ.pop('TIDES_DISABLE_GPU', None)
     else:
         os.environ['TIDES_DISABLE_GPU'] = '1'
-    if use_pp:
-        os.environ['TIDES_SRC_DIR'] = TIDES_SRC
-    else:
-        os.environ.pop('TIDES_SRC_DIR', None)
     t0 = time.time()
     r = native.NaoDriver.run(
         atomic_numbers=Z, positions=pos,
         grid_h=0.3, grid_margin=6.0,
         max_iter=max_iter, tol=1e-7,
         use_dual_grid=False, xc_functional='pbe',
+        pp_dir=PP_DIR if use_pp else '/nonexistent',
         allow_grid_refine=False,
     )
     wall = time.time() - t0
-    os.environ['TIDES_SRC_DIR'] = TIDES_SRC
     os.environ.pop('TIDES_DISABLE_GPU', None)
     bh = r.build_H_timings
     return {

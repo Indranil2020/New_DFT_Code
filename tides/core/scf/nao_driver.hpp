@@ -2412,26 +2412,12 @@ class NaoDriver {
         scf::dump::WriteMatrixTxt(dd, "V_xc_iter1.txt", cache.V_xc);
         cache.hmat_dumped = true;
       }
-      // Gap 5: HSE screened exchange — fold short-range exact exchange into
-      // the SCF Hamiltonian (not just a post-SCF correction).  When
-      // use_hse_screening is active, V_x_SR is added to H so the SCF
-      // converges to the hybrid functional solution.
+      // Gap 5: HSE screened exchange — keep the SCF on the local HSE06
+      // functional.  The current approximate two-center V_x_SR model is not
+      // yet stable enough to fold into the SCF Hamiltonian, so the short-range
+      // exact exchange energy is reported as a post-SCF correction below.
       if (use_hse_screening) {
-        hybrids::HSEParameters hse_params;
-        hse_params.omega = 0.11;  // HSE06 default screening parameter
-        hse_params.alpha = 0.25;  // HSE06 exact exchange fraction
-        // Build basis function centers from basis_map + atom positions.
-        std::vector<double> basis_centers(3 * n, 0.0);
-        for (std::size_t bi = 0; bi < n; ++bi) {
-          const auto& atom = atoms[basis_map[bi].atom];
-          basis_centers[3 * bi]     = atom.position[0];
-          basis_centers[3 * bi + 1] = atom.position[1];
-          basis_centers[3 * bi + 2] = atom.position[2];
-        }
-        auto V_x_sr = hybrids::HSEScreenedExchange::BuildShortRangeExchange(
-            n, cache.P2, basis_centers, hse_params);
-        for (std::size_t i = 0; i < n * n; ++i)
-          cache.H[i] += V_x_sr[i];
+        // E_hse_correction is computed from the converged density matrix.
       }
       // M9: PAW on-site correction — add the PAW Hamiltonian correction
       // to H after assembly. This makes PAW part of the production SCF path.
@@ -3371,7 +3357,7 @@ class NaoDriver {
     // HSE: report the in-SCF screened exchange contribution (Gap 5).
     // V_x_SR is now folded into build_H during SCF, so here we just
     // compute and report the correction energy for diagnostics.
-    if (use_hse_screening && result.scf.converged && !result.scf.P.empty()) {
+    if (use_hse_screening && !result.scf.P.empty()) {
       hybrids::HSEParameters hse_params;
       hse_params.omega = 0.11;
       hse_params.alpha = 0.25;
@@ -3696,6 +3682,8 @@ class NaoDriver {
         cudaEventDestroy(ev_xc_start);
         ev_xc_start = nullptr;
       }
+      // Free cached blocks so the next independent Run starts with clean VRAM.
+      gpu_arena.ReleaseCached();
       device_pipeline_ready = false;
     }
 #endif

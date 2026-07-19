@@ -17,6 +17,8 @@
 
 #include <cmath>
 #include <array>
+#include <cstdlib>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -33,6 +35,19 @@ using tides::grid::xc::XcFamily;
 int Fail(const std::string& msg) {
   std::cerr << "nao_driver_tests: FAIL — " << msg << '\n';
   return 1;
+}
+
+std::string GetPpDir() {
+  namespace fs = std::filesystem;
+  const char* src_dir_env = std::getenv("TIDES_SRC_DIR");
+  if (src_dir_env && src_dir_env[0] != '\0') {
+    fs::path p = fs::path(src_dir_env) / "external" / "pseudopotentials" / "pseudodojo-pbe-sr";
+    if (fs::exists(p)) return p.string();
+  }
+  // Infer from this file's location (core/scf/tests/<file>). Four parents -> source root.
+  fs::path p = fs::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
+               / "external" / "pseudopotentials" / "pseudodojo-pbe-sr";
+  return p.string();
 }
 
 int TestHAtom() {
@@ -226,7 +241,7 @@ int TestHSE06Hybrid() {
   hse_spec.exchange_fraction = 0.25;
 
   std::string pp_err;
-  auto pps = tides::basis::PpLoader::LoadByAtomicNumbers(Z, "", &pp_err);
+  auto pps = tides::basis::PpLoader::LoadByAtomicNumbers(Z, GetPpDir(), &pp_err);
   const bool have_pps = (pps.size() == Z.size());
 
   NaoDriverResult result;

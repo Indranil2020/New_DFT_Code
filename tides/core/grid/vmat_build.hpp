@@ -272,8 +272,19 @@ class VmatBuilder {
 
     std::vector<double> H(n_orb * n_orb, 0.0);
 
-    // Term 1: LDA-like (wv_rho as potential)
-    auto H_rho = BuildHmatGemm(grid, orbitals, wv_rho);
+    // Term 1: LDA-like (wv_rho as potential, already includes dv weighting).
+    // Do NOT call BuildHmatGemm here, because BuildHmatGemm would multiply by
+    // dv again. Compute the weighted sum directly.
+    std::vector<double> H_rho(n_orb * n_orb, 0.0);
+    for (std::size_t i = 0; i < n_orb; ++i) {
+      for (std::size_t j = i; j < n_orb; ++j) {
+        double s = 0.0;
+        for (std::size_t g = 0; g < N; ++g)
+          s += wv_rho[g] * orbitals[i][g] * orbitals[j][g];
+        H_rho[i * n_orb + j] = s;
+        H_rho[j * n_orb + i] = s;
+      }
+    }
 
     // Term 2: gradient contributions.
     //   H_grad_ij += Σ_g wv_grad_c(g) * [∇φ_i,c(g) * φ_j(g) + φ_i(g) * ∇φ_j,c(g)]

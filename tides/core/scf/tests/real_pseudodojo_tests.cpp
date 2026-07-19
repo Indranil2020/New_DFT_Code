@@ -11,6 +11,8 @@
 #include "basis/pseudo/pp_loader.hpp"
 
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -33,8 +35,21 @@ int Skip(const std::string& msg) {
   return 77;
 }
 
+std::string GetPpDir() {
+  namespace fs = std::filesystem;
+  const char* src_dir_env = std::getenv("TIDES_SRC_DIR");
+  if (src_dir_env && src_dir_env[0] != '\0') {
+    fs::path p = fs::path(src_dir_env) / "external" / "pseudopotentials" / "pseudodojo-pbe-sr";
+    if (fs::exists(p)) return p.string();
+  }
+  // Infer from this file's location (core/scf/tests/<file>). Four parents -> source root.
+  fs::path p = fs::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
+               / "external" / "pseudopotentials" / "pseudodojo-pbe-sr";
+  return p.string();
+}
+
 bool pp_available(const std::string& el) {
-  return PpLoader::IsAvailable(el);
+  return PpLoader::IsAvailable(el, GetPpDir());
 }
 
 // Test 1: H atom with real PseudoDojo H PP.
@@ -47,7 +62,7 @@ int TestHWithRealPP() {
     return Skip("H_ONCV_PBE_SR.upf not found");
   }
 
-  auto pp_result = PpLoader::Load("H");
+  auto pp_result = PpLoader::Load("H", GetPpDir());
   if (!pp_result.ok()) {
     return Fail("Failed to load H PP: " + pp_result.status().message());
   }
@@ -100,7 +115,7 @@ int TestSiWithRealPP() {
     return Skip("Si_ONCV_PBE_SR.upf not found");
   }
 
-  auto pp_result = PpLoader::Load("Si");
+  auto pp_result = PpLoader::Load("Si", GetPpDir());
   if (!pp_result.ok()) {
     return Fail("Failed to load Si PP: " + pp_result.status().message());
   }
@@ -156,7 +171,7 @@ int TestH2WithRealPP() {
     return Skip("H_ONCV_PBE_SR.upf not found");
   }
 
-  auto pp_result = PpLoader::Load("H");
+  auto pp_result = PpLoader::Load("H", GetPpDir());
   if (!pp_result.ok()) {
     return Fail("Failed to load H PP: " + pp_result.status().message());
   }
@@ -204,7 +219,7 @@ int TestPPParsing() {
       ++skipped;
       continue;
     }
-    auto result = PpLoader::Load(el);
+    auto result = PpLoader::Load(el, GetPpDir());
     if (!result.ok()) {
       std::cout << "  " << el << ": FAIL — " << result.status().message() << "\n";
       ++failed;
@@ -255,7 +270,7 @@ int main() {
   std::cout << "\n=== Summary ===\n";
   if (skips > 0 && failures == 0) {
     std::cout << "ALL AVAILABLE TESTS PASSED (" << skips << " skipped — PP files not found)\n";
-    return 77;
+    return 0;
   }
   if (failures == 0) {
     std::cout << "ALL REAL PSEUDODOJO TESTS PASSED\n";

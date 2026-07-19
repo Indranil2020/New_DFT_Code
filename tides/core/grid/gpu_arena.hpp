@@ -20,6 +20,8 @@
 //   arena.Free(d_rho);  // returns to pool, not cudaFree
 
 #include <cstddef>
+#include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #if defined(__CUDACC__) || defined(TIDES_HAVE_CUDA)
@@ -42,19 +44,27 @@ class GpuArena {
   void* Alloc(std::size_t bytes) {
     if (bytes == 0) return nullptr;
 
-    // Try to find a cached block of sufficient size.
-    for (auto it = free_blocks_.begin(); it != free_blocks_.end(); ++it) {
-      if (it->second >= bytes) {
-        void* ptr = it->first;
-        free_blocks_.erase(it);
-        return ptr;
+    // Try to find the smallest cached block of sufficient size.
+    std::size_t best_idx = free_blocks_.size();
+    std::size_t best_waste = static_cast<std::size_t>(-1);
+    for (std::size_t i = 0; i < free_blocks_.size(); ++i) {
+      const auto& block = free_blocks_[i];
+      if (block.second >= bytes && block.second - bytes < best_waste) {
+        best_idx = i;
+        best_waste = block.second - bytes;
       }
+    }
+    if (best_idx < free_blocks_.size()) {
+      void* ptr = free_blocks_[best_idx].first;
+      free_blocks_.erase(free_blocks_.begin() + best_idx);
+      return ptr;
     }
 
     // No cached block — allocate new.
     void* ptr = nullptr;
     cudaError_t err = cudaMalloc(&ptr, bytes);
     if (err != cudaSuccess) return nullptr;
+    sizes_[ptr] = bytes;
     total_allocated_ += bytes;
     return ptr;
   }
@@ -62,12 +72,17 @@ class GpuArena {
   // Return a block to the pool (no cudaFree).
   void Free(void* ptr) {
     if (ptr == nullptr) return;
-    // Find the size of this allocation.
-    // In a production arena we'd track sizes; for now we just cache
-    // up to max_cached_blocks_ and cudaFree excess.
+    auto it = sizes_.find(ptr);
+    if (it == sizes_.end()) {
+      // Untracked pointer: free immediately.
+      cudaFree(ptr);
+      return;
+    }
+    std::size_t bytes = it->second;
     if (free_blocks_.size() < max_cached_blocks_) {
-      free_blocks_.push_back({ptr, 0});  // size unknown, but reuse is safe
+      free_blocks_.push_back({ptr, bytes});
     } else {
+      sizes_.erase(it);
       cudaFree(ptr);
     }
   }
@@ -90,12 +105,19 @@ class GpuArena {
   // Get the persistent stream for kernel launches.
   cudaStream_t Stream() const { return stream_; }
 
-  // Release all cached blocks (call at session end).
-  void Release() {
+  // Free all cached (Free'd) blocks back to the device, but keep the stream.
+  // Call between independent SCF runs to avoid memory accumulation.
+  void ReleaseCached() {
     for (auto& [ptr, sz] : free_blocks_) {
       if (ptr) cudaFree(ptr);
+      sizes_.erase(ptr);
     }
     free_blocks_.clear();
+  }
+
+  // Release all cached blocks and the persistent stream (call at session end).
+  void Release() {
+    ReleaseCached();
     if (stream_) {
       cudaStreamDestroy(stream_);
       stream_ = nullptr;
@@ -115,6 +137,7 @@ class GpuArena {
 
   cudaStream_t stream_ = nullptr;
   std::size_t total_allocated_ = 0;
+  std::unordered_map<void*, std::size_t> sizes_;
   static constexpr std::size_t max_cached_blocks_ = 32;
   std::vector<std::pair<void*, std::size_t>> free_blocks_;
 };
