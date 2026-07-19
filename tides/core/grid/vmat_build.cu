@@ -353,6 +353,12 @@ struct GgaVmatGemmCache {
     // d_W4 is now allocated in ensure().
     return d_W4 != nullptr;
   }
+
+  void ResetScreen() {
+    screen_initialized = false;
+    compact_ready = false;
+    np_compact = 0;
+  }
 };
 
 GgaVmatGemmCache& gga_vmat_gemm_cache() {
@@ -498,6 +504,10 @@ template <typename T>
 void FreeDeviceArena(GpuArena& arena, T* ptr) { if (ptr) arena.Free(ptr); }
 
 }  // namespace
+
+void ResetGgaVmatScreenCache() {
+  gga_vmat_gemm_cache().ResetScreen();
+}
 
 [[nodiscard]] bool VmatCudaAvailable() {
   int device_count = 0;

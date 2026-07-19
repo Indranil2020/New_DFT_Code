@@ -153,3 +153,25 @@
 - `tides_nao_driver_tests`: PASS (H atom, H2 single grid, H2 dual grid all converge).
 - `tides_wp6_tests`: ALL GREEN (including NaoDriver stress tensor test).
 - 89/101 ctest pass (11 failures are pre-existing Tier-1/2 XC functional tests, 2 GPU skips).
+
+---
+
+## Phase 4 — H2 AE/PP Parity and erf-split V_ext (P0.3)
+
+### Acceptance Criteria
+- [x] H2 all-electron V_ext uses erf-split long-range grid (`-Z*erf(r/σ)/r`) with short-range analytic on-site replacement.
+- [x] H2 pseudopotential (trivial PP) energy matches all-electron within 0.1 Ha.
+- [x] Cross-atom grid overcount in H2 AE V_ext is eliminated via frame-consistent semi-on-site correction.
+- [x] `BuildHmatGemm` CPU BLAS overcount is bypassed in `BuildAnalyticVext` pending root-cause fix.
+- [x] Radial-integral and single-atom oracle tests remain green.
+
+### Changes
+- `core/scf/nao_driver.hpp`: `BuildAnalyticVext` now evaluates `-Z*erf(r/σ)/r` on the grid with analytic `-Z/r` on-site replacement; added `ApplySemiOnsitePotentialBlock` / `ApplySemiOnsiteVextBlock` to correct cross-atom on-B blocks; uses direct `BuildHmat` instead of `BuildHmatGemm` for AE V_ext matrix projection.
+
+### Test Results
+- `tides_nao_pseudo_tests`: ALL PASSED — H2 AE vs PP diff = 0.0164505 Ha (< 0.1 Ha).
+- `tides_nao_driver_tests`: PASS (H atom, H2 single grid, H2 dual grid; pre-existing HSE06 failure only).
+- `tides_radial_integral_tests`: ALL GREEN.
+
+### Open Items
+- `core/grid/vmat_build.hpp:BuildHmatGemm` CPU path produces overcounted overlap/projector matrices on MKL/cblas; root cause identified as BLAS GEMM call/layout, not yet fixed. GPU path and direct `BuildHmat` fallback are unblocked.

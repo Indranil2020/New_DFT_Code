@@ -36,6 +36,59 @@
 
 namespace tides::basis {
 
+// Kinetic radial function L_b(r) = -1/2 (R'' + 2/r R' - l(l+1)/r^2 R).
+// Per-interval finite differences (P0.1): use the quadratic through the
+// three local radial samples. This is correct for uniform grids and safe
+// if the NAO radial grid is ever made non-uniform.
+inline void KineticRadial(const NaoBasisFunction& f, std::vector<double>& L) {
+  const auto& r = f.r;
+  const auto& R = f.R;
+  const std::size_t n = r.size();
+  L.assign(n, 0.0);
+  if (n < 3) return;
+
+  auto quad_deriv = [](double x0, double x1, double x2,
+                       double f0, double f1, double f2, double x_target) {
+    const double L0 = (2.0 * x_target - x1 - x2) /
+                      ((x0 - x1) * (x0 - x2));
+    const double L1 = (2.0 * x_target - x0 - x2) /
+                      ((x1 - x0) * (x1 - x2));
+    const double L2 = (2.0 * x_target - x0 - x1) /
+                      ((x2 - x0) * (x2 - x1));
+    return f0 * L0 + f1 * L1 + f2 * L2;
+  };
+  auto quad_second = [](double x0, double x1, double x2,
+                        double f0, double f1, double f2) {
+    return 2.0 * (f0 / ((x0 - x1) * (x0 - x2)) +
+                  f1 / ((x1 - x0) * (x1 - x2)) +
+                  f2 / ((x2 - x0) * (x2 - x1)));
+  };
+
+  std::vector<double> dR(n, 0.0), d2R(n, 0.0);
+  // Interior.
+  for (std::size_t i = 1; i + 1 < n; ++i) {
+    dR[i] = quad_deriv(r[i - 1], r[i], r[i + 1],
+                       R[i - 1], R[i], R[i + 1], r[i]);
+    d2R[i] = quad_second(r[i - 1], r[i], r[i + 1],
+                         R[i - 1], R[i], R[i + 1]);
+  }
+  // Boundaries: fit the first/last three points and evaluate at the edge.
+  dR[0] = quad_deriv(r[0], r[1], r[2], R[0], R[1], R[2], r[0]);
+  d2R[0] = quad_second(r[0], r[1], r[2], R[0], R[1], R[2]);
+  dR[n - 1] = quad_deriv(r[n - 3], r[n - 2], r[n - 1],
+                         R[n - 3], R[n - 2], R[n - 1], r[n - 1]);
+  d2R[n - 1] = quad_second(r[n - 3], r[n - 2], r[n - 1],
+                           R[n - 3], R[n - 2], R[n - 1]);
+
+  const double llp1 = static_cast<double>(f.l * (f.l + 1));
+  for (std::size_t i = 0; i < n; ++i) {
+    const double rr = r[i];
+    const double lap = d2R[i] + (rr > 1e-12 ? 2.0 * dR[i] / rr : 0.0);
+    const double ang = (rr > 1e-12 ? llp1 * R[i] / (rr * rr) : 0.0);
+    L[i] = -0.5 * (lap - ang);
+  }
+}
+
 namespace {
 
 // -------------------------------------------------------------------------
@@ -204,36 +257,6 @@ inline double Interpolate(const std::vector<double>& x, const std::vector<double
   if (j >= n) j = n - 1;
   const double t = (xq - x[j - 1]) / (x[j] - x[j - 1]);
   return (1.0 - t) * y[j - 1] + t * y[j];
-}
-
-// Kinetic radial function L_b(r) = -1/2 (R'' + 2/r R' - l(l+1)/r^2 R).
-inline void KineticRadial(const NaoBasisFunction& f, std::vector<double>& L) {
-  const auto& r = f.r;
-  const auto& R = f.R;
-  const std::size_t n = r.size();
-  L.assign(n, 0.0);
-  if (n < 3) return;
-
-  // First and second derivatives on the uniform grid.
-  std::vector<double> dR(n, 0.0), d2R(n, 0.0);
-  const double h = r[1] - r[0];
-  for (std::size_t i = 1; i + 1 < n; ++i) {
-    dR[i] = (R[i + 1] - R[i - 1]) / (2.0 * h);
-    d2R[i] = (R[i + 1] - 2.0 * R[i] + R[i - 1]) / (h * h);
-  }
-  // Boundary: one-sided.
-  dR[0] = (R[1] - R[0]) / h;
-  d2R[0] = (R[2] - 2.0 * R[1] + R[0]) / (h * h);
-  dR[n - 1] = (R[n - 1] - R[n - 2]) / h;
-  d2R[n - 1] = (R[n - 1] - 2.0 * R[n - 2] + R[n - 3]) / (h * h);
-
-  const double llp1 = static_cast<double>(f.l * (f.l + 1));
-  for (std::size_t i = 0; i < n; ++i) {
-    const double rr = r[i];
-    const double lap = d2R[i] + (rr > 1e-12 ? 2.0 * dR[i] / rr : 0.0);
-    const double ang = (rr > 1e-12 ? llp1 * R[i] / (rr * rr) : 0.0);
-    L[i] = -0.5 * (lap - ang);
-  }
 }
 
 // -------------------------------------------------------------------------

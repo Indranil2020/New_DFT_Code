@@ -90,6 +90,11 @@ int TestH2() {
   std::cout << "  Converged: " << (result.scf.converged ? "YES" : "NO") << "\n";
   std::cout << "  Iterations: " << result.scf.n_iterations << "\n";
   std::cout << "  Energy: " << std::setprecision(10) << result.scf.energy << " Ha\n";
+  std::cout << "  E_kin: " << result.energy.E_kin << " Ha\n";
+  std::cout << "  E_ne:  " << result.energy.E_ne << " Ha\n";
+  std::cout << "  E_H:   " << result.energy.E_H << " Ha\n";
+  std::cout << "  E_xc:  " << result.energy.E_xc << " Ha\n";
+  std::cout << "  E_ion: " << result.energy.E_ion << " Ha\n";
   std::cout << "  Wall time: " << result.wall_time_ms << " ms\n";
   std::cout << "  Grid: " << result.grid_n[0] << "x" << result.grid_n[1] << "x" << result.grid_n[2] << "\n";
 

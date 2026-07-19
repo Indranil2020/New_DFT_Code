@@ -302,6 +302,11 @@ struct VmatGemmCache {
     cudaMalloc(&d_screen_count, sizeof(int));
     return d_screen_count != nullptr;
   }
+
+  void ResetScreen() {
+    screen_initialized = false;
+    np_compact = 0;
+  }
 };
 
 VmatGemmCache& vmat_gemm_cache() {
@@ -416,6 +421,10 @@ Status UploadArray(GpuArena& arena, const std::vector<T>& host, T** device,
 }
 
 }  // namespace
+
+void ResetVmatScreenCache() {
+  vmat_gemm_cache().ResetScreen();
+}
 
 [[nodiscard]] bool PpBuildCudaAvailable() {
   int device_count = 0;

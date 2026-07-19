@@ -33,6 +33,8 @@ void dgemm_(const char* transa, const char* transb, const int* m, const int* n,
             const int* k, const double* alpha, const double* a, const int* lda,
             const double* b, const int* ldb, const double* beta,
             double* c, const int* ldc);
+double ddot_(const int* n, const double* x, const int* incx,
+             const double* y, const int* incy);
 }
 
 namespace tides::scf {
@@ -206,6 +208,11 @@ class SCFDriver {
     const int pulay_depth = 8;
     std::vector<std::vector<double>> P_history;   // P at each step
     std::vector<std::vector<double>> F_history;    // P_new (output) at each step
+    std::vector<std::vector<double>> R_history;    // F - P residual at each step
+
+    // Fock-matrix DIIS history (used when mixing == 2).
+    std::vector<std::vector<double>> H_history;    // Fock matrices
+    std::vector<std::vector<double>> e_history;    // [F, P, S] commutator residuals
 
     double E_prev = 1e30;
 
@@ -223,6 +230,31 @@ class SCFDriver {
       auto H = build_H(P);
       auto t_bh1 = std::chrono::steady_clock::now();
       acc_build_H += std::chrono::duration<double, std::milli>(t_bh1 - t_bh0).count();
+
+      // Fock-matrix DIIS: store Fock and build [F, P, S] commutator residual.
+      if (mixing == 2 && !fixed_density) {
+        H_history.push_back(H);
+        std::vector<double> e(n * n, 0.0);
+        // e = F P S - S P F = (F P) S - (S P) F
+        std::vector<double> FP(n * n, 0.0), SP(n * n, 0.0);
+        int nn = static_cast<int>(n);
+        double alpha = 1.0, beta0 = 0.0;
+        char transN = 'N';
+        dgemm_(&transN, &transN, &nn, &nn, &nn, &alpha,
+               H.data(), &nn, P.data(), &nn, &beta0, FP.data(), &nn);
+        dgemm_(&transN, &transN, &nn, &nn, &nn, &alpha,
+               S.data(), &nn, P.data(), &nn, &beta0, SP.data(), &nn);
+        double one = 1.0, none = -1.0;
+        dgemm_(&transN, &transN, &nn, &nn, &nn, &one,
+               FP.data(), &nn, S.data(), &nn, &beta0, e.data(), &nn);
+        dgemm_(&transN, &transN, &nn, &nn, &nn, &none,
+               SP.data(), &nn, H.data(), &nn, &one, e.data(), &nn);
+        e_history.push_back(std::move(e));
+        if (static_cast<int>(H_history.size()) > pulay_depth) {
+          H_history.erase(H_history.begin());
+          e_history.erase(e_history.begin());
+        }
+      }
 
       // --- R2/R3: density-matrix solvers (no eigendecomposition) ---
       if (regime == solvers::SolverRegime::kR2_SP2 ||
@@ -287,9 +319,16 @@ class SCFDriver {
 
         P_history.push_back(P);
         F_history.push_back(P_new);
+        {
+          std::vector<double> R(n * n);
+          for (std::size_t idx = 0; idx < n * n; ++idx)
+            R[idx] = P_new[idx] - P[idx];
+          R_history.push_back(std::move(R));
+        }
         if (static_cast<int>(P_history.size()) > pulay_depth) {
           P_history.erase(P_history.begin());
           F_history.erase(F_history.begin());
+          R_history.erase(R_history.begin());
         }
 
         P = P_next;
@@ -297,6 +336,82 @@ class SCFDriver {
         res.P = P;
         res.eigenvalues = approx_evals;
         continue;
+      }
+
+      // Fock-matrix DIIS: extrapolate H from the Fock history before solving.
+      if (mixing == 2 && !fixed_density && static_cast<int>(H_history.size()) >= 2) {
+        const int m = std::min(pulay_depth, static_cast<int>(H_history.size()));
+        const int mstart = static_cast<int>(H_history.size()) - m;
+
+        // Build B[i][j] = <e_i, e_j>; augmented with constraint sum c = 1.
+        std::vector<std::vector<double>> B(m + 1, std::vector<double>(m + 1, 0.0));
+        int nn2 = static_cast<int>(n * n);
+        int inc = 1;
+        for (int i = 0; i < m; ++i) {
+          const auto& Ri = e_history[mstart + i];
+          for (int j = i; j < m; ++j) {
+            const auto& Rj = e_history[mstart + j];
+            double dot = ddot_(&nn2, Ri.data(), &inc, Rj.data(), &inc);
+            B[i][j] = dot;
+            B[j][i] = dot;
+          }
+          B[i][m] = 1.0;
+          B[m][i] = 1.0;
+        }
+        B[m][m] = 0.0;
+        double bmax = 0.0;
+        for (int i = 0; i < m; ++i)
+          bmax = std::max(bmax, std::fabs(B[i][i]));
+        double lambda = 1e-10 * bmax;
+        for (int i = 0; i < m; ++i)
+          B[i][i] += lambda;
+
+        std::vector<double> rhs(m + 1, 0.0);
+        rhs[m] = 1.0;
+        std::vector<double> c = rhs;
+        for (int col = 0; col <= m; ++col) {
+          int piv = col;
+          for (int row = col + 1; row <= m; ++row)
+            if (std::fabs(B[row][col]) > std::fabs(B[piv][col])) piv = row;
+          if (piv != col) {
+            std::swap(B[piv], B[col]);
+            std::swap(c[piv], c[col]);
+          }
+          if (std::fabs(B[col][col]) < 1e-30) continue;
+          for (int row = col + 1; row <= m; ++row) {
+            double factor = B[row][col] / B[col][col];
+            for (int k2 = col; k2 <= m; ++k2)
+              B[row][k2] -= factor * B[col][k2];
+            c[row] -= factor * c[col];
+          }
+        }
+        std::vector<double> coeffs(m + 1, 0.0);
+        for (int row = m; row >= 0; --row) {
+          double sum = c[row];
+          for (int k2 = row + 1; k2 <= m; ++k2)
+            sum -= B[row][k2] * coeffs[k2];
+          if (std::fabs(B[row][row]) > 1e-30)
+            coeffs[row] = sum / B[row][row];
+        }
+
+        // Validate coefficients.
+        bool diis_ok = true;
+        double csum = 0.0;
+        for (int j = 0; j < m; ++j) {
+          csum += coeffs[j];
+          if (std::fabs(coeffs[j]) > 10.0) { diis_ok = false; break; }
+        }
+        if (std::fabs(csum - 1.0) > 0.5) diis_ok = false;
+
+        if (diis_ok) {
+          std::vector<double> H_diis(n * n, 0.0);
+          for (int j = 0; j < m; ++j) {
+            const auto& Hj = H_history[mstart + j];
+            for (std::size_t idx = 0; idx < n * n; ++idx)
+              H_diis[idx] += coeffs[j] * Hj[idx];
+          }
+          H = std::move(H_diis);
+        }
       }
 
       // --- R0/R1: eigensolve-based solvers ---
@@ -517,29 +632,29 @@ class SCFDriver {
         double level_shift = (ls_env != nullptr) ? std::strtod(ls_env, nullptr) : 0.0;
         if (level_shift > 0.0) {
           // P' = X^T S P S X  (projector onto current P in orthogonal basis).
+          // OPT-2: Use BLAS dgemm instead of O(n³) triple loops.
+          int nn = static_cast<int>(n);
+          int nr = static_cast<int>(n_retained);
+          double alpha_ls = 1.0, beta_ls = 0.0;
+          char transN = 'N';
+          // SP = S × P (row-major → col-major: SP_cm = P_cm × S_cm)
           std::vector<double> SP(n * n, 0.0);
-          for (std::size_t i = 0; i < n; ++i)
-            for (std::size_t k = 0; k < n; ++k)
-              if (S[i * n + k] != 0.0)
-                for (std::size_t j = 0; j < n; ++j)
-                  SP[i * n + j] += S[i * n + k] * P[k * n + j];
+          dgemm_(&transN, &transN, &nn, &nn, &nn, &alpha_ls,
+                 P.data(), &nn, S.data(), &nn, &beta_ls, SP.data(), &nn);
+          // SPS = SP × S (row-major → col-major: SPS_cm = S_cm × SP_cm)
           std::vector<double> SPS(n * n, 0.0);
-          for (std::size_t i = 0; i < n; ++i)
-            for (std::size_t j = 0; j < n; ++j) {
-              double s = 0.0;
-              for (std::size_t k = 0; k < n; ++k)
-                s += SP[i * n + k] * S[k * n + j];
-              SPS[i * n + j] = s;
-            }
+          dgemm_(&transN, &transN, &nn, &nn, &nn, &alpha_ls,
+                 S.data(), &nn, SP.data(), &nn, &beta_ls, SPS.data(), &nn);
+          // Pp = Xt × SPS × X (two dgemm steps)
+          // Step 1: tmp = SPS × X (n × n_retained, row-major)
+          std::vector<double> tmp_ls(n * n_retained, 0.0);
+          dgemm_(&transN, &transN, &nr, &nn, &nn, &alpha_ls,
+                 X.data(), &nr, SPS.data(), &nn, &beta_ls, tmp_ls.data(), &nr);
+          // Step 2: Pp = Xt × tmp (n_retained × n_retained, row-major)
           std::vector<double> Pp(n_retained * n_retained, 0.0);
-          for (std::size_t k = 0; k < n_retained; ++k)
-            for (std::size_t l = 0; l < n_retained; ++l) {
-              double s = 0.0;
-              for (std::size_t i = 0; i < n; ++i)
-                for (std::size_t j = 0; j < n; ++j)
-                  s += Xt[k * n + i] * SPS[i * n + j] * X[j * n_retained + l];
-              Pp[k * n_retained + l] = s;
-            }
+          dgemm_(&transN, &transN, &nr, &nr, &nn, &alpha_ls,
+                 tmp_ls.data(), &nr, Xt.data(), &nn, &beta_ls, Pp.data(), &nr);
+          // Hp += level_shift * (I - Pp)
           for (std::size_t k = 0; k < n_retained; ++k)
             for (std::size_t l = 0; l < n_retained; ++l) {
               double q = (k == l) ? 1.0 : 0.0;
@@ -631,17 +746,21 @@ class SCFDriver {
 
       // Back-transform: C = X y (n x n_retained)
       auto t_bt0 = std::chrono::steady_clock::now();
+      // OPT-1: Use BLAS dgemm instead of O(n × n_retained²) triple loop.
       // y_evec is column-major n_retained x n_retained: y_evec[j + k*n_retained] = comp j of evec k
       // C[i, k] = sum_j X[i, j] * y_evec[j + k*n_retained]
-      std::vector<double> C_evec(n * n_retained, 0.0);  // row-major
-      for (std::size_t i = 0; i < n; ++i)
-        for (std::size_t k = 0; k < n_retained; ++k) {
-          double s = 0.0;
-          for (std::size_t j = 0; j < n_retained; ++j)
-            s += X[i * n_retained + j] * y_evec[j + k * n_retained];
-          C_evec[i * n_retained + k] = s;
-        }
+      // Row-major C = X_rm × Y_cm → col-major: C_cm = Y_cm^T × X_cm
+      // dgemm('T','N', M=n_retained, N=n, K=n_retained, ...)
+      int nr_bt = static_cast<int>(n_retained);
+      int nn_bt = static_cast<int>(n);
+      double alpha_bt = 1.0, beta_bt = 0.0;
+      char transT = 'T', transN_bt = 'N';
+      std::vector<double> C_evec(n * n_retained, 0.0);
+      dgemm_(&transT, &transN_bt, &nr_bt, &nn_bt, &nr_bt, &alpha_bt,
+             y_evec.data(), &nr_bt, X.data(), &nr_bt, &beta_bt,
+             C_evec.data(), &nr_bt);
       // Pack into EigenResult format (same as SolveGeneralized: evec[k*n + j])
+      // This is a simple transpose: eig.eigenvectors[k*n + i] = C_evec[i*n_retained + k]
       tides::solvers::EigenResult eig;
       eig.eigenvalues = y_eval;
       eig.eigenvectors.resize(n * n_retained, 0.0);
@@ -763,35 +882,20 @@ class SCFDriver {
       res.energy_history.push_back(E);
 
       // Convergence check.
-      if (n >= 96 || iter < 3) {
-        double p_trace = 0.0, p_s_trace = 0.0, idem_err = 0.0;
-        for (std::size_t i = 0; i < n; ++i)
+      // OPT-5: Replace O(n³) idempotency check with lightweight diagnostics.
+      // Energy convergence is the primary criterion; idempotency was diagnostic only.
+      if (iter < 3) {
+        double p_trace = 0.0, p_s_trace = 0.0;
+        for (std::size_t i = 0; i < n; ++i) {
+          p_trace += P_new[i * n + i];
           for (std::size_t j = 0; j < n; ++j)
             p_s_trace += P_new[i * n + j] * S[j * n + i];
-        for (std::size_t i = 0; i < n; ++i) p_trace += P_new[i * n + i];
-        std::vector<double> PS(n * n, 0.0);
-        for (std::size_t i = 0; i < n; ++i)
-          for (std::size_t j = 0; j < n; ++j) {
-            double s = 0.0;
-            for (std::size_t k = 0; k < n; ++k)
-              s += P_new[i * n + k] * S[k * n + j];
-            PS[i * n + j] = s;
-          }
-        for (std::size_t i = 0; i < n; ++i)
-          for (std::size_t j = 0; j < n; ++j) {
-            double psps = 0.0;
-            for (std::size_t k = 0; k < n; ++k)
-              psps += PS[i * n + k] * PS[k * n + j];
-            double diff = psps - PS[i * n + j];
-            idem_err += diff * diff;
-          }
-        idem_err = std::sqrt(idem_err);
+        }
         std::cout << "[SCFDriver] iter=" << iter
                   << " E=" << E
                   << " E_prev=" << E_prev
                   << " P_trace=" << p_trace
                   << " P*S_trace=" << p_s_trace
-                  << " PSP_err=" << idem_err
                   << "\n" << std::flush;
       }
       if (std::fabs(E - E_prev) < tol) {
@@ -839,7 +943,11 @@ class SCFDriver {
       // Mixing.
       auto t_diis0 = std::chrono::steady_clock::now();
       std::vector<double> P_next(n * n, 0.0);
-      if (mixing == 1 && static_cast<int>(P_history.size()) >= 2) {
+      if (mixing == 2) {
+        // Fock-matrix DIIS: the extrapolated Fock was already solved; use
+        // the resulting density directly without additional density mixing.
+        P_next = P_new;
+      } else if (mixing == 1 && static_cast<int>(P_history.size()) >= 2) {
         // Real DIIS/Pulay: find coefficients c_j minimizing ||sum c_j R_j||^2
         // subject to sum c_j = 1, where R_j = F_j - P_j (residual).
         // Then P_next = sum c_j F_j.
@@ -847,25 +955,17 @@ class SCFDriver {
         const int mstart = static_cast<int>(P_history.size()) - m;
 
         // Build the DIIS matrix B[i][j] = <R_i, R_j> (Frobenius inner product).
+        // OPT-6: Use BLAS ddot_ instead of manual loops.
         // B is m x m. We augment with the constraint sum c = 1 via Lagrange.
         // Add small diagonal regularization to prevent ill-conditioning.
         std::vector<std::vector<double>> B(m + 1, std::vector<double>(m + 1, 0.0));
+        int nn2 = static_cast<int>(n * n);
+        int inc = 1;
         for (int i = 0; i < m; ++i) {
-          const auto& Ri = F_history[mstart + i];
-          const auto& Pi = P_history[mstart + i];
+          const auto& Ri = R_history[mstart + i];
           for (int j = i; j < m; ++j) {
-            const auto& Rj = F_history[mstart + j];
-            const auto& Pj = P_history[mstart + j];
-            double dot = 0.0;
-            if (mp_active) {
-              std::vector<double> products(n * n);
-              for (std::size_t idx = 0; idx < n * n; ++idx)
-                products[idx] = (Ri[idx] - Pi[idx]) * (Rj[idx] - Pj[idx]);
-              dot = MixedPrecisionSCF::F64EReduce(products);
-            } else {
-              for (std::size_t idx = 0; idx < n * n; ++idx)
-                dot += (Ri[idx] - Pi[idx]) * (Rj[idx] - Pj[idx]);
-            }
+            const auto& Rj = R_history[mstart + j];
+            double dot = ddot_(&nn2, Ri.data(), &inc, Rj.data(), &inc);
             B[i][j] = dot;
             B[j][i] = dot;
           }
@@ -928,6 +1028,19 @@ class SCFDriver {
         }
         if (std::fabs(csum - 1.0) > 0.5) diis_ok = false;
 
+        // Damped DIIS: blend DIIS result with simple mixing.
+        // OPT-4b: Pure DIIS extrapolation overshoots. Blend with simple mixing
+        // for stability. damp=0.7 means 70% DIIS, 30% simple mixing.
+        if (diis_ok) {
+          double diis_damp = 0.7;
+          std::vector<double> P_simple(n * n, 0.0);
+          double eff_a = std::min(alpha, 0.8);
+          for (std::size_t idx = 0; idx < n * n; ++idx)
+            P_simple[idx] = eff_a * P_new[idx] + (1.0 - eff_a) * P[idx];
+          for (std::size_t idx = 0; idx < n * n; ++idx)
+            P_next[idx] = diis_damp * P_next[idx] + (1.0 - diis_damp) * P_simple[idx];
+        }
+
         // Check result for NaN/inf.
         double pmax = 0.0;
         for (std::size_t idx = 0; idx < n * n; ++idx)
@@ -935,29 +1048,16 @@ class SCFDriver {
         if (!std::isfinite(pmax) || pmax > 1e6) diis_ok = false;
 
         if (!diis_ok) {
-          // Fall back to simple mixing with Kerker damping.
-          // Adaptive alpha: increase mixing as SCF converges (residual shrinks).
-          double res_norm = 0.0;
-          for (std::size_t idx = 0; idx < n * n; ++idx) {
-            double d = P_new[idx] - P[idx];
-            res_norm += d * d;
-          }
-          double rms = std::sqrt(res_norm / static_cast<double>(n * n));
-          // Start conservative, increase as residual shrinks.
-          double eff_a = std::min(std::max(alpha / (1.0 + rms), 0.05), 0.8);
+          // Fall back to simple mixing.
+          double eff_a = std::min(alpha, 0.8);
           for (std::size_t idx = 0; idx < n * n; ++idx)
             P_next[idx] = eff_a * P_new[idx] + (1.0 - eff_a) * P[idx];
         }
       } else {
-        // Simple mixing with Kerker-style damping using RMS residual.
-        // Adaptive: increase alpha as residual decreases.
-        double res_norm = 0.0;
-        for (std::size_t idx = 0; idx < n * n; ++idx) {
-          double d = P_new[idx] - P[idx];
-          res_norm += d * d;
-        }
-        double rms = std::sqrt(res_norm / static_cast<double>(n * n));
-        double eff_alpha = std::min(std::max(alpha / (1.0 + rms), 0.05), 0.8);
+        // Simple mixing with fixed alpha.
+        // OPT-4b: Removed overly conservative adaptive damping (alpha/(1+rms)).
+        // That formula gave alpha~0.05 in early iterations, causing 40+ iters.
+        double eff_alpha = std::min(alpha, 0.8);
         for (std::size_t idx = 0; idx < n * n; ++idx)
           P_next[idx] = eff_alpha * P_new[idx] + (1.0 - eff_alpha) * P[idx];
       }
@@ -965,9 +1065,16 @@ class SCFDriver {
       // Update history.
       P_history.push_back(P);
       F_history.push_back(P_new);
+      {
+        std::vector<double> R(n * n);
+        for (std::size_t idx = 0; idx < n * n; ++idx)
+          R[idx] = P_new[idx] - P[idx];
+        R_history.push_back(std::move(R));
+      }
       if (static_cast<int>(P_history.size()) > pulay_depth) {
         P_history.erase(P_history.begin());
         F_history.erase(F_history.begin());
+        R_history.erase(R_history.begin());
       }
 
       P = P_next;

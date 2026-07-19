@@ -104,4 +104,9 @@ struct WeightedVmatDeviceIn {
 [[nodiscard]] Status BuildWeightedVmatDevice(const WeightedVmatDeviceIn& input,
                                              double* vmat, cudaStream_t stream);
 
+// Reset the static VmatGemmCache screen state. Must be called when phi
+// changes (new SCF run with different basis functions) to force rebuilding
+// the grid compaction index and compacted phi buffers.
+void ResetVmatScreenCache();
+
 }  // namespace tides::grid

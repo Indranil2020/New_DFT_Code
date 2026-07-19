@@ -26,6 +26,14 @@ endif()
 add_library(tides_core INTERFACE)
 target_include_directories(tides_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(tides_core INTERFACE ${CMAKE_DL_LIBS})
+
+# OpenMP for CPU parallelization of grid basis evaluation and setup loops.
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+  target_link_libraries(tides_core INTERFACE OpenMP::OpenMP_CXX)
+  message(STATUS "TIDES: OpenMP enabled for CPU targets")
+endif()
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(tides_core INTERFACE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wpedantic>)
@@ -342,6 +350,7 @@ if(TIDES_ENABLE_CUDA)
 
     add_library(tides_cuda_grid STATIC
       core/grid/rho_build.cu
+      core/grid/st_gpu.cu
       core/grid/poisson_fft.cu
       core/grid/vmat_build.cu
       core/grid/pp_build.cu
@@ -1056,6 +1065,15 @@ set_target_properties(tides_nao_driver_tests PROPERTIES
   CUDA_RUNTIME_LIBRARY Shared)
 add_test(NAME nao_driver_end_to_end_scf
   COMMAND tides_nao_driver_tests)
+
+add_executable(tides_radial_integral_tests
+  core/scf/tests/radial_integral_tests.cpp)
+target_link_libraries(tides_radial_integral_tests PRIVATE
+  tides_scf tides_grid tides_solvers)
+set_target_properties(tides_radial_integral_tests PROPERTIES
+  CUDA_RUNTIME_LIBRARY Shared)
+add_test(NAME radial_integral_closed_form
+  COMMAND tides_radial_integral_tests)
 
 add_executable(tides_grid_convergence_study
   core/scf/tests/grid_convergence_study.cpp)

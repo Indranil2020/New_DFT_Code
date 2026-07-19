@@ -75,4 +75,8 @@ struct MggaVmatDeviceIn {
 [[nodiscard]] Status BuildMggaVmatDevice(const MggaVmatDeviceIn& input,
                                          double* vmat, cudaStream_t stream);
 
+// Reset the static GgaVmatGemmCache screen state. Must be called when phi
+// changes (new SCF run with different basis functions).
+void ResetGgaVmatScreenCache();
+
 }  // namespace tides::grid
