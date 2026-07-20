@@ -34,6 +34,7 @@
 #include <iostream>
 #include <utility>
 #include <vector>
+#include <mutex>
 
 #include "basis/nao_generator.hpp"
 #include "basis/two_center_integrals.hpp"
@@ -210,7 +211,9 @@ static void ApplySemiOnsitePotentialBlock(
   // variation.
   const int n_theta = 16;
   const int n_phi = 32;
-  const auto ang_grid = BuildProductGaussLegendreAngularGrid(n_theta, n_phi);
+  // Cache the angular grid — it is constant for given (n_theta, n_phi).
+  // Thread-safe static initialization (C++11+).
+  static const auto ang_grid = BuildProductGaussLegendreAngularGrid(n_theta, n_phi);
   const std::size_t n_ang = ang_grid.size();
 
   // Precompute real spherical harmonics Y_{l_mu,m_mu}(theta_q, phi_q).
@@ -827,6 +830,7 @@ class NaoDriver {
 
       // Step 1: Compute V_loc,long^A(|r-R_A|) on the Cartesian grid.
       std::vector<double> v_a_grid(np, 0.0);
+      #pragma omp parallel for collapse(3) schedule(static)
       for (std::size_t ix = 0; ix < grid.n[0]; ++ix) {
         for (std::size_t iy = 0; iy < grid.n[1]; ++iy) {
           for (std::size_t iz = 0; iz < grid.n[2]; ++iz) {
@@ -876,6 +880,9 @@ class NaoDriver {
       if (enable_pp_semi_onsite) {
         // P0.4: frame-consistent dense angular×radial correction for the whole
         // <phi_i^B | V_loc^A | phi_j^B> atom-pair block.
+        // Each b_idx writes to a disjoint block of V_A (basis functions on
+        // atom b_idx), so parallelization over pairs is safe.
+        #pragma omp parallel for schedule(dynamic)
         for (std::size_t b_idx = 0; b_idx < atoms.size(); ++b_idx) {
           if (b_idx == a_idx) continue;
           ApplySemiOnsiteVlocBlock(V_A, n_basis, atoms, a_idx, b_idx,

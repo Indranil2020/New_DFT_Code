@@ -31,8 +31,10 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <tuple>
 #include <vector>
+#include <shared_mutex>
 
 namespace tides::basis {
 
@@ -640,6 +642,7 @@ class NaoTwoCenterBuilder {
   };
 
   template <typename AtomT, typename IdxT>
+    template <typename AtomT, typename IdxT>
   NaoTwoCenterResult Build(const std::vector<AtomT>& atoms,
                            const std::vector<IdxT>& basis_map,
                            const std::vector<double>& positions,
@@ -648,12 +651,15 @@ class NaoTwoCenterBuilder {
     result.S.assign(n_basis * n_basis, 0.0);
     result.T.assign(n_basis * n_basis, 0.0);
 
-    // Local basis-pair cache used by this Build call. Points into the global
-    // table cache that persists across Run calls, so expensive SkRadialIntegrals
-    // are built once per unique (recipe, fn_a, fn_b, kinetic) combination.
+    // --- Process-global radial-integral table cache ---
+    // Tables depend only on radial functions, not atom positions, so CH4's
+    // 2 elements need ~tens of tables once, and repeated runs (benchmarks, MD)
+    // reuse them.  Pattern: NaoGenerator::GenerateCached.
     using GlobalCacheKey = std::tuple<std::string, std::size_t, std::string,
                                        std::size_t, bool>;
     static std::map<GlobalCacheKey, SkRadialIntegrals> global_table_cache;
+    static std::shared_mutex global_table_cache_mutex;
+
     struct LocalCacheKey {
       std::size_t atom_a;
       std::size_t fn_a;
@@ -668,31 +674,47 @@ class NaoTwoCenterBuilder {
         return kinetic_b < other.kinetic_b;
       }
     };
-    std::map<LocalCacheKey, const SkRadialIntegrals*> local_cache;
 
     auto get_table = [&](std::size_t a, std::size_t fn_a, std::size_t b, std::size_t fn_b,
                          bool kinetic_b) -> const SkRadialIntegrals& {
-      LocalCacheKey local_key{a, fn_a, b, fn_b, kinetic_b};
-      auto lit = local_cache.find(local_key);
-      if (lit != local_cache.end()) return *lit->second;
-
+      // Fast path: read-lock the shared mutex.
+      {
+        std::shared_lock<std::shared_mutex> lk(global_table_cache_mutex);
+        GlobalCacheKey global_key{atoms[a].basis.recipe_hash, fn_a,
+                                  atoms[b].basis.recipe_hash, fn_b,
+                                  kinetic_b};
+        auto git = global_table_cache.find(global_key);
+        if (git != global_table_cache.end()) return git->second;
+      }
+      // Slow path: build under exclusive lock (double-checked).
       const auto& fa = atoms[a].basis.functions[fn_a];
       const auto& fb = atoms[b].basis.functions[fn_b];
       GlobalCacheKey global_key{atoms[a].basis.recipe_hash, fn_a,
                                 atoms[b].basis.recipe_hash, fn_b,
                                 kinetic_b};
-      auto git = global_table_cache.find(global_key);
-      if (git == global_table_cache.end()) {
+      {
+        std::unique_lock<std::shared_mutex> lk(global_table_cache_mutex);
+        auto git = global_table_cache.find(global_key);
+        if (git != global_table_cache.end()) return git->second;
         SkRadialIntegrals table = integrator_.Build(fa, fb, kinetic_b);
         auto [it, inserted] =
             global_table_cache.emplace(std::move(global_key), std::move(table));
-        git = it;
+        return it->second;
       }
-      local_cache[local_key] = &git->second;
-      return git->second;
     };
 
+    // --- Collect (a, b, i, j) work items for the atom-pair loop ---
+    // Each (i, j) pair writes to disjoint positions [i*n_basis+j, j*n_basis+i]
+    // and [j*n_basis+i, i*n_basis+j], so parallelization is safe.
     const std::size_t n_atoms = positions.size() / 3;
+
+    struct PairWork {
+      std::size_t a, b, i, j;
+      double R, cos_theta, phi;
+      bool is_onsite;
+    };
+    std::vector<PairWork> work_items;
+
     for (std::size_t a = 0; a < n_atoms; ++a) {
       for (std::size_t b = a; b < n_atoms; ++b) {
         double dx = positions[3 * b] - positions[3 * a];
@@ -700,9 +722,10 @@ class NaoTwoCenterBuilder {
         double dz = positions[3 * b + 2] - positions[3 * a + 2];
         double R = std::sqrt(dx * dx + dy * dy + dz * dz);
         double cos_theta = (R > 1e-12) ? dz / R : 1.0;
-        double phi = (std::fabs(dx) > 1e-12 || std::fabs(dy) > 1e-12)
+        double phi_ang = (std::fabs(dx) > 1e-12 || std::fabs(dy) > 1e-12)
                          ? std::atan2(dy, dx)
                          : 0.0;
+        bool is_onsite = (a == b);
 
         for (std::size_t i = 0; i < basis_map.size(); ++i) {
           const auto& bi = basis_map[i];
@@ -715,34 +738,52 @@ class NaoTwoCenterBuilder {
             const auto& fb = atoms[b].basis.functions[bj.fn];
             if (bi.l != fa.l || bj.l != fb.l) continue;
 
-            if (a == b) {
-              // On-site block: angular integral is δ_{l_a,l_b} δ_{m_a,m_b}.
-              if (bi.l == bj.l && bi.m == bj.m) {
-                const double s_val = OnsiteIntegral(fa, fb, false);
-                const double t_val = OnsiteIntegral(fa, fb, true);
-                result.S[i * n_basis + j] += s_val;
-                result.T[i * n_basis + j] += t_val;
-                if (j != i) {
-                  result.S[j * n_basis + i] += s_val;
-                  result.T[j * n_basis + i] += t_val;
-                }
-              }
-              continue;
-            }
-
-            // Evaluate overlap.
-            const auto& table_S = get_table(a, bi.fn, b, bj.fn, false);
-            double s_val = MatrixElement(table_S, bi.l, bi.m, bj.l, bj.m, R, cos_theta, phi);
-            result.S[i * n_basis + j] += s_val;
-            if (j != i) result.S[j * n_basis + i] += s_val;
-
-            // Evaluate kinetic.
-            const auto& table_T = get_table(a, bi.fn, b, bj.fn, true);
-            double t_val = MatrixElement(table_T, bi.l, bi.m, bj.l, bj.m, R, cos_theta, phi);
-            result.T[i * n_basis + j] += t_val;
-            if (j != i) result.T[j * n_basis + i] += t_val;
+            work_items.push_back({a, b, i, j, R, cos_theta, phi_ang, is_onsite});
           }
         }
+      }
+    }
+
+    // --- Parallel evaluation over independent basis-function pairs ---
+    // Each work item writes to a disjoint [i,j] + [j,i] pair of indices, so
+    // no synchronization is needed for the matrix updates.
+    #pragma omp parallel for schedule(dynamic)
+    for (std::size_t wi = 0; wi < work_items.size(); ++wi) {
+      const auto& w = work_items[wi];
+      const std::size_t i = w.i;
+      const std::size_t j = w.j;
+      const auto& bi = basis_map[i];
+      const auto& bj = basis_map[j];
+
+      if (w.is_onsite) {
+        // On-site block: angular integral is δ_{l_a,l_b} δ_{m_a,m_b}.
+        if (bi.l == bj.l && bi.m == bj.m) {
+          const auto& fa = atoms[w.a].basis.functions[bi.fn];
+          const auto& fb = atoms[w.b].basis.functions[bj.fn];
+          const double s_val = OnsiteIntegral(fa, fb, false);
+          const double t_val = OnsiteIntegral(fa, fb, true);
+          result.S[i * n_basis + j] += s_val;
+          result.T[i * n_basis + j] += t_val;
+          if (j != i) {
+            result.S[j * n_basis + i] += s_val;
+            result.T[j * n_basis + i] += t_val;
+          }
+        }
+      } else {
+        const auto& fa = atoms[w.a].basis.functions[bi.fn];
+        const auto& fb = atoms[w.b].basis.functions[bj.fn];
+
+        // Evaluate overlap.
+        const auto& table_S = get_table(w.a, bi.fn, w.b, bj.fn, false);
+        double s_val = MatrixElement(table_S, bi.l, bi.m, bj.l, bj.m, w.R, w.cos_theta, w.phi);
+        result.S[i * n_basis + j] += s_val;
+        if (j != i) result.S[j * n_basis + i] += s_val;
+
+        // Evaluate kinetic.
+        const auto& table_T = get_table(w.a, bi.fn, w.b, bj.fn, true);
+        double t_val = MatrixElement(table_T, bi.l, bi.m, bj.l, bj.m, w.R, w.cos_theta, w.phi);
+        result.T[i * n_basis + j] += t_val;
+        if (j != i) result.T[j * n_basis + i] += t_val;
       }
     }
 
