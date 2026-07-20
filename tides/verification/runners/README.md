@@ -1,4 +1,4 @@
-# TIDES P0.6 Verification Runners — PySCF Comparison Harness
+# TIDES P0.6 / P0.6b Verification Runners — Comparison Harnesses
 
 This directory contains the Python verification harness for TIDES task **P0.6**
 (per-term H-matrix dump & comparison against PySCF).
@@ -9,7 +9,9 @@ This directory contains the Python verification harness for TIDES task **P0.6**
 |---|---|
 | `fit_nao_gaussians.py` | Least-squares fit of each TIDES radial function R(r) to 12–16 even-tempered Gaussians `r^l · exp(-α·r²)`. Reports relative L² fit residual per function. |
 | `compare_pyscf_terms.py` | Builds the same molecule in PySCF (custom basis from the fits, spherical, Bohr), computes S/T/V_nuc via `mol.intor`, **automatically** determines the TIDES→PySCF basis-ordering permutation and per-function sign mapping by matching the S matrix, then reports `max|dS|`, `max|dT|`, `max|dV_ext|` and worst offenders. Exit 0 iff all within tolerance. |
-| `selftest_synthetic.py` | **Acceptance test.** Generates a synthetic dump (2 atoms, s+p functions from known Gaussians) where exact S/T/V are computable by PySCF, runs the full pipeline, and asserts it passes. **No TIDES C++ required.** |
+| `selftest_synthetic.py` | **Acceptance test (p06a).** Generates a synthetic dump (2 atoms, s+p functions from known Gaussians) where exact S/T/V are computable by PySCF, runs the full pipeline, and asserts it passes. **No TIDES C++ required.** |
+| `becke_terms_oracle.py` | **Precision oracle (p06b).** Computes S/T/V_ext directly from dumped radial tables via Becke multicenter numerical quadrature (Gauss-Chebyshev radial + product Gauss-Legendre angular + Becke partition-of-unity weights). No basis fitting — targets ≤1e-8 on S and ≤1e-6 on T/V for smooth NAOs. |
+| `selftest_becke.py` | **Acceptance test (p06b).** Synthetic Gaussian dump where analytic S/T/V are known; asserts the Becke oracle matches to ≤1e-8 (S) and ≤1e-6 (T/V). |
 
 ## Dump Schema
 
@@ -54,6 +56,21 @@ p0_6:
 
 The effective per-run tolerance is `max(nominal, 10 × max_fit_residual)` so that
 a looser Gaussian fit does not cause spurious failures.
+
+### Becke precision oracle (p06b)
+
+```bash
+python3 tides/verification/runners/selftest_becke.py
+# Exits 0 with max errors printed on success.
+
+python3 tides/verification/runners/becke_terms_oracle.py <dump_dir>
+# Writes becke_report.json; prints max|dS|, max|dT|, worst elements, mesh sizes.
+# Real dumps do NOT hard-fail (deviations measure TIDES grid error).
+```
+
+The Becke oracle tolerance (selftest) is defined in `tides/verification/tolerances.yaml`
+→ `becke_oracle`. Real-dump deviations are informational only (they measure TIDES
+grid error, which is the quantity being certified).
 
 ## PySCF / MKL Environment
 
