@@ -72,13 +72,19 @@ def run_route(Z, pos, use_pp, use_gpu, max_iter):
     }
 
 
+SMILES = {'CH4': 'C', 'H2O': 'O', 'NH3': 'N', 'C2H4': 'C=C', 'C2H6': 'CC'}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--max-iter', type=int, default=60)
+    ap.add_argument('--molecules', default='CH4,H2O',
+                    help='comma list from: ' + ','.join(SMILES))
     args = ap.parse_args()
 
     results = {}
-    for label, smiles in [('CH4', 'C'), ('H2O', 'O')]:
+    for label in args.molecules.split(','):
+        smiles = SMILES[label]
         Z, pos = make_molecule(smiles)
         entry = {}
         for pp in (False, True):
@@ -98,12 +104,12 @@ def main():
             g, c = entry[f'{route}_GPU'], entry[f'{route}_CPU']
             d_cg = abs(g['E'] - c['E'])
             conv = g['converged'] and c['converged']
-            ref = PYSCF_REF[(label, route)]
-            d_ref = g['E'] - ref
+            ref = PYSCF_REF.get((label, route))
+            ref_str = f"E_gpu-ref={g['E'] - ref:+.4f} Ha" if ref is not None else "ref=n/a"
             ok = conv and d_cg <= 1e-6
             all_pass &= ok
             print(f"{label} {route}: conv(G/C)={g['converged']}/{c['converged']}  "
-                  f"|E_gpu-E_cpu|={d_cg:.2e}  E_gpu-ref={d_ref:+.4f} Ha  "
+                  f"|E_gpu-E_cpu|={d_cg:.2e}  {ref_str}  "
                   f"[{'PASS' if ok else 'FAIL'}]")
     print(f"\nOVERALL: {'PASS' if all_pass else 'FAIL'} (conv + CPU~GPU 1e-6 gates)")
 

@@ -3063,33 +3063,48 @@ class NaoDriver {
         return !(e && e[0] == '0');
       }();
       if (scf_P_init.empty() && use_sad) {
+        // P1.1 A/B result (TASK-LEDGER E13): the "real SAD" (atomic shell
+        // occupations on zeta-0 functions, TIDES_SAD_UNIFORM=0) gave NO
+        // iteration win over the uniform fill on the PP molecule set
+        // (uniform 12/13/9/12 vs atomic 13/13/13/14 iters) — for compact
+        // valence-only PP bases the uniform smear approximates the bonded
+        // molecular density at least as well as isolated-atom occupations.
+        // Uniform therefore stays the default; the iteration gap vs
+        // gpu4pyscf is owned by DIIS quality/criteria (P1.2/P1.3).
+        const bool sad_uniform = [] {
+          const char* e = std::getenv("TIDES_SAD_UNIFORM");
+          return !(e && e[0] == '0');
+        }();
         scf_P_init.assign(n * n, 0.0);
-        std::size_t basis_offset = 0;
-        for (std::size_t a = 0; a < atoms.size(); ++a) {
-          // Count basis functions for this atom (including m-components).
-          std::size_t n_atom_basis = 0;
-          for (const auto& f : atoms[a].basis.functions)
-            n_atom_basis += 2 * static_cast<std::size_t>(f.l) + 1;
-          // Valence electrons for this atom.
-          std::size_t n_val = static_cast<std::size_t>(
-              use_pp ? (*pseudopotentials)[a].Z_valence : atoms[a].Z);
-          // Uniform fill of diagonal: each basis function gets equal share.
-          // SCFDriver uses P with trace(P,S) = n_occ, and occ_factor scales
-          // P2 = occ_factor * P. So P should have trace = n_occ.
-          // For SAD: each atom contributes n_val/2 occupied orbitals (spin-paired).
-          // Fill diagonal with n_val / (2 * n_atom_basis) per basis function.
-          double fill = (n_atom_basis > 0)
-              ? static_cast<double>(n_val) / (2.0 * static_cast<double>(n_atom_basis))
-              : 0.0;
-          for (std::size_t bi = 0; bi < n_atom_basis; ++bi) {
-            std::size_t idx = basis_offset + bi;
-            if (idx < n)
-              scf_P_init[idx * n + idx] = fill;
+        double trace = 0.0;
+        for (std::size_t bi = 0; bi < n; ++bi) {
+          const auto& atom = atoms[basis_map[bi].atom];
+          const auto& f = atom.basis.functions[basis_map[bi].fn];
+          double fill;
+          if (sad_uniform) {
+            std::size_t n_atom_basis = 0;
+            for (const auto& g : atom.basis.functions)
+              n_atom_basis += 2 * static_cast<std::size_t>(g.l) + 1;
+            const double n_val = static_cast<double>(
+                use_pp ? (*pseudopotentials)[basis_map[bi].atom].Z_valence
+                       : atom.Z);
+            fill = n_val / (2.0 * static_cast<double>(n_atom_basis));
+          } else {
+            fill = f.occ / (2.0 * (2.0 * static_cast<double>(f.l) + 1.0));
           }
-          basis_offset += n_atom_basis;
+          scf_P_init[bi * n + bi] = fill;
+          trace += fill;
         }
-        std::cout << "[NaoDriver] SAD initial guess: " << basis_offset
-                  << " basis functions, " << n_electrons << " electrons" << std::endl;
+        // Guarantee the electron count even if a config/channel mismatch
+        // left the occupation sum short (charged species, missing channel).
+        const double target = static_cast<double>(n_electrons) / 2.0;
+        if (trace > 1e-12 && std::fabs(trace - target) > 1e-9) {
+          const double s = target / trace;
+          for (std::size_t bi = 0; bi < n; ++bi) scf_P_init[bi * n + bi] *= s;
+        }
+        std::cout << "[NaoDriver] SAD initial guess ("
+                  << (sad_uniform ? "uniform" : "atomic-occ")
+                  << "): trace=" << trace << " target=" << target << std::endl;
       }
       // Build mixed-precision config for SCFDriver internal GEMM operations.
       scf::MixedPrecisionConfig mp_config;

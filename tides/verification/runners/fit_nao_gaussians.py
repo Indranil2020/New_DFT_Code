@@ -28,9 +28,20 @@ from scipy.special import gamma as gamma_func
 
 # Default even-tempered exponent ladder bounds (Bohr⁻²).
 # α_min captures the most diffuse tail; α_max captures the core region.
+# α_max is bounded by what the TIDES radial grid itself resolves: with
+# dr = 0.02 Bohr the sharpest representable feature has width ~dr, i.e.
+# α ~ 1/(2·dr²) ≈ 1e3; exponents far above that are invisible to the data
+# and only ill-condition the fit.
 DEFAULT_ALPHA_MIN = 0.01
 DEFAULT_ALPHA_MAX = 100.0
 DEFAULT_N_GAUSS = 14
+# NOTE: widening this ladder (e.g. α_max 2e3, n 20) makes neighbouring
+# even-tempered primitives near-collinear; the fit then carries huge ±
+# coefficient pairs that S tolerates but T (~α·S) amplifies by ~α. Confined
+# NAOs are fit to ~1e-2 relative at best (the r_cut kink is not Gaussian-
+# representable), so this harness is a SANITY oracle at the few-% level.
+# The precision oracle for S/T/V_ext is the Becke two-center quadrature
+# runner (becke_terms_oracle.py), which uses the dumped radials directly.
 
 
 # ---------------------------------------------------------------------------
@@ -100,16 +111,26 @@ def fit_radial_to_gaussians(
 
     alphas = even_tempered_exponents(n_gauss, alpha_min, alpha_max)
 
-    # Design matrix with *unnormalised* primitives  r^l · exp(-α·r²)
+    # Design matrix with *normalised* primitives so column norms are
+    # comparable and SVD truncation (rcond) is meaningful — with a wide
+    # exponent ladder an unregularised fit puts huge +/- coefficients on
+    # near-degenerate steep primitives, which S tolerates but T (~ α·S)
+    # amplifies catastrophically.
+    norms = np.array([primitive_normalization(a, l) for a in alphas])
     A = np.empty((len(r), n_gauss))
     for k in range(n_gauss):
-        A[:, k] = r ** l * np.exp(-alphas[k] * r ** 2)
+        A[:, k] = norms[k] * r ** l * np.exp(-alphas[k] * r ** 2)
 
-    # Linear least squares for the coefficients
-    coeffs, _res, _rank, _sv = np.linalg.lstsq(A, R, rcond=None)
+    # Least squares weighted by r so the fit metric matches the 3-D norm
+    # ∫|R−fit|² r² dr (an unweighted fit over-weights the far tail of the
+    # uniform radial grid). rcond truncates the near-degenerate directions.
+    w = r
+    coeffs_n, _res, _rank, _sv = np.linalg.lstsq(A * w[:, None], R * w,
+                                                 rcond=1e-10)
+    coeffs = coeffs_n * norms  # back to unnormalised-primitive convention
 
     # Relative L² residual (with r² weight, i.e. the 3-D norm)
-    R_fit = A @ coeffs
+    R_fit = A @ coeffs_n  # A holds normalised primitives
     diff = R - R_fit
     num = float(np.sqrt(np.trapz(diff ** 2 * r ** 2, r)))
     den = float(np.sqrt(np.trapz(R ** 2 * r ** 2, r)))

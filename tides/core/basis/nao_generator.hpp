@@ -52,6 +52,11 @@ struct NaoBasisFunction {
   std::vector<double> R;   // radial function on the grid
   std::vector<double> r;   // grid points
   double norm = 0.0;       // integral |R|^2 r^2 dr (should be 1)
+  // Atomic-shell electron count this function carries in a superposition-of-
+  // atomic-densities guess (P1.1). Set on zeta-0 functions of occupied
+  // channels (summed over shells of the same l); 0 for higher zetas and
+  // polarization channels.
+  double occ = 0.0;
 };
 
 struct NaoBasis {
@@ -253,6 +258,12 @@ class NaoGenerator {
         f.r_cut = rc;
         f.R = states[0].R;
         f.r = states[0].r_grid;
+        // P1.1: zeta-0 valence functions carry the atomic shell occupation
+        // for the SAD initial guess (higher zetas/polarization stay 0).
+        if (z == 0) {
+          for (const auto& sh : cfg.shells)
+            if (sh.l == ch.l) f.occ += static_cast<double>(sh.occ);
+        }
         // Smooth cutoff: same as AE path.
         for (std::size_t i = 0; i < f.R.size() && f.r[i] <= rc; ++i) {
           const double x = f.r[i] / rc;
@@ -350,6 +361,13 @@ class NaoGenerator {
         f.r_cut = rc;
         f.R = states[0].R;
         f.r = states[0].r_grid;
+        // P1.1: zeta-0 functions carry the summed atomic occupation of this
+        // l channel (AE: all shells of this l — the basis has one radial
+        // state per l, so core+valence charge lands on it; see E5 re-scope).
+        if (z == 0) {
+          for (const auto& sh : cfg.shells)
+            if (sh.l == ch.l) f.occ += static_cast<double>(sh.occ);
+        }
         // Smooth cutoff: only apply in the last 10% of r_cut to enforce
         // R(rc)=0 and R'(rc)=0 without distorting the orbital interior.
         // f(y) = (1 - y^2)^2 with y = (x - 0.9) / 0.1, identically 1 for x<=0.9.

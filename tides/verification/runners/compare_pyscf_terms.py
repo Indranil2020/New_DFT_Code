@@ -344,6 +344,13 @@ def compare_dump(
     """
     meta, S_tides, T_tides, V_tides = load_dump(dump_dir)
 
+    # PP dumps carry a non-empty V_nl.txt; for those, V_ext is a
+    # pseudopotential V_loc and CANNOT be compared against PySCF's
+    # all-electron int1e_nuc (-Z/r). The V gate is skipped and reported
+    # as n/a; the Becke oracle runner owns PP V_loc validation.
+    vnl_path = os.path.join(dump_dir, "V_nl.txt")
+    is_pp = os.path.isfile(vnl_path) and os.path.getsize(vnl_path) > 1
+
     radial_fits, max_residual = fit_all_radials(meta, dump_dir, n_gauss=n_gauss)
 
     mol = build_pyscf_mol(meta, dump_dir, radial_fits)
@@ -375,7 +382,8 @@ def compare_dump(
     tol_t = max(1e-5, 10.0 * max_residual)
     tol_v = max(1e-4, 10.0 * max_residual)
 
-    passed = max_dS <= tol_s and max_dT <= tol_t and max_dV <= tol_v
+    passed = max_dS <= tol_s and max_dT <= tol_t and (
+        is_pp or max_dV <= tol_v)
 
     # Per-function fit residuals
     per_fn = {}
@@ -391,6 +399,7 @@ def compare_dump(
         "tol_t": tol_t,
         "tol_v": tol_v,
         "passed": passed,
+        "is_pp": is_pp,
         "n_basis": int(meta["n_basis"]),
         "worst_S": _worst_elements(dS),
         "worst_T": _worst_elements(dT),
@@ -415,7 +424,9 @@ def main() -> None:
     print(f"TIDES vs PySCF comparison  (n_basis = {d['n_basis']})")
     print(f"  max|dS|      = {d['max_dS']:.6e}   (tol {d['tol_s']:.6e})")
     print(f"  max|dT|      = {d['max_dT']:.6e}   (tol {d['tol_t']:.6e})")
-    print(f"  max|dV_ext|  = {d['max_dV']:.6e}   (tol {d['tol_v']:.6e})")
+    v_note = "GATE SKIPPED: PP V_loc vs AE int1e_nuc is not comparable" \
+        if d["is_pp"] else f"tol {d['tol_v']:.6e}"
+    print(f"  max|dV_ext|  = {d['max_dV']:.6e}   ({v_note})")
     print(f"  max fit residual = {d['max_fit_residual']:.6e}")
     print()
     print("  Per-function fit residuals:")
