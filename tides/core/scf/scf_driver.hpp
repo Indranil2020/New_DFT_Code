@@ -222,6 +222,14 @@ class SCFDriver {
     double acc_energy = 0.0, acc_diis = 0.0;
     auto t_scf_start = std::chrono::steady_clock::now();
 
+    // P1.4: Automatic level shift state (auto-levelshift).
+    double auto_level_shift = 0.0;        // current auto shift value (0 = inactive)
+    std::vector<double> prev_eigenvalues; // eigenvalues from previous unshifted iteration
+    double prev_comm_max = 1e30;          // comm_max from previous iteration
+    int comm_stall_count = 0;            // consecutive iters where comm_max didn't decrease
+    bool shift_was_applied = false;       // true if a level shift was applied this iteration
+    bool auto_shifted_this_iter = false;  // P1.4: auto shift active this iter (blocks convergence)
+
     for (int iter = 0; iter < max_iter; ++iter) {
       res.n_iterations = iter + 1;
 
@@ -652,30 +660,123 @@ class SCFDriver {
       // Level shift: raise virtual-orbital eigenvalues relative to the
       // current occupied subspace. This removes near-degeneracy oscillations
       // (e.g. benzene pi manifold) without changing the converged energy.
+      // P1.4: Automatic level shift — triggers 0.3 Ha when the HOMO-LUMO
+      // gap is small (< 0.05 Ha) or the commutator stalls; decays as
+      // convergence approaches. Manual TIDES_LEVEL_SHIFT overrides automation.
       {
+        // --- Determine the level shift value ---
+        double level_shift = 0.0;
         const char* ls_env = std::getenv("TIDES_LEVEL_SHIFT");
-        double level_shift = (ls_env != nullptr) ? std::strtod(ls_env, nullptr) : 0.0;
+        const bool manual_shift = (ls_env != nullptr);
+
+        shift_was_applied = false;
+        auto_shifted_this_iter = false;
+
+        if (manual_shift) {
+          // Manual override: TIDES_LEVEL_SHIFT controls the shift entirely.
+          level_shift = std::strtod(ls_env, nullptr);
+        } else {
+          // Automation: check TIDES_AUTO_SHIFT (default: enabled).
+          static const bool auto_shift_enabled = [] {
+            const char* e = std::getenv("TIDES_AUTO_SHIFT");
+            return !(e && e[0] == '0');
+          }();
+
+          if (auto_shift_enabled) {
+            // Compute current comm_max from the DIIS commutator residual
+            // (e_history is populated earlier in this iteration).
+            double cur_comm_max = 0.0;
+            if (!e_history.empty()) {
+              for (double v : e_history.back())
+                cur_comm_max = std::max(cur_comm_max, std::fabs(v));
+            }
+
+            // Track commutator stall: consecutive iterations where comm_max
+            // has not decreased while remaining above 1e-3.
+            if (cur_comm_max > 1e-3) {
+              if (cur_comm_max >= prev_comm_max)
+                ++comm_stall_count;
+              else
+                comm_stall_count = 0;
+            } else {
+              comm_stall_count = 0;
+            }
+            prev_comm_max = cur_comm_max;
+
+            // HOMO-LUMO gap from the previous unshifted iteration's eigenvalues.
+            double hl_gap = 1e30;
+            if (!prev_eigenvalues.empty() && n_occ > 0 &&
+                n_occ < prev_eigenvalues.size()) {
+              double homo = prev_eigenvalues[n_occ - 1];
+              double lumo = prev_eigenvalues[n_occ];
+              hl_gap = lumo - homo;
+            }
+
+            // Trigger conditions:
+            // (a) HOMO-LUMO gap < 0.05 Ha
+            // (b) comm_max stalled for 3+ consecutive iters while > 1e-3
+            const bool gap_trigger = (hl_gap < 0.05);
+            const bool stall_trigger = (comm_stall_count >= 3);
+
+            if (auto_level_shift > 0.0) {
+              // Shift is active — apply decay rules.
+              if (cur_comm_max < 1e-4) {
+                // Remove shift entirely.
+                std::cout << "[SCFDriver] auto level shift: "
+                          << auto_level_shift << " -> 0.0 "
+                          << "(comm_max=" << cur_comm_max << " < 1e-4)\n"
+                          << std::flush;
+                auto_level_shift = 0.0;
+              } else if (cur_comm_max < 1e-3) {
+                // Halve the shift.
+                double new_shift = auto_level_shift * 0.5;
+                std::cout << "[SCFDriver] auto level shift: "
+                          << auto_level_shift << " -> " << new_shift
+                          << " (comm_max=" << cur_comm_max << " < 1e-3)\n"
+                          << std::flush;
+                auto_level_shift = new_shift;
+              }
+            } else if (gap_trigger || stall_trigger) {
+              // Activate the shift.
+              auto_level_shift = 0.3;
+              std::cout << "[SCFDriver] auto level shift: 0.0 -> 0.3 "
+                        << "("
+                        << (gap_trigger ? "HOMO-LUMO gap" : "comm stall")
+                        << "="
+                        << (gap_trigger ? hl_gap
+                                        : static_cast<double>(comm_stall_count))
+                        << ")\n"
+                        << std::flush;
+            }
+
+            level_shift = auto_level_shift;
+            auto_shifted_this_iter = (level_shift > 0.0);
+          }
+        }
+
+        // --- Apply the level shift to Hp (virtual block in orthogonal basis) ---
         if (level_shift > 0.0) {
+          shift_was_applied = true;
           // P' = X^T S P S X  (projector onto current P in orthogonal basis).
-          // OPT-2: Use BLAS dgemm instead of O(n³) triple loops.
+          // OPT-2: Use BLAS dgemm instead of O(n^3) triple loops.
           int nn = static_cast<int>(n);
           int nr = static_cast<int>(n_retained);
           double alpha_ls = 1.0, beta_ls = 0.0;
           char transN = 'N';
-          // SP = S × P (row-major → col-major: SP_cm = P_cm × S_cm)
+          // SP = S * P (row-major -> col-major: SP_cm = P_cm * S_cm)
           std::vector<double> SP(n * n, 0.0);
           dgemm_(&transN, &transN, &nn, &nn, &nn, &alpha_ls,
                  P.data(), &nn, S.data(), &nn, &beta_ls, SP.data(), &nn);
-          // SPS = SP × S (row-major → col-major: SPS_cm = S_cm × SP_cm)
+          // SPS = SP * S (row-major -> col-major: SPS_cm = S_cm * SP_cm)
           std::vector<double> SPS(n * n, 0.0);
           dgemm_(&transN, &transN, &nn, &nn, &nn, &alpha_ls,
                  S.data(), &nn, SP.data(), &nn, &beta_ls, SPS.data(), &nn);
-          // Pp = Xt × SPS × X (two dgemm steps)
-          // Step 1: tmp = SPS × X (n × n_retained, row-major)
+          // Pp = Xt * SPS * X (two dgemm steps)
+          // Step 1: tmp = SPS * X (n * n_retained, row-major)
           std::vector<double> tmp_ls(n * n_retained, 0.0);
           dgemm_(&transN, &transN, &nr, &nn, &nn, &alpha_ls,
                  X.data(), &nr, SPS.data(), &nn, &beta_ls, tmp_ls.data(), &nr);
-          // Step 2: Pp = Xt × tmp (n_retained × n_retained, row-major)
+          // Step 2: Pp = Xt * tmp (n_retained * n_retained, row-major)
           std::vector<double> Pp(n_retained * n_retained, 0.0);
           dgemm_(&transN, &transN, &nr, &nr, &nn, &alpha_ls,
                  tmp_ls.data(), &nr, Xt.data(), &nn, &beta_ls, Pp.data(), &nr);
@@ -788,6 +889,8 @@ class SCFDriver {
       // This is a simple transpose: eig.eigenvectors[k*n + i] = C_evec[i*n_retained + k]
       tides::solvers::EigenResult eig;
       eig.eigenvalues = y_eval;
+      // P1.4: store unshifted eigenvalues for HOMO-LUMO gap trigger.
+      if (!shift_was_applied) prev_eigenvalues = eig.eigenvalues;
       eig.eigenvectors.resize(n * n_retained, 0.0);
       for (std::size_t k = 0; k < n_retained; ++k)
         for (std::size_t i = 0; i < n; ++i)
@@ -952,7 +1055,8 @@ class SCFDriver {
                   << " P*S_trace=" << p_s_trace
                   << "\n" << std::flush;
       }
-      if (std::fabs(E - E_prev) < tol && comm_ok) {
+      // P1.4: auto level shift — convergence requires an UNSHIFTED iteration.
+      if (std::fabs(E - E_prev) < tol && comm_ok && !auto_shifted_this_iter) {
         res.converged = true;
         res.energy = E;
         res.P = P_new;
