@@ -249,7 +249,30 @@ class SCFDriver {
                FP.data(), &nn, S.data(), &nn, &beta0, e.data(), &nn);
         dgemm_(&transN, &transN, &nn, &nn, &nn, &none,
                SP.data(), &nn, H.data(), &nn, &one, e.data(), &nn);
-        e_history.push_back(std::move(e));
+        // P1.2: S-metric error vector — transform the commutator into the
+        // Lowdin-orthonormal basis, e_o = X^T e X. With ill-conditioned S
+        // (s_min ~1e-3..1e-6) the raw AO-basis inner products distort the
+        // DIIS B matrix; the orthonormal metric is what CDIIS assumes.
+        // TIDES_DIIS_SMETRIC=0 restores the raw AO error for A/B.
+        const bool diis_smetric = [] {
+          const char* env = std::getenv("TIDES_DIIS_SMETRIC");
+          return !(env && env[0] == '0');
+        }();
+        if (diis_smetric) {
+          int nr = static_cast<int>(n_retained);
+          // t1 (row-major n x n_retained) = e * X ; row-major C = B_rm*A_rm
+          // under the column-major dgemm argument swap used in this file.
+          std::vector<double> t1(n * n_retained, 0.0);
+          dgemm_(&transN, &transN, &nr, &nn, &nn, &one,
+                 X.data(), &nr, e.data(), &nn, &beta0, t1.data(), &nr);
+          // e_o (n_retained x n_retained) = X^T * t1
+          std::vector<double> eo(n_retained * n_retained, 0.0);
+          dgemm_(&transN, &transN, &nr, &nr, &nn, &one,
+                 t1.data(), &nr, Xt.data(), &nn, &beta0, eo.data(), &nr);
+          e_history.push_back(std::move(eo));
+        } else {
+          e_history.push_back(std::move(e));
+        }
         if (static_cast<int>(H_history.size()) > pulay_depth) {
           H_history.erase(H_history.begin());
           e_history.erase(e_history.begin());
@@ -344,8 +367,10 @@ class SCFDriver {
         const int mstart = static_cast<int>(H_history.size()) - m;
 
         // Build B[i][j] = <e_i, e_j>; augmented with constraint sum c = 1.
+        // Error vectors may be in the orthonormal basis (n_retained^2) or
+        // the AO basis (n^2) depending on TIDES_DIIS_SMETRIC.
         std::vector<std::vector<double>> B(m + 1, std::vector<double>(m + 1, 0.0));
-        int nn2 = static_cast<int>(n * n);
+        int nn2 = static_cast<int>(e_history[mstart].size());
         int inc = 1;
         for (int i = 0; i < m; ++i) {
           const auto& Ri = e_history[mstart + i];
@@ -875,11 +900,40 @@ class SCFDriver {
       // AUDIT B5/B7: eigenvalues come from the SCF loop's eigensolve.
       // B6 FIX: When fixed_density=true (XL-BOMD shadow forces), compute energy
       // from P (the input/auxiliary density) instead of P_new.
-      double E = fixed_density ? energy_fn(P, eig.eigenvalues)
-                                : energy_fn(P_new, eig.eigenvalues);
+      // P1 (TASK-LEDGER E15): evaluate the energy on the SAME density the
+      // potentials were built from (P, not P_new). The (P_new, V[P]) cross
+      // energy is first-order in the step |P_new−P| and kept drifting
+      // ~1e-6/iter after the density had converged; E[P] with V[P] is a
+      // consistent pair (quadratically convergent near the fixed point) —
+      // the same pairing PySCF uses. TIDES_ENERGY_PNEW=1 restores the old
+      // cross energy for A/B.
+      static const bool energy_pnew = [] {
+        const char* env = std::getenv("TIDES_ENERGY_PNEW");
+        return env && env[0] == '1';
+      }();
+      double E = (fixed_density || !energy_pnew)
+                     ? energy_fn(P, eig.eigenvalues)
+                     : energy_fn(P_new, eig.eigenvalues);
       auto t_en1 = std::chrono::steady_clock::now();
       acc_energy += std::chrono::duration<double, std::milli>(t_en1 - t_en0).count();
       res.energy_history.push_back(E);
+
+      // P1.3: commutator norm — with the variational energy expression the
+      // energy can go quiet while the density still moves, so convergence
+      // requires BOTH |dE| < tol AND max|[F,P,S]| < comm_tol.
+      double comm_max = 0.0;
+      for (double v : e_history.empty() ? std::vector<double>{}
+                                        : e_history.back())
+        comm_max = std::max(comm_max, std::fabs(v));
+      static const double comm_tol = [] {
+        const char* e = std::getenv("TIDES_SCF_COMM_TOL");
+        return e ? std::atof(e) : 1e-5;
+      }();
+      const bool comm_ok = e_history.empty() || comm_max < comm_tol;
+      if (std::getenv("TIDES_SCF_VERBOSE")) {
+        std::printf("[SCFDriver] iter=%d E=%.12f dE=%+.3e max|comm|=%.3e\n",
+                    iter, E, E - E_prev, comm_max);
+      }
 
       // Convergence check.
       // OPT-5: Replace O(n³) idempotency check with lightweight diagnostics.
@@ -898,7 +952,7 @@ class SCFDriver {
                   << " P*S_trace=" << p_s_trace
                   << "\n" << std::flush;
       }
-      if (std::fabs(E - E_prev) < tol) {
+      if (std::fabs(E - E_prev) < tol && comm_ok) {
         res.converged = true;
         res.energy = E;
         res.P = P_new;

@@ -1171,14 +1171,16 @@ class NaoDriver {
     }
     step("gradient computation");
 
-    // Flatten orbital/gradient arrays once and use BLAS for S/T assembly.
-    // For PP (smooth pseudo-valence orbitals) the grid-BLAS path is faster
-    // and accurate enough; default it on unless TIDES_USE_GRID_ST=0.
-    // For AE the analytic two-center path is kept as default for accuracy.
+    // S/T assembly path. The Becke precision oracle (TASK-LEDGER E16) showed
+    // the grid-BLAS S at h=0.3 is off by 2.4e-2 on the on-site diagonal of
+    // the tight C s function (S_00 = 0.9758 for a normalized orbital) — far
+    // beyond "accurate enough" — so the analytic two-center path (exact
+    // on-site radial integrals, splined off-site tables) is the default for
+    // BOTH AE and PP. TIDES_USE_GRID_ST=1 restores the grid path for A/B.
     const bool use_grid_st = [&] {
       const char* e = std::getenv("TIDES_USE_GRID_ST");
       if (e != nullptr) return e[0] == '1';
-      return use_pp;  // default on for PP, off for AE
+      return false;  // analytic two-center for both AE and PP (E16)
     }();
     std::vector<double> phi_flat;
     std::vector<double> grad_flat;
@@ -2722,7 +2724,20 @@ class NaoDriver {
       double tr_P2_VH = trace(P2_eff, cache.V_H);
       double tr_P2_Vxc = trace(P2_eff, cache.V_xc);
       double E_H = 0.5 * tr_P2_VH;
-      double E_kin = sum_eps - E_ne - E_nl - 2.0 * E_H - tr_P2_Vxc;
+      // P1 fix (TASK-LEDGER E15): kinetic energy from the direct trace
+      // tr(P·T). The old back-out E_kin = sum_eps − E_ne − ... used the
+      // eigenvalues of the DIIS-EXTRAPOLATED H, so it silently carried
+      // tr(P·(H_diis − H_raw)) — an error that decays only as the DIIS
+      // history settles, making the energy drift ~1e-6/iter for ~5 extra
+      // iterations AFTER the density had converged (max|comm| < 1e-6).
+      // TIDES_EKIN_SUMEPS=1 restores the old expression for A/B.
+      const bool ekin_sumeps = [] {
+        const char* e = std::getenv("TIDES_EKIN_SUMEPS");
+        return e && e[0] == '1';
+      }();
+      double E_kin = ekin_sumeps
+          ? (sum_eps - E_ne - E_nl - 2.0 * E_H - tr_P2_Vxc)
+          : trace(P2_eff, T);
       double E_total = E_kin + E_ne + E_nl + E_H + E_xc_grid + E_ion;
       static int energy_prints = 0;
       if (energy_prints++ < 3) {
