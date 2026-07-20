@@ -297,7 +297,6 @@ class SkRadialIntegrator {
   SkRadialIntegrals Build(const NaoBasisFunction& fa, const NaoBasisFunction& fb,
                           bool kinetic_b = false) {
     SkRadialIntegrals table;
-    fb_r_cut_ = fb.r_cut;
 
     // Second radial function.
     std::vector<double> Rb = fb.R;
@@ -334,8 +333,8 @@ class SkRadialIntegrator {
         const double r_next = ra_sub[i + 1];
         const double dr = r_next - r;
 
-        auto ang = AngularKernel(r, R, fa.l, fb.l, ra_sub, Ra_sub, Rb, fb.r);
-        auto ang_next = AngularKernel(r_next, R, fa.l, fb.l, ra_sub, Ra_sub, Rb, fb.r);
+        auto ang = AngularKernel(r, R, fa.l, fb.l, fb.r_cut, ra_sub, Ra_sub, Rb, fb.r);
+        auto ang_next = AngularKernel(r_next, R, fa.l, fb.l, fb.r_cut, ra_sub, Ra_sub, Rb, fb.r);
 
         const double f_i = Ra_sub[i] * r * r * ang.h0;
         const double f_next = Ra_sub[i + 1] * r_next * r_next * ang_next.h0;
@@ -468,7 +467,7 @@ class SkRadialIntegrator {
     double h_dd_delta = 0.0;
   };
 
-  AngularResult AngularKernel(double r, double R, int l_a, int l_b,
+  AngularResult AngularKernel(double r, double R, int l_a, int l_b, double fb_r_cut,
                               const std::vector<double>& ra_sub,
                               const std::vector<double>& Ra_sub,
                               const std::vector<double>& Rb,
@@ -491,7 +490,7 @@ class SkRadialIntegrator {
         const double r_bz = r * ct - R;
         const double r_b = std::sqrt(r_bx * r_bx + r_by * r_by + r_bz * r_bz);
 
-        if (r_b > fb_r_cut_) {
+        if (r_b > fb_r_cut) {
           // No contribution from b beyond its cutoff.
           continue;
         }
@@ -614,7 +613,6 @@ class SkRadialIntegrator {
   int n_R_;
   int n_r_;
   AngularGrid grid_;
-  double fb_r_cut_ = 1e6;
 };
 
 }  // namespace
@@ -630,7 +628,8 @@ struct NaoTwoCenterResult {
 class NaoTwoCenterBuilder {
  public:
   explicit NaoTwoCenterBuilder(int n_R = 200, int n_r = 200, int n_theta = 16, int n_phi = 16)
-      : integrator_(n_R, n_r, n_theta, n_phi) {}
+      : integrator_(n_R, n_r, n_theta, n_phi),
+        res_key_(((n_R * 1000 + n_r) * 1000 + n_theta) * 1000 + n_phi) {}
 
   // Build S and T for a list of atoms with NAO basis and a basis map.
   // basis_map is a flat list of (atom, fn, l, m) for each basis function.
@@ -642,7 +641,6 @@ class NaoTwoCenterBuilder {
   };
 
   template <typename AtomT, typename IdxT>
-    template <typename AtomT, typename IdxT>
   NaoTwoCenterResult Build(const std::vector<AtomT>& atoms,
                            const std::vector<IdxT>& basis_map,
                            const std::vector<double>& positions,
@@ -655,8 +653,11 @@ class NaoTwoCenterBuilder {
     // Tables depend only on radial functions, not atom positions, so CH4's
     // 2 elements need ~tens of tables once, and repeated runs (benchmarks, MD)
     // reuse them.  Pattern: NaoGenerator::GenerateCached.
+    // Key includes the quadrature resolution (res_key_): tables built at
+    // different n_R/n_r/theta/phi settings are NOT interchangeable
+    // (TASK-LEDGER E18 — a resolution-blind cache poisoned an A/B scan).
     using GlobalCacheKey = std::tuple<std::string, std::size_t, std::string,
-                                       std::size_t, bool>;
+                                       std::size_t, bool, std::size_t>;
     static std::map<GlobalCacheKey, SkRadialIntegrals> global_table_cache;
     static std::shared_mutex global_table_cache_mutex;
 
@@ -682,7 +683,7 @@ class NaoTwoCenterBuilder {
         std::shared_lock<std::shared_mutex> lk(global_table_cache_mutex);
         GlobalCacheKey global_key{atoms[a].basis.recipe_hash, fn_a,
                                   atoms[b].basis.recipe_hash, fn_b,
-                                  kinetic_b};
+                                  kinetic_b, res_key_};
         auto git = global_table_cache.find(global_key);
         if (git != global_table_cache.end()) return git->second;
       }
@@ -691,7 +692,7 @@ class NaoTwoCenterBuilder {
       const auto& fb = atoms[b].basis.functions[fn_b];
       GlobalCacheKey global_key{atoms[a].basis.recipe_hash, fn_a,
                                 atoms[b].basis.recipe_hash, fn_b,
-                                kinetic_b};
+                                kinetic_b, res_key_};
       {
         std::unique_lock<std::shared_mutex> lk(global_table_cache_mutex);
         auto git = global_table_cache.find(global_key);
@@ -741,6 +742,49 @@ class NaoTwoCenterBuilder {
             work_items.push_back({a, b, i, j, R, cos_theta, phi_ang, is_onsite});
           }
         }
+      }
+    }
+
+    // --- Parallel pre-build of unique radial tables ---
+    // Lazy builds inside get_table serialize on the cache's unique_lock, so
+    // a cold run degenerated to serial table construction (E19). Enumerate
+    // the unique off-site (fn_a, fn_b, kinetic) combinations first and build
+    // the missing tables in parallel WITHOUT holding the lock.
+    {
+      std::vector<std::tuple<std::size_t, std::size_t, std::size_t,
+                             std::size_t, bool>> to_build;
+      std::map<GlobalCacheKey, bool> seen;
+      for (const auto& w : work_items) {
+        if (w.is_onsite) continue;
+        const auto& bi = basis_map[w.i];
+        const auto& bj = basis_map[w.j];
+        for (bool kin : {false, true}) {
+          GlobalCacheKey key{atoms[w.a].basis.recipe_hash, bi.fn,
+                             atoms[w.b].basis.recipe_hash, bj.fn, kin,
+                             res_key_};
+          if (seen.count(key)) continue;
+          seen[key] = true;
+          bool cached = false;
+          {
+            std::shared_lock<std::shared_mutex> lk(global_table_cache_mutex);
+            cached = global_table_cache.count(key) > 0;
+          }
+          if (!cached) to_build.push_back({w.a, bi.fn, w.b, bj.fn, kin});
+        }
+      }
+      std::vector<SkRadialIntegrals> built(to_build.size());
+      #pragma omp parallel for schedule(dynamic)
+      for (std::size_t k = 0; k < to_build.size(); ++k) {
+        const auto& [a, fa_i, b, fb_i, kin] = to_build[k];
+        built[k] = integrator_.Build(atoms[a].basis.functions[fa_i],
+                                     atoms[b].basis.functions[fb_i], kin);
+      }
+      std::unique_lock<std::shared_mutex> lk(global_table_cache_mutex);
+      for (std::size_t k = 0; k < to_build.size(); ++k) {
+        const auto& [a, fa_i, b, fb_i, kin] = to_build[k];
+        GlobalCacheKey key{atoms[a].basis.recipe_hash, fa_i,
+                           atoms[b].basis.recipe_hash, fb_i, kin, res_key_};
+        global_table_cache.emplace(std::move(key), std::move(built[k]));
       }
     }
 
@@ -919,6 +963,8 @@ class NaoTwoCenterBuilder {
   }
 
   SkRadialIntegrator integrator_;
+  // Encodes (n_R, n_r, n_theta, n_phi) for the global table cache key.
+  std::size_t res_key_ = 0;
 };
 
 }  // namespace tides::basis

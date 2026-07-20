@@ -716,7 +716,10 @@ class NaoDriver {
       // Use the direct triple-loop matrix build.  BuildHmatGemm produces
       // incorrect/overcounted values for the CPU path on this build, so we
       // avoid it here until that BLAS issue is resolved separately.
-      auto V_A = grid::VmatBuilder::BuildHmat(grid, orbitals, v_a_grid);
+      // E19: BLAS GEMM projection — the E10-era "overcount" bypass to the
+      // serial direct loop was a placebo (E3: GEMM == direct to 6e-14) and
+      // cost ~2 s/atom; MKL-threaded GEMM restores fast setup.
+      auto V_A = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_a_grid);
 
       // Step 3: Replace on-site block (i,j both on atom A) with analytic
       // values. The grid -Z/r is poorly resolved near the nucleus; the
@@ -847,7 +850,10 @@ class NaoDriver {
       // Step 2: Project to get V_A matrix (all terms from atom A's V_loc).
       // Use the direct triple-loop matrix build; the GEMM path overcounts on
       // the CPU reference path for this orbital-product matmul.
-      auto V_A = grid::VmatBuilder::BuildHmat(grid, orbitals, v_a_grid);
+      // E19: BLAS GEMM projection — the E10-era "overcount" bypass to the
+      // serial direct loop was a placebo (E3: GEMM == direct to 6e-14) and
+      // cost ~2 s/atom; MKL-threaded GEMM restores fast setup.
+      auto V_A = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_a_grid);
 
       // Env gate for the analytic on-site replacement diagnostic.
       // TIDES_PP_ONSITE=0 keeps the grid-projected on-site values (matching GPU).
@@ -1256,9 +1262,11 @@ class NaoDriver {
         }
       step("S/T assembly (grid BLAS)");
     } else {
-      // Tunable two-center integral resolution. Lower counts trade accuracy
-      // for speed; the defaults match the original 200/200/16/16 grid.
-      int st_n_R = 100, st_n_r = 100, st_n_theta = 12, st_n_phi = 8;
+      // Tunable two-center integral resolution. E18: 200/200/16/16 is
+      // converged to 0.16 mHa on CH4; the lowered 100/100/12/8 settings
+      // biased totals by ~19 mHa, and with the global table cache (E19)
+      // the cost argument for lowering them is gone.
+      int st_n_R = 200, st_n_r = 200, st_n_theta = 16, st_n_phi = 16;
       if (const char* e = std::getenv("TIDES_ST_N_R"))
         st_n_R = std::atoi(e);
       if (const char* e = std::getenv("TIDES_ST_N_RR"))
