@@ -246,3 +246,14 @@ p0_6:
   s_max: 1.0e-5
   t_max: 1.0e-5
   vext_max: 1.0e-4
+
+# --- P0.6b: Becke multicenter quadrature oracle (direct radial integration) ---
+# Task p06b-becke-oracle: precision oracle computing S/T/V directly from
+# dumped radial tables via Becke partition-of-unity + Gauss-Chebyshev/Lebedev
+# grids. No basis fitting. These are the selftest (synthetic dump) tolerances;
+# real dumps do NOT hard-fail (deviations measure TIDES grid error).
+becke_oracle:
+  selftest_s: 1.0e-8      # synthetic Gaussian dump, S must match analytic
+  selftest_t: 1.0e-6      # synthetic Gaussian dump, T must match analytic
+  selftest_v: 1.0e-6      # synthetic Gaussian dump, V(-Z/r) must match analytic
+  ylm_validate: 1.0e-6    # on-site S block convention check
