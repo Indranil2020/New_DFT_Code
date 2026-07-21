@@ -34,6 +34,10 @@ struct GridBlock {
   //   phi[a * n_pts + p],  a in [0,active.size()), p in [0,n_pts)
   // Local point order: ix fastest, then iy, then iz (matches grid.flatten).
   std::vector<double> phi;
+  // Optional analytic ∇φ (GGA/T), same layout with a leading Cartesian axis:
+  //   grad[c * active.size() * n_pts + a * n_pts + p],  c in {0,1,2}
+  // Filled by AddBlockedGrad; empty when only φ is needed.
+  std::vector<double> grad;
 
   [[nodiscard]] std::int64_t n_pts() const {
     return static_cast<std::int64_t>(nx) * ny * nz;
@@ -161,6 +165,43 @@ BlockedPhi BuildBlockedPhi(const UniformGrid3D& grid,
     out.blocked_phi_bytes +=
         static_cast<std::int64_t>(blk.phi.size()) * 8;
   return out;
+}
+
+// Fill analytic ∇φ into an already-built BlockedPhi, reusing each block's
+// active list (no re-intersection). grad_eval(i, x, y, z) returns
+// {∂φ_i/∂x, ∂φ_i/∂y, ∂φ_i/∂z} — analytic gradients avoid the halo that a
+// finite-difference gradient on block-sparse storage would require.
+template <typename GradEval>
+void AddBlockedGrad(const UniformGrid3D& grid, BlockedPhi& bp,
+                    GradEval&& grad_eval) {
+  #pragma omp parallel for schedule(dynamic)
+  for (std::size_t b = 0; b < bp.blocks.size(); ++b) {
+    GridBlock& blk = bp.blocks[b];
+    const std::size_t na = blk.active.size();
+    if (na == 0) continue;
+    const std::int64_t npts = blk.n_pts();
+    blk.grad.assign(3 * na * static_cast<std::size_t>(npts), 0.0);
+    const std::size_t plane = na * static_cast<std::size_t>(npts);
+    for (std::size_t a = 0; a < na; ++a) {
+      const std::int32_t bi = blk.active[a];
+      std::int64_t p = 0;
+      for (std::int32_t lz = 0; lz < blk.nz; ++lz) {
+        const double z = grid.origin[2] + grid.h[2] * (blk.iz0 + lz);
+        for (std::int32_t ly = 0; ly < blk.ny; ++ly) {
+          const double y = grid.origin[1] + grid.h[1] * (blk.iy0 + ly);
+          for (std::int32_t lx = 0; lx < blk.nx; ++lx, ++p) {
+            const double x = grid.origin[0] + grid.h[0] * (blk.ix0 + lx);
+            const std::array<double, 3> g = grad_eval(bi, x, y, z);
+            blk.grad[0 * plane + a * npts + p] = g[0];
+            blk.grad[1 * plane + a * npts + p] = g[1];
+            blk.grad[2 * plane + a * npts + p] = g[2];
+          }
+        }
+      }
+    }
+  }
+  for (const auto& blk : bp.blocks)
+    bp.blocked_phi_bytes += static_cast<std::int64_t>(blk.grad.size()) * 8;
 }
 
 // Oracle: reconstruct the dense n_basis × n_grid φ table (row-major

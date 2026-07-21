@@ -104,6 +104,69 @@ inline std::vector<double> BlockedRho(const UniformGrid3D& grid,
   return rho;
 }
 
+// ρ and ∇ρ together (GGA), matching VmatBuilder::BuildRhoWithGrad:
+//   ρ(g)    = Σ_ij P_ij φ_i(g)φ_j(g)
+//   ∇ρ_c(g) = 2·Σ_i ∂φ_i,c(g)·temp_i(g),  temp = P·φ   (P symmetric)
+// Requires AddBlockedGrad to have been called on bp.
+struct BlockedRhoGrad {
+  std::vector<double> rho, grad_x, grad_y, grad_z;
+};
+inline BlockedRhoGrad BlockedRhoWithGrad(const UniformGrid3D& grid,
+                                         const BlockedPhi& bp,
+                                         const std::vector<double>& P) {
+  const std::size_t n = bp.n_basis;
+  const std::int64_t n_grid =
+      static_cast<std::int64_t>(grid.n[0]) * grid.n[1] * grid.n[2];
+  BlockedRhoGrad out;
+  out.rho.assign(n_grid, 0.0);
+  out.grad_x.assign(n_grid, 0.0);
+  out.grad_y.assign(n_grid, 0.0);
+  out.grad_z.assign(n_grid, 0.0);
+  #pragma omp parallel for schedule(dynamic)
+  for (std::size_t b = 0; b < bp.blocks.size(); ++b) {
+    const GridBlock& blk = bp.blocks[b];
+    const std::size_t na = blk.active.size();
+    if (na == 0) continue;
+    const std::int64_t npts = blk.n_pts();
+    const std::size_t plane = na * static_cast<std::size_t>(npts);
+    // temp[a,p] = Σ_c P[active[a],active[c]] φ[c,p]
+    std::vector<double> temp(na * static_cast<std::size_t>(npts), 0.0);
+    for (std::size_t a = 0; a < na; ++a) {
+      const std::int32_t ia = blk.active[a];
+      double* trow = temp.data() + a * npts;
+      for (std::size_t c = 0; c < na; ++c) {
+        const double Pac = P[ia * n + blk.active[c]];
+        if (Pac == 0.0) continue;
+        const double* pc = blk.phi.data() + c * npts;
+        for (std::int64_t p = 0; p < npts; ++p) trow[p] += Pac * pc[p];
+      }
+    }
+    std::int64_t p = 0;
+    for (std::int32_t lz = 0; lz < blk.nz; ++lz) {
+      const std::size_t iz = blk.iz0 + lz;
+      for (std::int32_t ly = 0; ly < blk.ny; ++ly) {
+        const std::size_t iy = blk.iy0 + ly;
+        for (std::int32_t lx = 0; lx < blk.nx; ++lx, ++p) {
+          const std::size_t g = grid.flatten(blk.ix0 + lx, iy, iz);
+          double r = 0.0, gx = 0.0, gy = 0.0, gz = 0.0;
+          for (std::size_t a = 0; a < na; ++a) {
+            const double t = temp[a * npts + p];
+            r += blk.phi[a * npts + p] * t;
+            gx += blk.grad[0 * plane + a * npts + p] * t;
+            gy += blk.grad[1 * plane + a * npts + p] * t;
+            gz += blk.grad[2 * plane + a * npts + p] * t;
+          }
+          out.rho[g] = r;
+          out.grad_x[g] = 2.0 * gx;
+          out.grad_y[g] = 2.0 * gy;
+          out.grad_z[g] = 2.0 * gz;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // H_ij = dv · Σ_g v(g) φ_i(g) φ_j(g), v on the full grid; returns dense n×n.
 inline std::vector<double> BlockedVmat(const UniformGrid3D& grid,
                                        const BlockedPhi& bp,
