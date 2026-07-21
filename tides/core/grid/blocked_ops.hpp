@@ -214,4 +214,72 @@ inline std::vector<double> BlockedVmat(const UniformGrid3D& grid,
   return H;
 }
 
+// GGA vmat, matching VmatBuilder::BuildGgaHmatGemm with the E15 fully-weighted
+// plane convention:
+//   H_ij = Σ_g [ wv_rho(g)·φ_i φ_j
+//              + Σ_c wv_grad_c(g)·( ∂φ_i,c φ_j + φ_i ∂φ_j,c ) ]
+// wv_rho and wv_grad already carry the quadrature weight dv (no extra dv here).
+// Requires AddBlockedGrad on bp.
+inline std::vector<double> BlockedGgaVmat(
+    const UniformGrid3D& grid, const BlockedPhi& bp,
+    const std::vector<double>& wv_rho,
+    const std::vector<double>& wv_grad_x,
+    const std::vector<double>& wv_grad_y,
+    const std::vector<double>& wv_grad_z) {
+  const std::size_t n = bp.n_basis;
+  std::vector<double> H(n * n, 0.0);
+  #pragma omp parallel
+  {
+    std::vector<double> H_local(n * n, 0.0);
+    #pragma omp for schedule(dynamic) nowait
+    for (std::size_t b = 0; b < bp.blocks.size(); ++b) {
+      const GridBlock& blk = bp.blocks[b];
+      const std::size_t na = blk.active.size();
+      if (na == 0) continue;
+      const std::int64_t npts = blk.n_pts();
+      const std::size_t plane = na * static_cast<std::size_t>(npts);
+      // Gather the four weighted planes at the block's points (local order).
+      std::vector<double> wr(npts), wgx(npts), wgy(npts), wgz(npts);
+      std::int64_t p = 0;
+      for (std::int32_t lz = 0; lz < blk.nz; ++lz) {
+        const std::size_t iz = blk.iz0 + lz;
+        for (std::int32_t ly = 0; ly < blk.ny; ++ly) {
+          const std::size_t iy = blk.iy0 + ly;
+          for (std::int32_t lx = 0; lx < blk.nx; ++lx, ++p) {
+            const std::size_t g = grid.flatten(blk.ix0 + lx, iy, iz);
+            wr[p] = wv_rho[g]; wgx[p] = wv_grad_x[g];
+            wgy[p] = wv_grad_y[g]; wgz[p] = wv_grad_z[g];
+          }
+        }
+      }
+      for (std::size_t a = 0; a < na; ++a) {
+        const double* fa = blk.phi.data() + a * npts;
+        const double* gax = blk.grad.data() + 0 * plane + a * npts;
+        const double* gay = blk.grad.data() + 1 * plane + a * npts;
+        const double* gaz = blk.grad.data() + 2 * plane + a * npts;
+        const std::int32_t ia = blk.active[a];
+        for (std::size_t c = a; c < na; ++c) {
+          const double* fc = blk.phi.data() + c * npts;
+          const double* gcx = blk.grad.data() + 0 * plane + c * npts;
+          const double* gcy = blk.grad.data() + 1 * plane + c * npts;
+          const double* gcz = blk.grad.data() + 2 * plane + c * npts;
+          double s = 0.0;
+          for (std::int64_t q = 0; q < npts; ++q) {
+            s += wr[q] * fa[q] * fc[q]
+               + wgx[q] * (gax[q] * fc[q] + fa[q] * gcx[q])
+               + wgy[q] * (gay[q] * fc[q] + fa[q] * gcy[q])
+               + wgz[q] * (gaz[q] * fc[q] + fa[q] * gcz[q]);
+          }
+          const std::int32_t ic = blk.active[c];
+          H_local[ia * n + ic] += s;
+          if (ic != ia) H_local[ic * n + ia] += s;
+        }
+      }
+    }
+    #pragma omp critical
+    for (std::size_t k = 0; k < n * n; ++k) H[k] += H_local[k];
+  }
+  return H;
+}
+
 }  // namespace tides::grid
