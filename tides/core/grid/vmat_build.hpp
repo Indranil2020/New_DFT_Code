@@ -18,9 +18,12 @@
 // TileMat grouped GEMM for the orbital products; this CPU path is the FP64
 // oracle.
 
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <vector>
+#include <mutex>
+#include <unordered_map>
 
 #include "grid/dual_grid.hpp"
 #include "tile/layout.hpp"
@@ -44,6 +47,29 @@ struct RhoWithGrad {
 };
 
 class VmatBuilder {
+ public:
+  // p2-vext-cpu: Process-level cache for the Phi (orbital flatten) buffer.
+  // Phi depends only on the orbitals table (not on the potential v), so it
+  // is identical across all BuildHmatGemm calls in the same SCF scope.
+  // Keyed by (n_orb, N, orbitals data pointer). Thread-safe via mutex.
+  struct PhiCacheKey {
+    std::size_t n_orb;
+    std::size_t N;
+    const void* orb_ptr;
+    bool operator==(const PhiCacheKey& o) const {
+      return n_orb == o.n_orb && N == o.N && orb_ptr == o.orb_ptr;
+    }
+  };
+  struct PhiCacheKeyHash {
+    std::size_t operator()(const PhiCacheKey& k) const {
+      return std::hash<std::size_t>{}(k.n_orb) ^
+             (std::hash<std::size_t>{}(k.N) << 1) ^
+             (std::hash<const void*>{}(k.orb_ptr) << 2);
+    }
+  };
+  inline static std::unordered_map<PhiCacheKey, std::vector<double>,
+                                  PhiCacheKeyHash> phi_cache;
+  inline static std::mutex phi_cache_mutex;
  public:
   // Forward: density from density matrix P and orbitals.
   // rho(r) = sum_{ij} P_{ij} * phi_i(r) * phi_j(r)
@@ -210,13 +236,37 @@ class VmatBuilder {
     const double dv = h0 * h1 * h2;
     if (n_orb == 0 || N == 0) return {};
 
-    // Flatten orbitals and scale by v.
-    std::vector<double> Phi(n_orb * N, 0.0);
+    // p2-vext-cpu: Reuse cached Phi if available (thread-safe).
+    // The orbital flatten is the SAME across all calls with the same orbitals
+    // table; caching avoids re-flattening n_orb×N doubles on every call.
+    const void* orb_ptr = orbitals.data();
+    PhiCacheKey cache_key{n_orb, N, orb_ptr};
+    const std::vector<double>* Phi_ptr = nullptr;
+    {
+      std::lock_guard<std::mutex> lk(phi_cache_mutex);
+      auto it = phi_cache.find(cache_key);
+      if (it != phi_cache.end()) {
+        Phi_ptr = &it->second;
+      }
+    }
+    // Flatten orbitals (and cache) if not found.
+    std::vector<double> Phi_local;
+    if (Phi_ptr == nullptr) {
+      Phi_local.resize(n_orb * N, 0.0);
+      for (std::size_t i = 0; i < n_orb; ++i)
+        std::copy(orbitals[i].begin(), orbitals[i].end(),
+                  Phi_local.begin() + i * N);
+      std::lock_guard<std::mutex> lk(phi_cache_mutex);
+      auto [ins_it, inserted] = phi_cache.emplace(cache_key, std::move(Phi_local));
+      Phi_ptr = &ins_it->second;
+    }
+    const auto& Phi = *Phi_ptr;
+
+    // PhiV depends on v, so must be computed each call.
     std::vector<double> PhiV(n_orb * N, 0.0);
     for (std::size_t i = 0; i < n_orb; ++i) {
       for (std::size_t g = 0; g < N; ++g) {
-        Phi[i * N + g] = orbitals[i][g];
-        PhiV[i * N + g] = v[g] * orbitals[i][g];
+        PhiV[i * N + g] = v[g] * Phi[i * N + g];
       }
     }
 

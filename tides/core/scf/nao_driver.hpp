@@ -183,7 +183,8 @@ static void ApplySemiOnsitePotentialBlock(
     const std::vector<int>& basis_l,
     const std::vector<int>& basis_m,
     const std::vector<std::size_t>& basis_fn_map,
-    EvalV eval_v) {
+    EvalV eval_v,
+    bool accumulate = false) {
   // Collect basis functions on atom B.
   std::vector<std::size_t> b_fns;
   for (std::size_t mu = 0; mu < n_basis; ++mu) {
@@ -323,12 +324,15 @@ static void ApplySemiOnsitePotentialBlock(
     have_prev = true;
   }
 
-  // Replace the on-B block of V_A.
+  // Replace or accumulate the on-B block of V_A.
   for (std::size_t i = 0; i < nB; ++i) {
     const std::size_t mu_i = b_fns[i];
     for (std::size_t j = 0; j < nB; ++j) {
       const std::size_t mu_j = b_fns[j];
-      V_A[mu_i * n_basis + mu_j] = M[i * nB + j];
+      if (accumulate)
+        V_A[mu_i * n_basis + mu_j] += M[i * nB + j];
+      else
+        V_A[mu_i * n_basis + mu_j] = M[i * nB + j];
     }
   }
 }
@@ -394,7 +398,8 @@ static void ApplySemiOnsiteVlocBlock(
     const std::vector<int>& basis_l,
     const std::vector<int>& basis_m,
     const std::vector<std::size_t>& basis_fn_map,
-    const basis::Pseudopotential& pp_a) {
+    const basis::Pseudopotential& pp_a,
+    bool accumulate = false) {
   const auto& pp_rg = pp_a.r_grid;
   const auto& pp_vl = pp_a.v_local;
   double z_eff = 0.0;
@@ -405,7 +410,7 @@ static void ApplySemiOnsiteVlocBlock(
   };
   ApplySemiOnsitePotentialBlock(V_A, n_basis, atoms, a_idx, b_idx,
                               basis_atom_map, basis_l, basis_m,
-                              basis_fn_map, eval_vloc);
+                              basis_fn_map, eval_vloc, accumulate);
 }
 
 static void ApplySemiOnsiteVextBlock(
@@ -418,7 +423,8 @@ static void ApplySemiOnsiteVextBlock(
     const std::vector<int>& basis_l,
     const std::vector<int>& basis_m,
     const std::vector<std::size_t>& basis_fn_map,
-    double Z) {
+    double Z,
+    bool accumulate = false) {
   // Full -Z/r potential for the all-electron cross-atom (semi-on-site) block.
   // The tiny core (rr -> 0) contributes O(1e-18) to the 3D integral, so a
   // modest cap keeps the integrand finite without affecting accuracy.
@@ -428,7 +434,7 @@ static void ApplySemiOnsiteVextBlock(
   };
   ApplySemiOnsitePotentialBlock(V_A, n_basis, atoms, a_idx, b_idx,
                               basis_atom_map, basis_l, basis_m,
-                              basis_fn_map, eval_v);
+                              basis_fn_map, eval_v, accumulate);
 }
 
 class NaoDriver {
@@ -795,6 +801,18 @@ class NaoDriver {
   // radial grid. Cross-atom terms use the Cartesian grid projection.
   // This avoids the deep V_loc well near r=0 that the Cartesian grid
   // cannot resolve, giving much faster grid convergence.
+  //
+  // p2-vext-cpu: Merged-GEMM optimization. Instead of N separate
+  // BuildHmatGemm calls (each allocating two n_basis×n_grid buffers and
+  // flattening the SAME orbitals table), the per-atom long-range grid
+  // potentials are summed into a single v_total grid and projected with
+  // ONE BuildHmatGemm call. This is valid because
+  //   Sum_a Phi diag(v_a) Phi^T = Phi diag(Sum_a v_a) Phi^T.
+  // Per-atom on-site and semi-on-site corrections are then applied as
+  // additive deltas on top of the single projected matrix. Falls back to
+  // the original per-atom loop when only one of the two corrections is
+  // env-gated off (diagnostic mode), since those cases need per-atom
+  // grid-projected on-site submatrices that the merged path cannot provide.
   static std::vector<double> BuildAnalyticVextPP(
       const std::vector<NaoAtom>& atoms,
       const std::vector<std::size_t>& basis_atom_map,
@@ -808,6 +826,192 @@ class NaoDriver {
     std::vector<double> V_ext(n_basis * n_basis, 0.0);
     const std::size_t np = grid.total_points();
 
+    // Read env gates once (same logic as original per-atom code).
+    const bool enable_pp_onsite = [&] {
+      const char* e = std::getenv("TIDES_PP_ONSITE");
+      return (e == nullptr) || (e[0] != '0');
+    }();
+    const bool enable_pp_semi_onsite = [&] {
+      const char* e = std::getenv("TIDES_PP_SEMIONSITE");
+      return (e == nullptr) || (e[0] != '0');
+    }();
+
+    // Merged-GEMM path: valid when both corrections are enabled (on-site
+    // blocks are fully replaced by analytic values) or both disabled (no
+    // corrections needed). Mixed cases fall back to the per-atom loop below.
+    const bool use_merged_path =
+        (enable_pp_onsite && enable_pp_semi_onsite) ||
+        (!enable_pp_onsite && !enable_pp_semi_onsite);
+
+    if (use_merged_path) {
+      // Phase 1: Compute and sum all per-atom long-range grid potentials
+      // directly into v_total. Each atom's v_a_grid is the smooth long-range
+      // part V_loc(r)*erf(r/sigma); summing before the GEMM is valid because
+      // the projection is linear in the potential.
+      std::vector<double> v_total(np, 0.0);
+
+      // p2-vext-cpu: Pre-compute per-atom PP parameters to avoid redundant
+      // work inside the grid loop. Collect only atoms with valid PPs.
+      struct AtomPpParams {
+        std::size_t a_idx;
+        double ax, ay, az;
+        const std::vector<double>* pp_rg;
+        const std::vector<double>* pp_vl;
+        double z_eff;
+        bool is_coulombic;
+      };
+      std::vector<AtomPpParams> active_pps;
+      for (std::size_t a_idx = 0; a_idx < atoms.size(); ++a_idx) {
+        const auto& atom = atoms[a_idx];
+        const basis::Pseudopotential* pp = nullptr;
+        if (pseudopotentials && a_idx < pseudopotentials->size())
+          pp = &(*pseudopotentials)[a_idx];
+        if (!pp || pp->v_local.empty() || pp->r_grid.empty()) continue;
+        double z_eff = 0.0;
+        bool is_coulombic = false;
+        GetPpCoulombParams(*pp, z_eff, is_coulombic);
+        active_pps.push_back({a_idx, atom.position[0], atom.position[1],
+                              atom.position[2], &pp->r_grid, &pp->v_local,
+                              z_eff, is_coulombic});
+      }
+      const double sigma = grid.h[0];
+
+      // Single grid sweep: evaluate all atoms' long-range potentials and
+      // accumulate into v_total. This eliminates the serial outer atom loop
+      // (N serial grid sweeps → 1 grid sweep with N evals per point).
+      #pragma omp parallel for collapse(3) schedule(static)
+      for (std::size_t ix = 0; ix < grid.n[0]; ++ix) {
+        for (std::size_t iy = 0; iy < grid.n[1]; ++iy) {
+          for (std::size_t iz = 0; iz < grid.n[2]; ++iz) {
+            const std::size_t g = grid.flatten(ix, iy, iz);
+            auto [x, y, z] = grid.coord(ix, iy, iz);
+            double v = 0.0;
+            for (const auto& app : active_pps) {
+              double dx = x - app.ax, dy = y - app.ay, dz = z - app.az;
+              double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+              v += EvalPpVlocLong(r, *app.pp_rg, *app.pp_vl,
+                                 app.z_eff, app.is_coulombic, sigma);
+            }
+            v_total[g] = v;
+          }
+        }
+      }
+
+      // Phase 2: Single merged GEMM projection. Replaces N separate
+      // BuildHmatGemm calls (each allocating and filling two n_basis×n_grid
+      // buffers) with one call that does it once.
+      V_ext = grid::VmatBuilder::BuildHmatGemm(grid, orbitals, v_total);
+
+      if (!enable_pp_onsite && !enable_pp_semi_onsite) {
+        // Both corrections disabled: V_ext = merged grid projection, done.
+        return V_ext;
+      }
+
+      // Phase 3a: Zero ALL on-site blocks and fill with analytic radial
+      // integrals for atoms that have a pseudopotential. In the default case
+      // (both corrections enabled), every on-site block (C,C) is fully
+      // replaced: the merged GEMM's grid-projected value is removed, and the
+      // analytic value is added. Atoms without PP get only the semi-on-site
+      // corrections from Phase 3b.
+      for (std::size_t a_idx = 0; a_idx < atoms.size(); ++a_idx) {
+        // Zero the on-site block (i,j both on atom a_idx).
+        for (std::size_t i = 0; i < n_basis; ++i) {
+          if (basis_atom_map[i] != a_idx) continue;
+          for (std::size_t j = 0; j < n_basis; ++j) {
+            if (basis_atom_map[j] != a_idx) continue;
+            V_ext[i * n_basis + j] = 0.0;
+          }
+        }
+      }
+
+      for (std::size_t a_idx = 0; a_idx < atoms.size(); ++a_idx) {
+        const auto& atom = atoms[a_idx];
+
+        const basis::Pseudopotential* pp = nullptr;
+        if (pseudopotentials && a_idx < pseudopotentials->size())
+          pp = &(*pseudopotentials)[a_idx];
+        if (!pp || pp->v_local.empty() || pp->r_grid.empty()) continue;
+
+        const auto& pp_rg = pp->r_grid;
+        const auto& pp_vl = pp->v_local;
+        double z_eff = 0.0;
+        bool is_coulombic = false;
+        GetPpCoulombParams(*pp, z_eff, is_coulombic);
+
+        // Analytic on-site: <phi_i^A | V_loc^A | phi_j^A>
+        // = delta_{l_i,l_j} delta_{m_i,m_j} * integral R_i(r) V_loc(r) R_j(r) r^2 dr
+        for (std::size_t i = 0; i < n_basis; ++i) {
+          if (basis_atom_map[i] != a_idx) continue;
+          for (std::size_t j = i; j < n_basis; ++j) {
+            if (basis_atom_map[j] != a_idx) continue;
+            if (basis_l[i] != basis_l[j]) continue;
+            if (basis_m[i] != basis_m[j]) continue;
+
+            const auto& fn_i = atom.basis.functions[basis_fn_map[i]];
+            const auto& fn_j = atom.basis.functions[basis_fn_map[j]];
+            const auto& nao_rg = fn_i.r;
+            const auto& Ri_vals = fn_i.R;
+            const auto& Rj_vals = fn_j.R;
+            std::size_t n_r = std::min(Ri_vals.size(), Rj_vals.size());
+            if (n_r < 2) continue;
+
+            // Per-interval trapezoid (P0.1)
+            double integral = 0.0;
+            for (std::size_t k = 0; k + 1 < n_r; ++k) {
+              const double r = nao_rg[k];
+              const double r_next = nao_rg[k + 1];
+              const double ri = Ri_vals[k];
+              const double ri_next = Ri_vals[k + 1];
+              const double rj = Rj_vals[k];
+              const double rj_next = Rj_vals[k + 1];
+              // Interpolate V_loc from PP radial grid at r and r_next.
+              // Use the full potential (not the erf-split long-range) because
+              // the on-site block is replaced entirely by this analytic radial
+              // quadrature.
+              auto eval_vloc = [&](double rr) {
+                return EvalPpVlocFull(rr, pp_rg, pp_vl, z_eff, is_coulombic);
+              };
+              const double v_loc_r = eval_vloc(r);
+              const double v_loc_r_next = eval_vloc(r_next);
+              const double dr = r_next - r;
+              const double f_i = ri * rj * v_loc_r * r * r;
+              const double f_next = ri_next * rj_next * v_loc_r_next * r_next * r_next;
+              integral += 0.5 * (f_i + f_next) * dr;
+            }
+
+            V_ext[i * n_basis + j] += integral;
+            if (j != i) V_ext[j * n_basis + i] += integral;
+          }
+        }
+      }
+
+      // Phase 3b: Apply semi-on-site corrections additively. For each source
+      // atom A (with PP) and target atom B≠A, add the analytic
+      // <phi_i^B | V_loc^A | phi_j^B> block to V_ext's (B,B) block. The
+      // outer a_idx loop is serial; the inner b_idx loop is already
+      // parallelized (same pattern as the original code). Each b_idx writes
+      // to a disjoint block, so accumulation across a_idx iterations (serial)
+      // is safe.
+      for (std::size_t a_idx = 0; a_idx < atoms.size(); ++a_idx) {
+        const basis::Pseudopotential* pp = nullptr;
+        if (pseudopotentials && a_idx < pseudopotentials->size())
+          pp = &(*pseudopotentials)[a_idx];
+        if (!pp || pp->v_local.empty() || pp->r_grid.empty()) continue;
+
+        #pragma omp parallel for schedule(dynamic)
+        for (std::size_t b_idx = 0; b_idx < atoms.size(); ++b_idx) {
+          if (b_idx == a_idx) continue;
+          ApplySemiOnsiteVlocBlock(V_ext, n_basis, atoms, a_idx, b_idx,
+                                   basis_atom_map, basis_l, basis_m,
+                                   basis_fn_map, *pp, /*accumulate=*/true);
+        }
+      }
+
+      return V_ext;
+    }
+
+    // Fallback: per-atom loop for mixed enable_pp_onsite / enable_pp_semi_onsite
+    // (diagnostic env-gated modes). Preserves the original serial structure.
     for (std::size_t a_idx = 0; a_idx < atoms.size(); ++a_idx) {
       const auto& atom = atoms[a_idx];
       const double ax = atom.position[0];
@@ -842,7 +1046,7 @@ class NaoDriver {
             double dx = x - ax, dy = y - ay, dz = z - az;
             double r = std::sqrt(dx*dx + dy*dy + dz*dz);
             v_a_grid[g] = EvalPpVlocLong(r, pp_rg, pp_vl, z_eff,
-                                         is_coulombic, sigma);
+                                       is_coulombic, sigma);
           }
         }
       }
@@ -859,10 +1063,6 @@ class NaoDriver {
       // TIDES_PP_ONSITE=0 keeps the grid-projected on-site values (matching GPU).
       // TIDES_PP_ONSITE=1 (default) zeroes the on-site block and refills it with
       // the radial integral, which is supposed to improve grid convergence.
-      const bool enable_pp_onsite = [&] {
-        const char* e = std::getenv("TIDES_PP_ONSITE");
-        return (e == nullptr) || (e[0] != '0');
-      }();
 
       // Step 3: Zero out on-site block, then fill with analytic radial integrals.
       if (enable_pp_onsite) {
@@ -878,10 +1078,6 @@ class NaoDriver {
       // Env gate for the semi-on-site correction diagnostic.
       // TIDES_PP_SEMIONSITE=0 disables it, leaving the analytic on-site block
       // plus the raw grid projection for cross-atom terms. Default enabled.
-      const bool enable_pp_semi_onsite = [&] {
-        const char* e = std::getenv("TIDES_PP_SEMIONSITE");
-        return (e == nullptr) || (e[0] != '0');
-      }();
 
       if (enable_pp_semi_onsite) {
         // P0.4: frame-consistent dense angular×radial correction for the whole
