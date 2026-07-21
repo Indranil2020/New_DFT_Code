@@ -682,7 +682,11 @@ class SCFDriver {
             return !(e && e[0] == '0');
           }();
 
-          if (auto_shift_enabled) {
+          // Finite-Te smearing is itself the small-gap remedy; an automatic
+          // level shift fights the deliberately-gapless smeared spectrum and
+          // blocks convergence (C2H6 T=1500K: 16 iters with shift off vs
+          // max_iter with it on). Disable auto-shift whenever smearing runs.
+          if (auto_shift_enabled && mermin_kT <= 0.0) {
             // Compute current comm_max from the DIIS commutator residual
             // (e_history is populated earlier in this iteration).
             double cur_comm_max = 0.0;
@@ -905,12 +909,20 @@ class SCFDriver {
       auto t_dsy0 = std::chrono::steady_clock::now();
       std::vector<double> P_new(n * n, 0.0);
       if (mermin_kT > 0.0) {
-        double n_electrons = 2.0 * static_cast<double>(n_occ);
-        mermin_result = MerminDFT::Compute(eig.eigenvalues, n_electrons, mermin_kT);
-        mermin_entropy = mermin_result.electronic_entropy;
+        // Convention: P is stored with trace(P) = n_occ (pair count). The
+        // physical spin factor 2 is applied downstream via occ_factor.
+        // Therefore MerminDFT::Compute must target n_occ (pairs), NOT 2*n_occ,
+        // so f_k ∈ [0,1] sums to n_occ and trace(P_new) = n_occ.
+        // Physical spatial-orbital occupancy is 2·f_k ∈ [0,2]; the stored P
+        // uses the pair fraction f_k, and occ_factor=2 restores the density.
+        double n_pairs = static_cast<double>(n_occ);
+        mermin_result = MerminDFT::Compute(eig.eigenvalues, n_pairs, mermin_kT);
+        // MerminEntropy returns S per spatial orbital in k_B units.
+        // Physical entropy has 2 spin channels: S_phys = 2 * S_spatial.
+        mermin_entropy = 2.0 * mermin_result.electronic_entropy;
         mermin_free_energy = mermin_result.free_energy;
-        // Build P_new with fractional occupations: P = sum_k f_k * C_k C_k^T
-        // (f_k from Fermi-Dirac, scaled by 2 for spin degeneracy)
+        // Build P_new with fractional pair occupations: P = sum_k f_k * C_k C_k^T
+        // (trace = n_occ; occ_factor=2 downstream gives the physical density).
         for (std::size_t k = 0; k < n_retained && k < mermin_result.occupations.size(); ++k) {
           double f_k = mermin_result.occupations[k];
           for (std::size_t i = 0; i < n; ++i) {
@@ -1066,10 +1078,12 @@ class SCFDriver {
         auto bounds = verification::APosterioriErrorControl::Compute(
             n, n_occ, H, S, P_new, eig.eigenvalues, eig.eigenvectors);
         // --- Gap module wiring: Mermin free energy correction ---
+        // E is the T=0-style total energy (with fractional-occupation density).
+        // The Mermin free energy is F = E - kT * S_phys, where S_phys includes
+        // the spin factor 2 (already applied to mermin_entropy above).
         double E_final = E;
         if (mermin_kT > 0.0 && mermin_result.occupations.size() > 0) {
-          E_final = MerminDFT::MerminCorrectedEnergy(
-              E, mermin_result, mermin_kT);
+          E_final = E - mermin_kT * mermin_entropy;
         }
         res.converged = true;
         res.energy = E_final;

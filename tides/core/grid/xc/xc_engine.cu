@@ -85,9 +85,9 @@ constexpr std::size_t kPointPadding = 512;
   return false;
 }
 
-}  // namespace
-
 #endif  // TIDES_HAVE_CUDA
+
+}  // namespace
 
 Status XcEval(const XcSpec& spec, const XcGridIn& input, XcGridOut& output,
               cudaStream_t stream) {

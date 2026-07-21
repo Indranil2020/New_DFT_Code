@@ -2846,9 +2846,21 @@ class NaoDriver {
       const bool use_bf16 = (mp_mode == scf::PrecisionMode::kBF16);
 
       // F64E compensated summation for eigenvalue sum.
+      // T=0: integer occupation of n_occ lowest orbitals (byte-for-byte unchanged).
+      // Mermin: fractional Fermi-Dirac occupations f_k summing to n_occ (pairs);
+      //   band energy = occ_factor * sum_k f_k * eps_k over ALL orbitals.
       std::vector<double> eps_occ;
-      for (std::size_t k = 0; k < n_occ && k < n; ++k)
-        eps_occ.push_back(occ_factor * eigenvalues[k]);
+      if (electronic_temp_k > 0.0) {
+        double kT_eval = electronic_temp_k * 3.1668e-6;
+        auto mermin_eval = scf::MerminDFT::Compute(
+            eigenvalues, static_cast<double>(n_occ), kT_eval);
+        for (std::size_t k = 0; k < eigenvalues.size() &&
+             k < mermin_eval.occupations.size(); ++k)
+          eps_occ.push_back(occ_factor * mermin_eval.occupations[k] * eigenvalues[k]);
+      } else {
+        for (std::size_t k = 0; k < n_occ && k < n; ++k)
+          eps_occ.push_back(occ_factor * eigenvalues[k]);
+      }
       double sum_eps = use_mp
           ? scf::MixedPrecisionSCF::F64EReduce(eps_occ)
           : ([&]{ double s = 0.0; for (double v : eps_occ) s += v; return s; }());
@@ -3658,19 +3670,24 @@ class NaoDriver {
     }
 
     // Mermin finite-Te: compute Fermi-Dirac occupations and free energy.
+    // Convention: use n_occ (pair count) so f_k sums to n_occ, matching the
+    // trace(P)=n_occ + occ_factor=2 convention. Physical entropy S_phys = 2*S.
     if (electronic_temp_k > 0.0 && !result.scf.eigenvalues.empty()) {
       double kT_ha = electronic_temp_k * 3.1668e-6;  // K -> Hartree
       auto mermin = scf::MerminDFT::Compute(
           result.scf.eigenvalues,
-          static_cast<double>(n_electrons), kT_ha);
+          static_cast<double>(n_occ), kT_ha);
       result.mermin_fermi_level = mermin.fermi_level;
-      result.mermin_entropy = mermin.electronic_entropy;
+      // S_phys = 2 * S_spatial (spin degeneracy).
+      result.mermin_entropy = 2.0 * mermin.electronic_entropy;
+      // Mermin free energy: F = E_total - kT * S_phys.
       result.E_mermin_free_energy =
-          scf::MerminDFT::MerminCorrectedEnergy(
-              result.energy.E_total, mermin, kT_ha);
+          result.energy.E_total - kT_ha * result.mermin_entropy;
+      // The reported E_total for a smeared run is the Mermin free energy.
+      result.energy.E_total = result.E_mermin_free_energy;
       std::cout << "[NaoDriver] Mermin finite-Te (T=" << electronic_temp_k
                 << " K): mu=" << mermin.fermi_level
-                << ", S=" << mermin.electronic_entropy
+                << ", S=" << result.mermin_entropy
                 << ", F=" << result.E_mermin_free_energy << std::endl;
     }
 
