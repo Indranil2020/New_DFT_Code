@@ -1,0 +1,2941 @@
+/home/indranil/git/New_DFT_Code/tides/bench/resource_monitor.py:34: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml
+Loading frozen PySCF reference...
+  PBE molecules: ['CH4', 'H2O', 'NH3', 'C2H6', 'C6H6', 'C4H10', 'C8H18', 'C10H22']
+  B3LYP molecules: ['CH4', 'H2O', 'NH3', 'C2H6', 'C6H6', 'C4H10', 'C8H18', 'C10H22']
+  Reference date: 2026-07-21 10:20:56
+
+
+################################################################################
+# Running TIDES — XC=PBE
+################################################################################
+
+  [PBE] CH4 (5 atoms) — GPU-AE
+[NaoDriver] Starting Run (Z={ 6 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=2903.78 ms, step=2903.78 ms)
+[NaoDriver] grid basis evaluation (elapsed=3125.33 ms, step=221.557 ms)
+[NaoDriver] gradient computation (elapsed=3523.02 ms, step=397.688 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=12841.2 ms, step=9318.19 ms)
+[NaoDriver] VRAM: free=10737MB  total=11888MB  needed~1053MB
+[NaoDriver] Device pipeline ready (stride=857600, functional=PBE)
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=16096.8 ms, step=3255.62 ms)
+[NaoDriver] E_ion = 13.4083
+[NaoDriver] launching SCF (n=40, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=40 n_retained=39 s_max=5.96463 s_min=6.61176e-07
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=857375 np_compact=233379 (27.2% active)
+[screen] GGA np=857375 np_compact=233379 (27.2% active)
+[energy_fn] sum_eps=-41.3274 E_ne=-108.073 E_nl=0 E_H=23.569 E_xc_grid=-4.44991 E_kin=38.2643 E_ion=13.4083 E_total=-37.2817 V_Hnorm=43.5538 V_xcnorm=4.80188
+[SCFDriver] iter=0 E=-37.2817 E_prev=1e+30 P_trace=8.15319 P*S_trace=5
+[energy_fn] sum_eps=-39.8227 E_ne=-126.193 E_nl=0 E_H=25.0744 E_xc_grid=-4.82965 E_kin=42.5121 E_ion=13.4083 E_total=-50.0278 V_Hnorm=45.1494 V_xcnorm=4.85156
+[SCFDriver] iter=1 E=-50.0278 E_prev=-37.2817 P_trace=6.16329 P*S_trace=5
+[energy_fn] sum_eps=-39.6428 E_ne=-126.642 E_nl=0 E_H=25.3547 E_xc_grid=-4.84794 E_kin=42.6957 E_ion=13.4083 E_total=-50.0317 V_Hnorm=45.3383 V_xcnorm=4.86923
+[SCFDriver] iter=2 E=-50.0317 E_prev=-50.0278 P_trace=6.55709 P*S_trace=5
+[NaoDriver] SCF (elapsed=17025 ms, step=928.174 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00352286
+  rho_build:   9.62102
+  poisson:     14.557
+  xc_eval:     98.8663
+  vmat_build:  0
+  assemble_H:  0.0102671
+  total:       123.071
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 190x190x190):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  9.61602
+    vmat_cpu:   0.00506586
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 41.4551
+    gpu_xc:      40.8166
+    gpu_xc_ker:  1.47055
+    gpu_xc_vmat: 39.3461
+    E=-50.034056  CONVERGED  iters=7  wall=17.06s  nbf=40  gpu=True
+    build_H: rho=9.6ms  pois=14.6ms  xc=98.9ms  vmat=0.0ms  total=123.1ms
+    SCF: eig=5.0ms  diis=0.0ms  total=899.7ms/iter
+    Energy: -37.2816568310  -50.0278007759  -50.0317341622  ...  -50.0340560634  
+
+  [PBE] CH4 (5 atoms) — GPU-PP
+[NaoDriver] Starting Run (Z={ 6 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=1462.61 ms, step=1462.61 ms)
+[NaoDriver] grid basis evaluation (elapsed=1673.18 ms, step=210.57 ms)
+[NaoDriver] gradient computation (elapsed=1905.44 ms, step=232.265 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=10561.5 ms, step=8656.08 ms)
+[NaoDriver] VRAM: free=8531MB  total=11888MB  needed~1053MB
+[NaoDriver] Device pipeline ready (stride=857600, functional=PBE)
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=12284.3 ms, step=1722.77 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=12834.8 ms, step=550.544 ms)
+[NaoDriver] E_ion = 9.53229
+[NaoDriver] launching SCF (n=40, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=40 n_retained=40 s_max=6.82431 s_min=0.0024172
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=857375 np_compact=233379 (27.2% active)
+[screen] GGA np=857375 np_compact=233379 (27.2% active)
+[SCFDriver] iter=0 E=-2.21866 E_prev=1e+30 P_trace=10.2785 P*S_trace=4
+[SCFDriver] iter=1 E=-7.67399 E_prev=-2.21866 P_trace=6.43806 P*S_trace=4
+[SCFDriver] iter=2 E=-7.82847 E_prev=-7.67399 P_trace=6.69803 P*S_trace=4
+[NaoDriver] SCF (elapsed=13678.4 ms, step=843.571 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00342757
+  rho_build:   0.0466273
+  poisson:     10.1099
+  xc_eval:     99.2226
+  vmat_build:  0
+  assemble_H:  0.00991314
+  total:       109.406
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 190x190x190):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.0882381
+    vmat_cpu:   0.00637957
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 32.4959
+    gpu_xc:      40.4867
+    gpu_xc_ker:  1.31416
+    gpu_xc_vmat: 39.1726
+    E=-7.875197  CONVERGED  iters=7  wall=13.71s  nbf=40  gpu=True
+    build_H: rho=0.0ms  pois=10.1ms  xc=99.2ms  vmat=0.0ms  total=109.4ms
+    SCF: eig=3.2ms  diis=0.0ms  total=791.6ms/iter
+    Energy: -2.2186582753  -7.6739874954  -7.8284746572  ...  -7.8751969091  
+
+  [PBE] CH4 (5 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.421087 ms, step=0.421087 ms)
+[NaoDriver] grid basis evaluation (elapsed=275.064 ms, step=274.642 ms)
+[NaoDriver] gradient computation (elapsed=502.697 ms, step=227.634 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=514.347 ms, step=11.6498 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=2979.49 ms, step=2465.14 ms)
+[NaoDriver] E_ion = 13.4083
+[NaoDriver] launching SCF (n=40, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=40 n_retained=39 s_max=5.96463 s_min=6.61176e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-37.2817 E_prev=1e+30 P_trace=8.15319 P*S_trace=5
+[SCFDriver] iter=1 E=-50.0278 E_prev=-37.2817 P_trace=6.16329 P*S_trace=5
+[SCFDriver] iter=2 E=-50.0317 E_prev=-50.0278 P_trace=6.55709 P*S_trace=5
+[NaoDriver] SCF (elapsed=29681.9 ms, step=26702.4 ms)
+[NaoDriver] H tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] tile trace(P,H) = -19.8765 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00357843
+  rho_build:   492.826
+  poisson:     531.304
+  xc_eval:     2782.12
+  vmat_build:  0
+  assemble_H:  0.0453113
+  total:       3806.3
+  GPU pipeline: no
+    E=-50.034056  CONVERGED  iters=7  wall=29.71s  nbf=40  gpu=False
+    build_H: rho=492.8ms  pois=531.3ms  xc=2782.1ms  vmat=0.0ms  total=3806.3ms
+    SCF: eig=3.4ms  diis=0.0ms  total=26672.8ms/iter
+    Energy: -37.2816568310  -50.0278007759  -50.0317341622  ...  -50.0340560634  
+
+  [PBE] CH4 (5 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.416199 ms, step=0.416199 ms)
+[NaoDriver] grid basis evaluation (elapsed=231.56 ms, step=231.143 ms)
+[NaoDriver] gradient computation (elapsed=446.416 ms, step=214.856 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=459.952 ms, step=13.5362 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=1572.69 ms, step=1112.74 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=2130.24 ms, step=557.543 ms)
+[NaoDriver] E_ion = 9.53229
+[NaoDriver] launching SCF (n=40, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=40 n_retained=40 s_max=6.82431 s_min=0.0024172
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-2.21866 E_prev=1e+30 P_trace=10.2785 P*S_trace=4
+[SCFDriver] iter=1 E=-7.67399 E_prev=-2.21866 P_trace=6.43806 P*S_trace=4
+[SCFDriver] iter=2 E=-7.82847 E_prev=-7.67399 P_trace=6.69803 P*S_trace=4
+[NaoDriver] SCF (elapsed=29176.7 ms, step=27046.5 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00347486
+  rho_build:   465.584
+  poisson:     540.38
+  xc_eval:     2846.81
+  vmat_build:  0
+  assemble_H:  0.0112863
+  total:       3852.79
+  GPU pipeline: no
+    E=-7.875197  CONVERGED  iters=7  wall=29.21s  nbf=40  gpu=False
+    build_H: rho=465.6ms  pois=540.4ms  xc=2846.8ms  vmat=0.0ms  total=3852.8ms
+    SCF: eig=3.6ms  diis=0.0ms  total=26999.6ms/iter
+    Energy: -2.2186582753  -7.6739874954  -7.8284746572  ...  -7.8751969091  
+
+  COMPARISON CH4 [PBE]:
+      ae_gpu: TIDES 17.06s/7it/conv=True  PySCF 4.18s/5it/conv=True  speedup=0.24x
+      pp_gpu: TIDES 13.71s/7it/conv=True  PySCF 6.87s/6it/conv=True  speedup=0.50x
+      ae_cpu: TIDES 29.71s/7it/conv=True  PySCF 4.84s/5it/conv=True  speedup=0.16x
+      pp_cpu: TIDES 29.21s/7it/conv=True  PySCF 8.02s/6it/conv=True  speedup=0.27x
+
+  [PBE] H2O (3 atoms) — GPU-AE
+[NaoDriver] Starting Run (Z={ 8 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=2121.06 ms, step=2121.06 ms)
+[NaoDriver] grid basis evaluation (elapsed=2281.23 ms, step=160.17 ms)
+[NaoDriver] gradient computation (elapsed=2333.64 ms, step=52.4057 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=7503.83 ms, step=5170.19 ms)
+[NaoDriver] VRAM: free=8097MB  total=11888MB  needed~474MB
+[NaoDriver] Device pipeline ready (stride=641536, functional=PBE)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=8321.89 ms, step=818.065 ms)
+[NaoDriver] E_ion = 9.08426
+[NaoDriver] launching SCF (n=24, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=24 n_retained=23 s_max=3.61417 s_min=3.34073e-08
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=641277 np_compact=188499 (29.4% active)
+[screen] GGA np=641277 np_compact=188499 (29.4% active)
+[SCFDriver] iter=0 E=-71.9124 E_prev=1e+30 P_trace=5.95843 P*S_trace=5
+[SCFDriver] iter=1 E=-73.1002 E_prev=-71.9124 P_trace=3.38085 P*S_trace=5
+[SCFDriver] iter=2 E=-75.6738 E_prev=-73.1002 P_trace=4.44016 P*S_trace=5
+[NaoDriver] SCF (elapsed=8799.79 ms, step=477.899 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00189111
+  rho_build:   0.282798
+  poisson:     8.4957
+  xc_eval:     38.5902
+  vmat_build:  0
+  assemble_H:  0.00582044
+  total:       47.388
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 182x174x162):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  5.3585
+    vmat_cpu:   0.00497656
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 23.6907
+    gpu_xc:      13.4491
+    gpu_xc_ker:  1.00737
+    gpu_xc_vmat: 12.4417
+    E=-76.560080  CONVERGED  iters=9  wall=8.81s  nbf=24  gpu=True
+    build_H: rho=0.3ms  pois=8.5ms  xc=38.6ms  vmat=0.0ms  total=47.4ms
+    SCF: eig=2.1ms  diis=0.0ms  total=446.8ms/iter
+    Energy: -71.9124429677  -73.1001819899  -75.6738387983  ...  -76.5600799791  
+
+  [PBE] H2O (3 atoms) — GPU-PP
+[NaoDriver] Starting Run (Z={ 8 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=916.445 ms, step=916.445 ms)
+[NaoDriver] grid basis evaluation (elapsed=1069.78 ms, step=153.337 ms)
+[NaoDriver] gradient computation (elapsed=1123.93 ms, step=54.1492 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=6030.33 ms, step=4906.4 ms)
+[NaoDriver] VRAM: free=9490MB  total=11888MB  needed~474MB
+[NaoDriver] Device pipeline ready (stride=641536, functional=PBE)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=6853.26 ms, step=822.928 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=7082.17 ms, step=228.909 ms)
+[NaoDriver] E_ion = 6.89984
+[NaoDriver] launching SCF (n=24, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=24 n_retained=24 s_max=4.21903 s_min=0.00260215
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=641277 np_compact=188499 (29.4% active)
+[screen] GGA np=641277 np_compact=188499 (29.4% active)
+[SCFDriver] iter=0 E=-10.8573 E_prev=1e+30 P_trace=6.16921 P*S_trace=4
+[SCFDriver] iter=1 E=-14.6218 E_prev=-10.8573 P_trace=3.33021 P*S_trace=4
+[SCFDriver] iter=2 E=-15.9627 E_prev=-14.6218 P_trace=4.0364 P*S_trace=4
+[NaoDriver] SCF (elapsed=7411.35 ms, step=329.184 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00162629
+  rho_build:   0.0438801
+  poisson:     3.33781
+  xc_eval:     36.7596
+  vmat_build:  0
+  assemble_H:  0.00577357
+  total:       40.1604
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 182x174x162):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.0665554
+    vmat_cpu:   0.004967
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 17.9029
+    gpu_xc:      12.4145
+    gpu_xc_ker:  1.03735
+    gpu_xc_vmat: 11.3772
+    E=-16.072571  CONVERGED  iters=7  wall=7.42s  nbf=24  gpu=True
+    build_H: rho=0.0ms  pois=3.3ms  xc=36.8ms  vmat=0.0ms  total=40.2ms
+    SCF: eig=2.1ms  diis=0.0ms  total=297.2ms/iter
+    Energy: -10.8573250607  -14.6217984568  -15.9627347785  ...  -16.0725713115  
+
+  [PBE] H2O (3 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 8 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=8 (O), key=406e60724f327f2d
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.325742 ms, step=0.325742 ms)
+[NaoDriver] grid basis evaluation (elapsed=160.776 ms, step=160.45 ms)
+[NaoDriver] gradient computation (elapsed=213.788 ms, step=53.0123 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=224.971 ms, step=11.1834 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=894.887 ms, step=669.916 ms)
+[NaoDriver] E_ion = 9.08426
+[NaoDriver] launching SCF (n=24, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=24 n_retained=23 s_max=3.61417 s_min=3.34073e-08
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-71.9124 E_prev=1e+30 P_trace=5.95843 P*S_trace=5
+[SCFDriver] iter=1 E=-73.1002 E_prev=-71.9124 P_trace=3.38085 P*S_trace=5
+[SCFDriver] iter=2 E=-75.6738 E_prev=-73.1002 P_trace=4.44016 P*S_trace=5
+[NaoDriver] SCF (elapsed=14638.6 ms, step=13743.7 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00164122
+  rho_build:   178.072
+  poisson:     285.809
+  xc_eval:     1059.3
+  vmat_build:  0
+  assemble_H:  0.00634678
+  total:       1523.19
+  GPU pipeline: no
+    E=-76.560080  CONVERGED  iters=9  wall=14.64s  nbf=24  gpu=False
+    build_H: rho=178.1ms  pois=285.8ms  xc=1059.3ms  vmat=0.0ms  total=1523.2ms
+    SCF: eig=2.2ms  diis=0.0ms  total=13730.6ms/iter
+    Energy: -71.9124429677  -73.1001819899  -75.6738387983  ...  -76.5600799791  
+
+  [PBE] H2O (3 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 8 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=8 (O), key=406e60724f327f2d:pp:O
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.800448 ms, step=0.800448 ms)
+[NaoDriver] grid basis evaluation (elapsed=118.172 ms, step=117.371 ms)
+[NaoDriver] gradient computation (elapsed=169.973 ms, step=51.8018 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=172.394 ms, step=2.4207 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=681.253 ms, step=508.859 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=915.996 ms, step=234.743 ms)
+[NaoDriver] E_ion = 6.89984
+[NaoDriver] launching SCF (n=24, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=24 n_retained=24 s_max=4.21903 s_min=0.00260215
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-10.8573 E_prev=1e+30 P_trace=6.16921 P*S_trace=4
+[SCFDriver] iter=1 E=-14.6218 E_prev=-10.8573 P_trace=3.33021 P*S_trace=4
+[SCFDriver] iter=2 E=-15.9627 E_prev=-14.6218 P_trace=4.0364 P*S_trace=4
+[NaoDriver] SCF (elapsed=11932.6 ms, step=11016.6 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00205586
+  rho_build:   177.932
+  poisson:     267.619
+  xc_eval:     1123.78
+  vmat_build:  0
+  assemble_H:  0.00703843
+  total:       1569.35
+  GPU pipeline: no
+    E=-16.072571  CONVERGED  iters=7  wall=11.94s  nbf=24  gpu=False
+    build_H: rho=177.9ms  pois=267.6ms  xc=1123.8ms  vmat=0.0ms  total=1569.3ms
+    SCF: eig=2.3ms  diis=0.0ms  total=11003.2ms/iter
+    Energy: -10.8573250607  -14.6217984568  -15.9627347785  ...  -16.0725713115  
+
+  COMPARISON H2O [PBE]:
+      ae_gpu: TIDES 8.81s/9it/conv=True  PySCF 3.98s/7it/conv=True  speedup=0.45x
+      pp_gpu: TIDES 7.42s/7it/conv=True  PySCF 3.81s/7it/conv=True  speedup=0.51x
+      ae_cpu: TIDES 14.64s/9it/conv=True  PySCF 3.75s/7it/conv=True  speedup=0.26x
+      pp_cpu: TIDES 11.94s/7it/conv=True  PySCF 4.08s/7it/conv=True  speedup=0.34x
+
+  [PBE] NH3 (4 atoms) — GPU-AE
+[NaoDriver] Starting Run (Z={ 7 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=2115.5 ms, step=2115.5 ms)
+[NaoDriver] grid basis evaluation (elapsed=2267.76 ms, step=152.254 ms)
+[NaoDriver] gradient computation (elapsed=2407.48 ms, step=139.718 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=8229.57 ms, step=5822.09 ms)
+[NaoDriver] VRAM: free=9184MB  total=11888MB  needed~755MB
+[NaoDriver] Device pipeline ready (stride=767488, functional=PBE)
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=10387.4 ms, step=2157.86 ms)
+[NaoDriver] E_ion = 11.8809
+[NaoDriver] launching SCF (n=32, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=32 n_retained=31 s_max=4.89504 s_min=1.42696e-07
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=767125 np_compact=211332 (27.5% active)
+[screen] GGA np=767125 np_compact=211332 (27.5% active)
+[SCFDriver] iter=0 E=-17.4958 E_prev=1e+30 P_trace=22.0069 P*S_trace=5
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0140457)
+[SCFDriver] iter=1 E=-11.7502 E_prev=-17.4958 P_trace=3.44905 P*S_trace=5
+[SCFDriver] iter=2 E=-18.6465 E_prev=-11.7502 P_trace=3.15846 P*S_trace=5
+[NaoDriver] SCF (elapsed=14785.6 ms, step=4398.18 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00213466
+  rho_build:   0.0635635
+  poisson:     1.36478
+  xc_eval:     49.7537
+  vmat_build:  0
+  assemble_H:  0.00885131
+  total:       51.2059
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 190x190x170):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.932179
+    vmat_cpu:   0.00588414
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 24.5873
+    gpu_xc:      14.3729
+    gpu_xc_ker:  1.18997
+    gpu_xc_vmat: 13.1829
+    E=-2.004195  FAILED  iters=80  wall=14.80s  nbf=32  gpu=True
+    build_H: rho=0.1ms  pois=1.4ms  xc=49.8ms  vmat=0.0ms  total=51.2ms
+    SCF: eig=3.1ms  diis=0.0ms  total=4368.4ms/iter
+    Energy: -17.4958335234  -11.7502460118  -18.6464950205  ...  -2.0041949984  
+
+  [PBE] NH3 (4 atoms) — GPU-PP
+[NaoDriver] Starting Run (Z={ 7 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=925.78 ms, step=925.78 ms)
+[NaoDriver] grid basis evaluation (elapsed=1168.69 ms, step=242.913 ms)
+[NaoDriver] gradient computation (elapsed=1312.87 ms, step=144.176 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=6047.96 ms, step=4735.1 ms)
+[NaoDriver] VRAM: free=8883MB  total=11888MB  needed~755MB
+[NaoDriver] Device pipeline ready (stride=767488, functional=PBE)
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=7179.21 ms, step=1131.25 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=7576.5 ms, step=397.291 ms)
+[NaoDriver] E_ion = 8.76504
+[NaoDriver] launching SCF (n=32, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=32 n_retained=32 s_max=5.70543 s_min=0.00239131
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=767125 np_compact=211332 (27.5% active)
+[screen] GGA np=767125 np_compact=211332 (27.5% active)
+[SCFDriver] iter=0 E=-6.26128 E_prev=1e+30 P_trace=7.27524 P*S_trace=4
+[SCFDriver] iter=1 E=-10.6498 E_prev=-6.26128 P_trace=4.1539 P*S_trace=4
+[SCFDriver] iter=2 E=-11.0707 E_prev=-10.6498 P_trace=4.57266 P*S_trace=4
+[NaoDriver] SCF (elapsed=8026.23 ms, step=449.726 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00253471
+  rho_build:   0.0515951
+  poisson:     4.6235
+  xc_eval:     49.716
+  vmat_build:  0
+  assemble_H:  0.00800243
+  total:       54.414
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 190x190x170):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.0825429
+    vmat_cpu:   0.00602386
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 26.0313
+    gpu_xc:      15.0939
+    gpu_xc_ker:  1.435
+    gpu_xc_vmat: 13.6589
+    E=-11.126525  CONVERGED  iters=7  wall=8.04s  nbf=32  gpu=True
+    build_H: rho=0.1ms  pois=4.6ms  xc=49.7ms  vmat=0.0ms  total=54.4ms
+    SCF: eig=3.7ms  diis=0.0ms  total=408.9ms/iter
+    Energy: -6.2612777205  -10.6498044155  -11.0706705184  ...  -11.1265250348  
+
+  [PBE] NH3 (4 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 7 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=7 (N), key=31e513bf9d4940f7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.388188 ms, step=0.388188 ms)
+[NaoDriver] grid basis evaluation (elapsed=185.519 ms, step=185.131 ms)
+[NaoDriver] gradient computation (elapsed=289.929 ms, step=104.41 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=303.822 ms, step=13.8927 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=1589.42 ms, step=1285.6 ms)
+[NaoDriver] E_ion = 11.8809
+[NaoDriver] launching SCF (n=32, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=32 n_retained=31 s_max=4.89504 s_min=1.42696e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-17.4958 E_prev=1e+30 P_trace=22.0069 P*S_trace=5
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0140457)
+[SCFDriver] iter=1 E=-11.7502 E_prev=-17.4958 P_trace=3.44905 P*S_trace=5
+[SCFDriver] iter=2 E=-18.6465 E_prev=-11.7502 P_trace=3.15846 P*S_trace=5
+[NaoDriver] SCF (elapsed=214422 ms, step=212832 ms)
+[NaoDriver] H tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] tile trace(P,H) = -41.3982 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00213431
+  rho_build:   341.851
+  poisson:     434.866
+  xc_eval:     1879.58
+  vmat_build:  0
+  assemble_H:  0.0310588
+  total:       2656.33
+  GPU pipeline: no
+    E=-2.004195  FAILED  iters=80  wall=214.44s  nbf=32  gpu=False
+    build_H: rho=341.9ms  pois=434.9ms  xc=1879.6ms  vmat=0.0ms  total=2656.3ms
+    SCF: eig=3.3ms  diis=0.0ms  total=212800.9ms/iter
+    Energy: -17.4958335234  -11.7502460118  -18.6464950205  ...  -2.0041949984  
+
+  [PBE] NH3 (4 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 7 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=7 (N), key=31e513bf9d4940f7:pp:N
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.396062 ms, step=0.396062 ms)
+[NaoDriver] grid basis evaluation (elapsed=199.395 ms, step=198.999 ms)
+[NaoDriver] gradient computation (elapsed=337.579 ms, step=138.184 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=371.586 ms, step=34.0075 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=1333.48 ms, step=961.893 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=1758.28 ms, step=424.797 ms)
+[NaoDriver] E_ion = 8.76504
+[NaoDriver] launching SCF (n=32, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=32 n_retained=32 s_max=5.70543 s_min=0.00239131
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-6.26128 E_prev=1e+30 P_trace=7.27524 P*S_trace=4
+[SCFDriver] iter=1 E=-10.6498 E_prev=-6.26128 P_trace=4.1539 P*S_trace=4
+[SCFDriver] iter=2 E=-11.0707 E_prev=-10.6498 P_trace=4.57266 P*S_trace=4
+[NaoDriver] SCF (elapsed=20381.6 ms, step=18623.3 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00260171
+  rho_build:   341.814
+  poisson:     426.216
+  xc_eval:     1881.69
+  vmat_build:  0
+  assemble_H:  0.00878514
+  total:       2649.74
+  GPU pipeline: no
+    E=-11.126525  CONVERGED  iters=7  wall=20.40s  nbf=32  gpu=False
+    build_H: rho=341.8ms  pois=426.2ms  xc=1881.7ms  vmat=0.0ms  total=2649.7ms
+    SCF: eig=3.2ms  diis=0.0ms  total=18573.8ms/iter
+    Energy: -6.2612777205  -10.6498044155  -11.0706705184  ...  -11.1265250348  
+
+  COMPARISON NH3 [PBE]:
+      ae_gpu: TIDES 14.80s/80it/conv=False  PySCF 8.84s/6it/conv=True  speedup=0.60x
+      pp_gpu: TIDES 8.04s/7it/conv=True  PySCF 6.65s/6it/conv=True  speedup=0.83x
+      ae_cpu: TIDES 214.44s/80it/conv=False  PySCF 9.17s/6it/conv=True  speedup=0.04x
+      pp_cpu: TIDES 20.40s/7it/conv=True  PySCF 6.42s/6it/conv=True  speedup=0.31x
+
+  [PBE] C2H6 (8 atoms) — GPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.763634 ms, step=0.763634 ms)
+[NaoDriver] grid basis evaluation (elapsed=301.539 ms, step=300.776 ms)
+[NaoDriver] gradient computation (elapsed=760.885 ms, step=459.346 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=3852.8 ms, step=3091.92 ms)
+[NaoDriver] VRAM: free=8901MB  total=11888MB  needed~1716MB
+[NaoDriver] Device pipeline ready (stride=875520, functional=PBE)
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=11210.7 ms, step=7357.87 ms)
+[NaoDriver] E_ion = 42.4269
+[NaoDriver] launching SCF (n=64, n_occ=9)
+[NaoDriver] SAD initial guess (uniform): trace=9 target=9
+[SCFDriver] S eigenvalue filter: n=64 n_retained=62 s_max=6.89284 s_min=6.44352e-07
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=875425 np_compact=284029 (32.4% active)
+[screen] GGA np=875425 np_compact=284029 (32.4% active)
+[SCFDriver] iter=0 E=-52.1868 E_prev=1e+30 P_trace=460.447 P*S_trace=9
+[SCFDriver] iter=1 E=-65.694 E_prev=-52.1868 P_trace=395.938 P*S_trace=9
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0264434)
+[SCFDriver] iter=2 E=-66.716 E_prev=-65.694 P_trace=400.429 P*S_trace=9
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000924855 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000798132 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000682801 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.01875 (comm_max=0.000545068 < 1e-3)
+[SCFDriver] auto level shift: 0.01875 -> 0.009375 (comm_max=0.000273357 < 1e-3)
+[SCFDriver] auto level shift: 0.009375 -> 0.0046875 (comm_max=0.000183559 < 1e-3)
+[SCFDriver] auto level shift: 0.0046875 -> 0.0 (comm_max=6.64973e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00524095)
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.0001094 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000106981 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000101348 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.0 (comm_max=8.61469e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00523477)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=2.34989e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00523592)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=5.17875e-06 < 1e-4)
+[NaoDriver] SCF (elapsed=18983.7 ms, step=7773 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00729296
+  rho_build:   0.0716129
+  poisson:     3.38277
+  xc_eval:     147.961
+  vmat_build:  0
+  assemble_H:  0.0174374
+  total:       151.454
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 194x190x190):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  2.42654
+    vmat_cpu:   0.00571476
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 40.576
+    gpu_xc:      62.996
+    gpu_xc_ker:  1.60017
+    gpu_xc_vmat: 61.3958
+    E=-67.039526  CONVERGED  iters=49  wall=19.00s  nbf=64  gpu=True
+    build_H: rho=0.1ms  pois=3.4ms  xc=148.0ms  vmat=0.0ms  total=151.5ms
+    SCF: eig=5.5ms  diis=0.0ms  total=7742.5ms/iter
+    Energy: -52.1868384982  -65.6939725311  -66.7160188490  ...  -67.0395264063  
+
+  [PBE] C2H6 (8 atoms) — GPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.724718 ms, step=0.724718 ms)
+[NaoDriver] grid basis evaluation (elapsed=409.401 ms, step=408.676 ms)
+[NaoDriver] gradient computation (elapsed=594.807 ms, step=185.407 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=3700.87 ms, step=3106.07 ms)
+[NaoDriver] VRAM: free=7239MB  total=11888MB  needed~1716MB
+[NaoDriver] Device pipeline ready (stride=875520, functional=PBE)
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=6314.2 ms, step=2613.32 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=7418.23 ms, step=1104.03 ms)
+[NaoDriver] E_ion = 26.6772
+[NaoDriver] launching SCF (n=64, n_occ=7)
+[NaoDriver] SAD initial guess (uniform): trace=7 target=7
+[SCFDriver] S eigenvalue filter: n=64 n_retained=64 s_max=7.79174 s_min=0.00192288
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=875425 np_compact=284029 (32.4% active)
+[screen] GGA np=875425 np_compact=284029 (32.4% active)
+[SCFDriver] iter=0 E=-2.41693 E_prev=1e+30 P_trace=39.2288 P*S_trace=7
+[SCFDriver] iter=1 E=-13.429 E_prev=-2.41693 P_trace=18.7527 P*S_trace=7
+[SCFDriver] iter=2 E=-13.7898 E_prev=-13.429 P_trace=23.658 P*S_trace=7
+[NaoDriver] SCF (elapsed=8759.19 ms, step=1340.96 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00832113
+  rho_build:   0.0472155
+  poisson:     9.72618
+  xc_eval:     143.634
+  vmat_build:  0
+  assemble_H:  0.02232
+  total:       153.454
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 194x190x190):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.0788335
+    vmat_cpu:   0.00623475
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 39.5696
+    gpu_xc:      63.9982
+    gpu_xc_ker:  1.5441
+    gpu_xc_vmat: 62.4542
+    E=-13.875471  CONVERGED  iters=8  wall=8.78s  nbf=64  gpu=True
+    build_H: rho=0.0ms  pois=9.7ms  xc=143.6ms  vmat=0.0ms  total=153.5ms
+    SCF: eig=5.5ms  diis=0.0ms  total=1282.9ms/iter
+    Energy: -2.4169345863  -13.4289834852  -13.7897911821  ...  -13.8754712916  
+
+  [PBE] C2H6 (8 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.768473 ms, step=0.768473 ms)
+[NaoDriver] grid basis evaluation (elapsed=326.636 ms, step=325.867 ms)
+[NaoDriver] gradient computation (elapsed=531.056 ms, step=204.421 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=544.617 ms, step=13.5606 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=6693.2 ms, step=6148.58 ms)
+[NaoDriver] E_ion = 42.4269
+[NaoDriver] launching SCF (n=64, n_occ=9)
+[NaoDriver] SAD initial guess (uniform): trace=9 target=9
+[SCFDriver] S eigenvalue filter: n=64 n_retained=62 s_max=6.89284 s_min=6.44352e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-52.1868 E_prev=1e+30 P_trace=460.447 P*S_trace=9
+[SCFDriver] iter=1 E=-65.694 E_prev=-52.1868 P_trace=395.938 P*S_trace=9
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0264434)
+[SCFDriver] iter=2 E=-66.716 E_prev=-65.694 P_trace=400.429 P*S_trace=9
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000924855 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000798132 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000682801 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.01875 (comm_max=0.000545068 < 1e-3)
+[SCFDriver] auto level shift: 0.01875 -> 0.009375 (comm_max=0.000273357 < 1e-3)
+[SCFDriver] auto level shift: 0.009375 -> 0.0046875 (comm_max=0.000183559 < 1e-3)
+[SCFDriver] auto level shift: 0.0046875 -> 0.0 (comm_max=6.64973e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00524095)
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.0001094 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000106981 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000101348 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.0 (comm_max=8.61469e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00523477)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=2.34989e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00523592)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=5.17875e-06 < 1e-4)
+[NaoDriver] SCF (elapsed=359466 ms, step=352772 ms)
+[NaoDriver] H tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] tile trace(P,H) = -12.4654 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0072238
+  rho_build:   744.705
+  poisson:     759.28
+  xc_eval:     5686.82
+  vmat_build:  0
+  assemble_H:  0.0844484
+  total:       7190.9
+  GPU pipeline: no
+    E=-67.039526  CONVERGED  iters=49  wall=359.47s  nbf=64  gpu=False
+    build_H: rho=744.7ms  pois=759.3ms  xc=5686.8ms  vmat=0.0ms  total=7190.9ms
+    SCF: eig=5.9ms  diis=0.0ms  total=352742.7ms/iter
+    Energy: -52.1868384982  -65.6939725311  -66.7160188490  ...  -67.0395264063  
+
+  [PBE] C2H6 (8 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.809489 ms, step=0.809489 ms)
+[NaoDriver] grid basis evaluation (elapsed=305.317 ms, step=304.508 ms)
+[NaoDriver] gradient computation (elapsed=493.59 ms, step=188.273 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=506.338 ms, step=12.7474 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=1989.53 ms, step=1483.2 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=3002.28 ms, step=1012.75 ms)
+[NaoDriver] E_ion = 26.6772
+[NaoDriver] launching SCF (n=64, n_occ=7)
+[NaoDriver] SAD initial guess (uniform): trace=7 target=7
+[SCFDriver] S eigenvalue filter: n=64 n_retained=64 s_max=7.79174 s_min=0.00192288
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-2.41693 E_prev=1e+30 P_trace=39.2288 P*S_trace=7
+[SCFDriver] iter=1 E=-13.429 E_prev=-2.41693 P_trace=18.7527 P*S_trace=7
+[SCFDriver] iter=2 E=-13.7898 E_prev=-13.429 P_trace=23.658 P*S_trace=7
+[NaoDriver] SCF (elapsed=59327 ms, step=56324.7 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00813713
+  rho_build:   774.211
+  poisson:     744.257
+  xc_eval:     5507.34
+  vmat_build:  0
+  assemble_H:  0.0206339
+  total:       7025.84
+  GPU pipeline: no
+    E=-13.875471  CONVERGED  iters=8  wall=59.35s  nbf=64  gpu=False
+    build_H: rho=774.2ms  pois=744.3ms  xc=5507.3ms  vmat=0.0ms  total=7025.8ms
+    SCF: eig=5.8ms  diis=0.0ms  total=56265.6ms/iter
+    Energy: -2.4169345863  -13.4289834852  -13.7897911821  ...  -13.8754712916  
+
+  COMPARISON C2H6 [PBE]:
+      ae_gpu: TIDES 19.00s/49it/conv=True  PySCF 14.04s/6it/conv=True  speedup=0.74x
+      pp_gpu: TIDES 8.78s/8it/conv=True  PySCF 13.56s/7it/conv=True  speedup=1.55x
+      ae_cpu: TIDES 359.47s/49it/conv=True  PySCF 15.54s/6it/conv=True  speedup=0.04x
+      pp_cpu: TIDES 59.35s/8it/conv=True  PySCF 15.50s/7it/conv=True  speedup=0.26x
+
+  [PBE] C6H6 (12 atoms) — GPU-AE: SKIPPED (GPU OOM, nbf=114 > 90)
+
+  [PBE] C6H6 (12 atoms) — GPU-PP: SKIPPED (GPU OOM, nbf=108 > 90)
+
+  [PBE] C6H6 (12 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.836716 ms, step=0.836716 ms)
+[NaoDriver] grid basis evaluation (elapsed=452.557 ms, step=451.72 ms)
+[NaoDriver] gradient computation (elapsed=1160.75 ms, step=708.195 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=1183.38 ms, step=22.6275 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=14882.5 ms, step=13699.1 ms)
+[NaoDriver] E_ion = 203.416
+[NaoDriver] launching SCF (n=96, n_occ=21)
+[NaoDriver] SAD initial guess (uniform): trace=21 target=21
+[SCFDriver] S eigenvalue filter: n=96 n_retained=90 s_max=3.68357 s_min=6.34322e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-149.85 E_prev=1e+30 P_trace=30.224 P*S_trace=21
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0327511)
+[SCFDriver] iter=1 E=-149.841 E_prev=-149.85 P_trace=32.979 P*S_trace=21
+[SCFDriver] iter=2 E=-187.347 E_prev=-149.841 P_trace=37.5292 P*S_trace=21
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000830989 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000494561 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000312042 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.01875 (comm_max=0.000171867 < 1e-3)
+[SCFDriver] auto level shift: 0.01875 -> 0.0 (comm_max=4.1598e-05 < 1e-4)
+[NaoDriver] SCF (elapsed=243608 ms, step=228725 ms)
+[NaoDriver] H tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] tile trace(P,H) = -37.3387 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0173621
+  rho_build:   1320.59
+  poisson:     1138.71
+  xc_eval:     12767
+  vmat_build:  0
+  assemble_H:  0.174404
+  total:       15226.5
+  GPU pipeline: no
+    E=-189.871771  CONVERGED  iters=15  wall=243.70s  nbf=96  gpu=False
+    build_H: rho=1320.6ms  pois=1138.7ms  xc=12767.0ms  vmat=0.0ms  total=15226.5ms
+    SCF: eig=15.2ms  diis=0.0ms  total=228696.0ms/iter
+    Energy: -149.8503441835  -149.8413477770  -187.3474707782  ...  -189.8717706286  
+
+  [PBE] C6H6 (12 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.957456 ms, step=0.957456 ms)
+[NaoDriver] grid basis evaluation (elapsed=455.23 ms, step=454.272 ms)
+[NaoDriver] gradient computation (elapsed=1187.07 ms, step=731.837 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=1202.66 ms, step=15.5945 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=3558.4 ms, step=2355.74 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=6425.32 ms, step=2866.92 ms)
+[NaoDriver] E_ion = 103.113
+[NaoDriver] launching SCF (n=96, n_occ=15)
+[NaoDriver] SAD initial guess (uniform): trace=15 target=15
+[SCFDriver] S eigenvalue filter: n=96 n_retained=96 s_max=4.70568 s_min=0.00203151
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=12.3993 E_prev=1e+30 P_trace=12.403 P*S_trace=15
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00394466)
+[SCFDriver] iter=1 E=-11.8833 E_prev=12.3993 P_trace=11.3847 P*S_trace=15
+[SCFDriver] iter=2 E=-12.0084 E_prev=-11.8833 P_trace=11.2645 P*S_trace=15
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000984156 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000617374 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000831161 < 1e-3)
+[NaoDriver] SCF (elapsed=1.30069e+06 ms, step=1.29426e+06 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0173093
+  rho_build:   1458.83
+  poisson:     1206.78
+  xc_eval:     13488.4
+  vmat_build:  0
+  assemble_H:  0.0408373
+  total:       16154.1
+  GPU pipeline: no
+    E=-12.059097  FAILED  iters=80  wall=1300.80s  nbf=96  gpu=False
+    build_H: rho=1458.8ms  pois=1206.8ms  xc=13488.4ms  vmat=0.0ms  total=16154.1ms
+    SCF: eig=17.3ms  diis=0.0ms  total=1294114.4ms/iter
+    Energy: 12.3992881732  -11.8832639991  -12.0084114289  ...  -12.0590968233  
+
+  COMPARISON C6H6 [PBE]:
+      ae_gpu: TIDES GPU_OOM (skipped, nbf=114)  PySCF 26.32s/6it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      pp_gpu: TIDES GPU_OOM (skipped, nbf=108)  PySCF 26.33s/7it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      ae_cpu: TIDES 243.70s/15it/conv=True  PySCF 26.46s/6it/conv=True  speedup=0.11x
+      pp_cpu: TIDES 1300.80s/80it/conv=False  PySCF 29.97s/7it/conv=True  speedup=0.02x
+
+  [PBE] C4H10 (14 atoms) — GPU-AE: SKIPPED (GPU OOM, nbf=106 > 90)
+
+  [PBE] C4H10 (14 atoms) — GPU-PP: SKIPPED (GPU OOM, nbf=102 > 90)
+
+  [PBE] C4H10 (14 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 6 6 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=1.31191 ms, step=1.31191 ms)
+[NaoDriver] grid basis evaluation (elapsed=592.634 ms, step=591.322 ms)
+[NaoDriver] gradient computation (elapsed=1777.37 ms, step=1184.73 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=1813.43 ms, step=36.0645 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 10 / 16 tiles (sparsity 0.625)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=24864.4 ms, step=23050.9 ms)
+[NaoDriver] E_ion = 132.892
+[NaoDriver] launching SCF (n=112, n_occ=17)
+[NaoDriver] SAD initial guess (uniform): trace=17 target=17
+[SCFDriver] S eigenvalue filter: n=112 n_retained=108 s_max=7.65248 s_min=6.34684e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-108.386 E_prev=1e+30 P_trace=1742.47 P*S_trace=17
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0249596)
+[SCFDriver] iter=1 E=-129.853 E_prev=-108.386 P_trace=1644.7 P*S_trace=17
+[SCFDriver] iter=2 E=-140.951 E_prev=-129.853 P_trace=1552.26 P*S_trace=17
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.00088335 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000762594 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000601356 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.01875 (comm_max=0.000803088 < 1e-3)
+[SCFDriver] auto level shift: 0.01875 -> 0.009375 (comm_max=0.000539475 < 1e-3)
+[SCFDriver] auto level shift: 0.009375 -> 0.0046875 (comm_max=0.000122679 < 1e-3)
+[NaoDriver] SCF (elapsed=1.85042e+06 ms, step=1.82556e+06 ms)
+[NaoDriver] H tile substrate: 10 / 16 tiles (sparsity 0.625)
+[NaoDriver] tile trace(P,H) = -39.5381 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0228078
+  rho_build:   1883.47
+  poisson:     1519.81
+  xc_eval:     19368.7
+  vmat_build:  0
+  assemble_H:  0.236011
+  total:       22772.2
+  GPU pipeline: no
+    E=-143.115362  FAILED  iters=80  wall=1850.44s  nbf=112  gpu=False
+    build_H: rho=1883.5ms  pois=1519.8ms  xc=19368.7ms  vmat=0.0ms  total=22772.2ms
+    SCF: eig=39.3ms  diis=0.1ms  total=1825524.3ms/iter
+    Energy: -108.3861268142  -129.8532072445  -140.9509940985  ...  -143.1153615216  
+
+  [PBE] C4H10 (14 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 6 6 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.980081 ms, step=0.980081 ms)
+[NaoDriver] grid basis evaluation (elapsed=680.587 ms, step=679.607 ms)
+[NaoDriver] gradient computation (elapsed=1228.99 ms, step=548.398 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=1249.28 ms, step=20.2934 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 10 / 16 tiles (sparsity 0.625)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=5146.45 ms, step=3897.17 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=8404.05 ms, step=3257.6 ms)
+[NaoDriver] E_ion = 78.4991
+[NaoDriver] launching SCF (n=112, n_occ=13)
+[NaoDriver] SAD initial guess (uniform): trace=13 target=13
+[SCFDriver] S eigenvalue filter: n=112 n_retained=112 s_max=8.51716 s_min=0.00123005
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=12.3821 E_prev=1e+30 P_trace=340.543 P*S_trace=13
+[SCFDriver] iter=1 E=-7.53951 E_prev=12.3821 P_trace=64.4805 P*S_trace=13
+[SCFDriver] iter=2 E=-8.70537 E_prev=-7.53951 P_trace=52.2266 P*S_trace=13
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0426408)
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000692027 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000166281 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0 (comm_max=6.47692e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0404395)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=6.68616e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0402542)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=2.73769e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0402761)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=1.17951e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.040289)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=8.50157e-07 < 1e-4)
+[NaoDriver] SCF (elapsed=424954 ms, step=416550 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.023988
+  rho_build:   1878.15
+  poisson:     1516.13
+  xc_eval:     19694.8
+  vmat_build:  0
+  assemble_H:  0.0476906
+  total:       23089.1
+  GPU pipeline: no
+    E=-10.032963  CONVERGED  iters=18  wall=424.98s  nbf=112  gpu=False
+    build_H: rho=1878.2ms  pois=1516.1ms  xc=19694.8ms  vmat=0.0ms  total=23089.1ms
+    SCF: eig=38.4ms  diis=0.1ms  total=416424.2ms/iter
+    Energy: 12.3821038935  -7.5395094700  -8.7053666737  ...  -10.0329632940  
+
+  COMPARISON C4H10 [PBE]:
+      ae_gpu: TIDES GPU_OOM (skipped, nbf=106)  PySCF 21.25s/8it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      pp_gpu: TIDES GPU_OOM (skipped, nbf=102)  PySCF 16.21s/8it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      ae_cpu: TIDES 1850.44s/80it/conv=False  PySCF 21.33s/8it/conv=True  speedup=0.01x
+      pp_cpu: TIDES 424.98s/18it/conv=True  PySCF 17.58s/8it/conv=True  speedup=0.04x
+
+  [PBE] C8H18 (26 atoms) — GPU-AE: SKIPPED (GPU OOM, nbf=202 > 90)
+
+  [PBE] C8H18 (26 atoms) — GPU-PP: SKIPPED (GPU OOM, nbf=194 > 90)
+
+  [PBE] C8H18 (26 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=1.72985 ms, step=1.72985 ms)
+[NaoDriver] grid basis evaluation (elapsed=1470.64 ms, step=1468.91 ms)
+[NaoDriver] gradient computation (elapsed=4296.76 ms, step=2826.12 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=4328.39 ms, step=31.6284 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 28 / 49 tiles (sparsity 0.571429)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=101115 ms, step=96786.2 ms)
+[NaoDriver] E_ion = 384.657
+[NaoDriver] launching SCF (n=208, n_occ=33)
+[NaoDriver] SAD initial guess (uniform): trace=33 target=33
+[SCFDriver] S eigenvalue filter: n=208 n_retained=200 s_max=7.55663 s_min=6.30196e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-206.927 E_prev=1e+30 P_trace=3517.3 P*S_trace=33
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00727934)
+[SCFDriver] iter=1 E=-267.446 E_prev=-206.927 P_trace=2470.2 P*S_trace=33
+[SCFDriver] iter=2 E=-258.549 E_prev=-267.446 P_trace=2397.33 P*S_trace=33
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.00093911 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000401477 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000442233 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.01875 (comm_max=0.00043501 < 1e-3)
+[NaoDriver] SCF (elapsed=6.66094e+06 ms, step=6.55983e+06 ms)
+[NaoDriver] H tile substrate: 28 / 49 tiles (sparsity 0.571429)
+[NaoDriver] tile trace(P,H) = -92.3903 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0824555
+  rho_build:   4823
+  poisson:     3640.77
+  xc_eval:     73415.7
+  vmat_build:  0
+  assemble_H:  0.729158
+  total:       81880.3
+  GPU pipeline: no
+    E=-297.219930  FAILED  iters=80  wall=6661.25s  nbf=208  gpu=False
+    build_H: rho=4823.0ms  pois=3640.8ms  xc=73415.7ms  vmat=0.0ms  total=81880.3ms
+    SCF: eig=76.1ms  diis=0.2ms  total=6559786.8ms/iter
+    Energy: -206.9272596787  -267.4455066805  -258.5493114362  ...  -297.2199303849  
+
+  [PBE] C8H18 (26 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=1.8651 ms, step=1.8651 ms)
+[NaoDriver] grid basis evaluation (elapsed=1201.74 ms, step=1199.87 ms)
+[NaoDriver] gradient computation (elapsed=4026.7 ms, step=2824.96 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=4062.93 ms, step=36.2287 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 28 / 49 tiles (sparsity 0.571429)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=12366.9 ms, step=8304.02 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=23864.4 ms, step=11497.5 ms)
+[NaoDriver] E_ion = 221.099
+[NaoDriver] launching SCF (n=208, n_occ=25)
+[NaoDriver] SAD initial guess (uniform): trace=25 target=25
+[SCFDriver] S eigenvalue filter: n=208 n_retained=208 s_max=8.44147 s_min=0.00106538
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=124.245 E_prev=1e+30 P_trace=737.709 P*S_trace=25
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0251448)
+[SCFDriver] iter=1 E=84.612 E_prev=124.245 P_trace=303.016 P*S_trace=25
+[SCFDriver] iter=2 E=81.9301 E_prev=84.612 P_trace=238.01 P*S_trace=25
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000993407 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000731889 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000454597 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.01875 (comm_max=0.000309037 < 1e-3)
+[SCFDriver] auto level shift: 0.01875 -> 0.009375 (comm_max=0.000896764 < 1e-3)
+[SCFDriver] auto level shift: 0.009375 -> 0.0046875 (comm_max=0.000483395 < 1e-3)
+[SCFDriver] auto level shift: 0.0046875 -> 0.00234375 (comm_max=0.000173667 < 1e-3)
+[SCFDriver] auto level shift: 0.00234375 -> 0.00117187 (comm_max=0.000211752 < 1e-3)
+[SCFDriver] auto level shift: 0.00117187 -> 0.000585937 (comm_max=0.000199296 < 1e-3)
+[SCFDriver] auto level shift: 0.000585937 -> 0.000292969 (comm_max=0.000135747 < 1e-3)
+[SCFDriver] auto level shift: 0.000292969 -> 0.0 (comm_max=3.04589e-05 < 1e-4)
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.00776256)
+[SCFDriver] auto level shift: 0.3 -> 0.0 (comm_max=4.45792e-06 < 1e-4)
+[NaoDriver] SCF (elapsed=4.20812e+06 ms, step=4.18426e+06 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0825891
+  rho_build:   4576.92
+  poisson:     3416.19
+  xc_eval:     72358.7
+  vmat_build:  0
+  assemble_H:  0.152661
+  total:       80352.1
+  GPU pipeline: no
+    E=81.316383  CONVERGED  iters=52  wall=4208.48s  nbf=208  gpu=False
+    build_H: rho=4576.9ms  pois=3416.2ms  xc=72358.7ms  vmat=0.0ms  total=80352.1ms
+    SCF: eig=71.5ms  diis=0.2ms  total=4184080.7ms/iter
+    Energy: 124.2453537643  84.6120460266  81.9301197547  ...  81.3163834585  
+
+  COMPARISON C8H18 [PBE]:
+      ae_gpu: TIDES GPU_OOM (skipped, nbf=202)  PySCF 41.98s/8it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      pp_gpu: TIDES GPU_OOM (skipped, nbf=194)  PySCF 34.73s/9it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      ae_cpu: TIDES 6661.25s/80it/conv=False  PySCF 50.66s/8it/conv=True  speedup=0.01x
+      pp_cpu: TIDES 4208.48s/52it/conv=True  PySCF 51.34s/9it/conv=True  speedup=0.01x
+
+  [PBE] C10H22 (32 atoms) — GPU-AE: SKIPPED (GPU OOM, nbf=250 > 90)
+
+  [PBE] C10H22 (32 atoms) — GPU-PP: SKIPPED (GPU OOM, nbf=240 > 90)
+
+  [PBE] C10H22 (32 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 6 6 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=2.05381 ms, step=2.05381 ms)
+[NaoDriver] grid basis evaluation (elapsed=1875.61 ms, step=1873.56 ms)
+[NaoDriver] gradient computation (elapsed=5712.55 ms, step=3836.94 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=5757.4 ms, step=44.848 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 36 / 64 tiles (sparsity 0.5625)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=159982 ms, step=154225 ms)
+[NaoDriver] E_ion = 541.059
+[NaoDriver] launching SCF (n=256, n_occ=41)
+[NaoDriver] SAD initial guess (uniform): trace=41 target=41
+[SCFDriver] S eigenvalue filter: n=256 n_retained=246 s_max=7.61733 s_min=6.27474e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-310.333 E_prev=1e+30 P_trace=5219.1 P*S_trace=41
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0176681)
+[SCFDriver] iter=1 E=-405.486 E_prev=-310.333 P_trace=4255.61 P*S_trace=41
+[SCFDriver] iter=2 E=-380.991 E_prev=-405.486 P_trace=4224.43 P*S_trace=41
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000808338 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000748398 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000704715 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.01875 (comm_max=0.000858249 < 1e-3)
+[NaoDriver] SCF (elapsed=1.11438e+07 ms, step=1.09838e+07 ms)
+[NaoDriver] H tile substrate: 36 / 64 tiles (sparsity 0.5625)
+[NaoDriver] tile trace(P,H) = -149.562 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.129144
+  rho_build:   6932.34
+  poisson:     5197.49
+  xc_eval:     125001
+  vmat_build:  0
+  assemble_H:  1.24195
+  total:       137133
+  GPU pipeline: no
+    E=-420.538522  FAILED  iters=80  wall=11143.90s  nbf=256  gpu=False
+    build_H: rho=6932.3ms  pois=5197.5ms  xc=125001.3ms  vmat=0.0ms  total=137132.5ms
+    SCF: eig=88.4ms  diis=0.4ms  total=10983783.5ms/iter
+    Energy: -310.3332186596  -405.4862014377  -380.9912822349  ...  -420.5385216704  
+
+  [PBE] C10H22 (32 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 6 6 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=2.34344 ms, step=2.34344 ms)
+[NaoDriver] grid basis evaluation (elapsed=1665.98 ms, step=1663.63 ms)
+[NaoDriver] gradient computation (elapsed=3500 ms, step=1834.02 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=3553.44 ms, step=53.4464 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 36 / 64 tiles (sparsity 0.5625)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=15406.3 ms, step=11852.9 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=31931.7 ms, step=16525.4 ms)
+[NaoDriver] E_ion = 309.402
+[NaoDriver] launching SCF (n=256, n_occ=31)
+[NaoDriver] SAD initial guess (uniform): trace=31 target=31
+[SCFDriver] S eigenvalue filter: n=256 n_retained=256 s_max=8.488 s_min=0.00100407
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=208.208 E_prev=1e+30 P_trace=1459.21 P*S_trace=31
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0460921)
+[SCFDriver] iter=1 E=158.857 E_prev=208.208 P_trace=1067.5 P*S_trace=31
+[SCFDriver] iter=2 E=158.487 E_prev=158.857 P_trace=812.662 P*S_trace=31
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000993491 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000882378 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0375 (comm_max=0.000536089 < 1e-3)
+[SCFDriver] auto level shift: 0.0375 -> 0.01875 (comm_max=0.000937974 < 1e-3)
+[NaoDriver] SCF (elapsed=9.81223e+06 ms, step=9.78029e+06 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.121029
+  rho_build:   5963.24
+  poisson:     4463.86
+  xc_eval:     111668
+  vmat_build:  0
+  assemble_H:  0.229428
+  total:       122095
+  GPU pipeline: no
+    E=154.503940  FAILED  iters=80  wall=9812.34s  nbf=256  gpu=False
+    build_H: rho=5963.2ms  pois=4463.9ms  xc=111667.7ms  vmat=0.0ms  total=122095.2ms
+    SCF: eig=86.6ms  diis=0.3ms  total=9780024.3ms/iter
+    Energy: 208.2079557017  158.8568985895  158.4867784781  ...  154.5039400118  
+
+  COMPARISON C10H22 [PBE]:
+      ae_gpu: TIDES GPU_OOM (skipped, nbf=250)  PySCF 63.36s/8it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      pp_gpu: TIDES GPU_OOM (skipped, nbf=240)  PySCF 64.14s/9it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      ae_cpu: TIDES 11143.90s/80it/conv=False  PySCF 72.05s/8it/conv=True  speedup=0.01x
+      pp_cpu: TIDES 9812.34s/80it/conv=False  PySCF 86.46s/9it/conv=True  speedup=0.01x
+
+============================================================================================================================================
+  UNIFIED BENCHMARK DASHBOARD — PBE
+============================================================================================================================================
+
+============================================================================================================================================
+TABLE 1 — SPEED (wall time, seconds)
+============================================================================================================================================
+Mol        N | TIDES AE-GPU PySCF GPU-AE  speedup | TIDES PP-GPU PySCF GPU-PP  speedup | TIDES AE-CPU PySCF CPU-AE  speedup | TIDES PP-CPU PySCF CPU-PP  speedup
+--------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5 |   17.06s    4.18s    0.24x |   13.71s    6.87s    0.50x |   29.71s    4.84s    0.16x |   29.21s    8.02s    0.27x
+H2O        3 |    8.81s    3.98s    0.45x |    7.42s    3.81s    0.51x |   14.64s    3.75s    0.26x |   11.94s    4.08s    0.34x
+NH3        4 |   14.80s    8.84s    0.60x |    8.04s    6.65s    0.83x |  214.44s    9.17s    0.04x |   20.40s    6.42s    0.31x
+C2H6       8 |   19.00s   14.04s    0.74x |    8.78s   13.56s    1.55x |  359.47s   15.54s    0.04x |   59.35s   15.50s    0.26x
+C6H6      12 |   N/A   26.32s      N/A |   N/A   26.33s      N/A |  243.70s   26.46s    0.11x | 1300.80s   29.97s    0.02x
+C4H10     14 |   N/A   21.25s      N/A |   N/A   16.21s      N/A | 1850.44s   21.33s    0.01x |  424.98s   17.58s    0.04x
+C8H18     26 |   N/A   41.98s      N/A |   N/A   34.73s      N/A | 6661.25s   50.66s    0.01x | 4208.48s   51.34s    0.01x
+C10H22    32 |   N/A   63.36s      N/A |   N/A   64.14s      N/A | 11143.90s   72.05s    0.01x | 9812.34s   86.46s    0.01x
+
+============================================================================================================================================
+TABLE 2 — CONVERGENCE
+============================================================================================================================================
+Mol        N |           AE-GPU           PP-GPU |           AE-CPU           PP-CPU
+----------------------------------------------------------------------------------------------------
+CH4        5 |    T= YES P= YES    T= YES P= YES |    T= YES P= YES    T= YES P= YES
+H2O        3 |    T= YES P= YES    T= YES P= YES |    T= YES P= YES    T= YES P= YES
+NH3        4 |    T= NO  P= YES    T= YES P= YES |    T= NO  P= YES    T= YES P= YES
+C2H6       8 |    T= YES P= YES    T= YES P= YES |    T= YES P= YES    T= YES P= YES
+C6H6      12 |    T= NO  P= YES    T= NO  P= YES |    T= YES P= YES    T= NO  P= YES
+C4H10     14 |    T= NO  P= YES    T= NO  P= YES |    T= NO  P= YES    T= YES P= YES
+C8H18     26 |    T= NO  P= YES    T= NO  P= YES |    T= NO  P= YES    T= YES P= YES
+C10H22    32 |    T= NO  P= YES    T= NO  P= YES |    T= NO  P= YES    T= NO  P= YES
+
+============================================================================================================================================
+TABLE 3 — SCF ITERATIONS
+============================================================================================================================================
+Mol        N |               AE-GPU               PP-GPU |               AE-CPU               PP-CPU
+--------------------------------------------------------------------------------------------------------------
+CH4        5 | T=   7 P=   5   1.4x T=   7 P=   6   1.2x | T=   7 P=   5   1.4x T=   7 P=   6   1.2x
+H2O        3 | T=   9 P=   7   1.3x T=   7 P=   7   1.0x | T=   9 P=   7   1.3x T=   7 P=   7   1.0x
+NH3        4 | T=  80 P=   6  13.3x T=   7 P=   6   1.2x | T=  80 P=   6  13.3x T=   7 P=   6   1.2x
+C2H6       8 | T=  49 P=   6   8.2x T=   8 P=   7   1.1x | T=  49 P=   6   8.2x T=   8 P=   7   1.1x
+C6H6      12 | T=   0 P=   6    N/A T=   0 P=   7    N/A | T=  15 P=   6   2.5x T=  80 P=   7  11.4x
+C4H10     14 | T=   0 P=   8    N/A T=   0 P=   8    N/A | T=  80 P=   8  10.0x T=  18 P=   8   2.2x
+C8H18     26 | T=   0 P=   8    N/A T=   0 P=   9    N/A | T=  80 P=   8  10.0x T=  52 P=   9   5.8x
+C10H22    32 | T=   0 P=   8    N/A T=   0 P=   9    N/A | T=  80 P=   8  10.0x T=  80 P=   9   8.9x
+
+============================================================================================================================================
+TABLE 4 — PER-ITERATION COST (ms/iter, averaged)
+============================================================================================================================================
+Mol        N |                             TIDES AE-GPU |                   PySCF GPU-AE | ratio
+             |  build_H      eig     diis    total |     veff      eig    total |   iter
+------------------------------------------------------------------------------------------------------------------------
+CH4        5 |   123.1     5.0     0.0   899.7 |   538.8    16.8   650.5 |  1.38x
+H2O        3 |    47.4     2.1     0.0   446.8 |   379.1     0.2   506.8 |  0.88x
+NH3        4 |    51.2     3.1     0.0  4368.4 |  1011.7     0.3  1128.4 |  3.87x
+C2H6       8 |   151.5     5.5     0.0  7742.5 |  1580.3    35.6  1736.2 |  4.46x
+C6H6      12 |     N/A     N/A     N/A     N/A |  2686.1   419.9  3267.3 |    N/A
+C4H10     14 |     N/A     N/A     N/A     N/A |  1769.0   225.8  2085.1 |    N/A
+C8H18     26 |     N/A     N/A     N/A     N/A |  3731.4   323.9  4178.5 |    N/A
+C10H22    32 |     N/A     N/A     N/A     N/A |  5525.7   648.7  6326.4 |    N/A
+
+============================================================================================================================================
+TABLE 5 — OPERATION BREAKDOWN (% of SCF time, AE-GPU vs GPU-AE)
+============================================================================================================================================
+Mol        N |                                              TIDES |                                              PySCF
+             |   rho%  pois%    xc%  vmat%   eig%  diis% other% | hcore%  veff%   eig%  rdm1%  etot% other%
+--------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5 |   1.1%   1.6%  11.0%   0.0%   0.6%   0.0%  85.8% |  11.4%  82.8%   2.6%   0.0%   0.0%   3.1%
+H2O        3 |   0.1%   1.9%   8.6%   0.0%   0.5%   0.0%  88.9% |  19.4%  74.8%   0.0%   0.0%   0.0%   5.7%
+NH3        4 |   0.0%   0.0%   1.1%   0.0%   0.1%   0.0%  98.8% |   7.8%  89.7%   0.0%   0.0%   0.0%   2.5%
+C2H6       8 |   0.0%   0.0%   1.9%   0.0%   0.1%   0.0%  98.0% |   5.1%  91.0%   2.0%   0.0%   0.0%   1.9%
+C6H6      12 |   N/A   N/A   N/A   N/A   N/A   N/A   N/A |   2.8%  82.2%  12.9%   0.7%   0.0%   1.4%
+C4H10     14 |   N/A   N/A   N/A   N/A   N/A   N/A   N/A |   3.0%  84.8%  10.8%   0.0%   0.0%   1.3%
+C8H18     26 |   N/A   N/A   N/A   N/A   N/A   N/A   N/A |   1.6%  89.3%   7.8%   0.3%   0.0%   1.0%
+C10H22    32 |   N/A   N/A   N/A   N/A   N/A   N/A   N/A |   1.7%  87.3%  10.3%   0.3%   0.0%   0.4%
+
+============================================================================================================================================
+TABLE 6 — CONVERGENCE TRAJECTORY (energy per iteration, AE-GPU vs GPU-AE)
+============================================================================================================================================
+
+  CH4 (5 atoms):
+    TIDES (7 iters):  -37.2816568310  -50.0278007759  -50.0317341622  -50.0333900866  -50.0340538013  -50.0340560525  -50.0340560634  
+    PySCF (5 iters):  -40.3781653474  -40.3375239607  -40.4147231476  -40.4147261457  -40.4147261740  
+    TIDES |dE|:  1.27e+01  3.93e-03  1.66e-03  6.64e-04  2.25e-06  1.09e-08  
+    PySCF |dE|:  1.77e-01  4.06e-02  7.72e-02  3.00e-06  2.84e-08  
+
+  H2O (3 atoms):
+    TIDES (9 iters):  -71.9124429677  -73.1001819899  -75.6738387983  -76.5175293410  -76.5575541591  ...  -76.5600799788  -76.5600799791  
+    PySCF (7 iters):  -76.1632188192  -75.9278000935  -76.2722614454  -76.2725414694  -76.2725483664  -76.2725485738  -76.2725485743  
+    TIDES |dE|:  1.19e+00  2.57e+00  8.44e-01  4.00e-02  2.41e-03  1.11e-04  7.59e-07  2.61e-10  
+    PySCF |dE|:  5.68e-02  2.35e-01  3.44e-01  2.80e-04  6.90e-06  2.07e-07  5.30e-10  
+
+  NH3 (4 atoms):
+    TIDES (80 iters):  -17.4958335234  -11.7502460118  -18.6464950205  -16.6906370927  -12.2451159255  ...  -6.3395579721  -2.0041949984  
+    PySCF (6 iters):  -56.3869627598  -56.3023861333  -56.4327782081  -56.4329069640  -56.4329093791  -56.4329094147  
+    TIDES |dE|:  5.75e+00  6.90e+00  1.96e+00  4.45e+00  4.71e+00  1.70e+00  3.95e-02  2.78e-01  1.04e+01  1.45e+00  4.38e+00  4.15e+00  4.33e+00  4.32e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  7.73e+00  1.45e+00  4.56e-01  6.35e+00  1.16e+00  4.23e+00  4.12e+00  4.32e+00  4.31e+00  4.34e+00  4.33e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  4.34e+00  7.73e+00  1.45e+00  4.56e-01  6.35e+00  1.16e+00  4.23e+00  4.12e+00  4.32e+00  4.31e+00  4.34e+00  
+    PySCF |dE|:  5.61e-02  8.46e-02  1.30e-01  1.29e-04  2.42e-06  3.56e-08  
+
+  C2H6 (8 atoms):
+    TIDES (49 iters):  -52.1868384982  -65.6939725311  -66.7160188490  -66.9743151762  -67.0189794785  ...  -67.0395264059  -67.0395264063  
+    PySCF (6 iters):  -79.5883265342  -79.5221345084  -79.6402785018  -79.6403806073  -79.6403845107  -79.6403845217  
+    TIDES |dE|:  1.35e+01  1.02e+00  2.58e-01  4.47e-02  1.15e-02  2.63e-03  1.45e-03  1.08e-03  7.93e-04  6.90e-04  9.93e-05  2.02e-05  8.83e-05  2.93e-04  8.30e-05  9.82e-04  6.88e-05  4.17e-05  8.24e-06  5.21e-04  1.53e-05  1.65e-05  1.75e-05  1.77e-04  3.92e-05  1.30e-06  3.11e-06  6.76e-05  7.72e-06  1.12e-05  1.20e-05  3.40e-05  2.79e-05  2.73e-05  2.62e-05  1.88e-05  2.74e-05  5.93e-06  2.81e-06  9.76e-07  2.75e-08  8.16e-08  1.49e-07  3.31e-07  7.74e-07  4.04e-09  6.46e-08  4.00e-10  
+    PySCF |dE|:  1.20e-01  6.62e-02  1.18e-01  1.02e-04  3.90e-06  1.11e-08  
+
+  C6H6 (12 atoms):
+    TIDES (0 iters):  
+    PySCF (6 iters):  -231.7142884184  -231.6686661933  -231.7725362282  -231.7727951590  -231.7728009852  -231.7728010508  
+    PySCF |dE|:  6.36e-01  4.56e-02  1.04e-01  2.59e-04  5.83e-06  6.56e-08  
+
+  C4H10 (14 atoms):
+    TIDES (0 iters):  
+    PySCF (8 iters):  -158.0111619476  -157.8949472322  -158.0954681114  -158.0959117730  -158.0959674973  ...  -158.0959799085  -158.0959799132  
+    PySCF |dE|:  2.41e-02  1.16e-01  2.01e-01  4.44e-04  5.57e-05  1.22e-05  2.05e-07  4.75e-09  
+
+  C8H18 (26 atoms):
+    TIDES (0 iters):  
+    PySCF (8 iters):  -314.8587015940  -314.6691055567  -315.0061709596  -315.0067001340  -315.0068168137  ...  -315.0068361108  -315.0068361396  
+    PySCF |dE|:  1.62e-01  1.90e-01  3.37e-01  5.29e-04  1.17e-04  1.91e-05  2.23e-07  2.88e-08  
+
+  C10H22 (32 atoms):
+    TIDES (0 iters):  
+    PySCF (8 iters):  -393.2813337028  -393.0453005438  -393.4602892544  -393.4610497868  -393.4611380370  ...  -393.4611639165  -393.4611639371  
+    PySCF |dE|:  2.55e-01  2.36e-01  4.15e-01  7.61e-04  8.83e-05  2.54e-05  4.91e-07  2.05e-08  
+
+============================================================================================================================================
+TABLE 7 — FULL PROFILING DETAIL (AE-GPU vs GPU-AE, ms/iter)
+============================================================================================================================================
+Mol        N |                                               TIDES substeps |                                   PySCF operations
+             |  quant    rho   pois     xc   vmat  asmbl    eig   diis  total |  hcore   veff    eig   rdm1   etot  total
+--------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5 |     0.0     9.6    14.6    98.9     N/A     0.0     5.0     0.0   899.7 |    74.5   538.8    16.8     0.0     0.1   650.5
+H2O        3 |     0.0     0.3     8.5    38.6     N/A     0.0     2.1     0.0   446.8 |    98.5   379.1     0.2     0.0     0.0   506.8
+NH3        4 |     0.0     0.1     1.4    49.8     N/A     0.0     3.1     0.0  4368.4 |    88.5  1011.7     0.3     0.0     0.1  1128.4
+C2H6       8 |     0.0     0.1     3.4   148.0     N/A     0.0     5.5     0.0  7742.5 |    88.1  1580.3    35.6     0.1     0.1  1736.2
+C6H6      12 |     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A |    91.8  2686.1   419.9    23.2     0.1  3267.3
+C4H10     14 |     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A |    63.2  1769.0   225.8     0.1     0.1  2085.1
+C8H18     26 |     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A |    66.9  3731.4   323.9    14.3     0.1  4178.5
+C10H22    32 |     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A |   109.1  5525.7   648.7    19.0     0.1  6326.4
+
+============================================================================================================================================
+TABLE 8 — RESOURCE USAGE (CPU%, RAM, GPU%, VRAM, power, temp)
+============================================================================================================================================
+Mol        N |                   TIDES AE-GPU |                   PySCF GPU-AE |                   TIDES PP-GPU |                   PySCF GPU-PP |                   TIDES AE-CPU |                   PySCF CPU-AE
+             |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5 |  1108   1757    11   4800  25.0 |  1168    645    19   1823  60.4 |  1084   2610     8   4815  48.8 |  1106    644    12   1823  57.7 |   961   2704     5   4341  48.9 |  1176    633     1   1823  42.7
+H2O        3 |  1098   1517     6   4669  47.1 |  1074    627    40   2059  88.7 |  1076   1339     8   3276  48.7 |  1095    624     1   2078  49.5 |   806   1748     4   3005  48.6 |  1092    627     0   1813  50.7
+NH3        4 |   966   2095    25   4410  57.2 |   910    648    48   1848  87.8 |  1080   1510     7   4159  51.5 |   811    647    21   1838  70.2 |  8063   2181     4   3958  48.2 |   970    647    45   2050  79.2
+C2H6       8 |  1086   4054    38   7072  58.2 |   787    789    23   1912  49.7 |  1100   4055    16   6787  52.3 |   820    787    53   1912  93.5 |  1028   4151     3   5857  47.9 |   757    755    35   2111  69.0
+C6H6      12 |                        GPU_OOM |   862   1141    28   1891  54.9 |                        GPU_OOM |  1004   1118    21   1889  65.6 |   957   7158     2   6304  47.3 |   854   1165    30   1939  72.7
+C4H10     14 |                        GPU_OOM |  1104   1410    49   1898  88.0 |                        GPU_OOM |  1152   1406     4   1906  35.7 |  1051   9082     6   7230  46.5 |  1100   1409    46   1920  86.3
+C8H18     26 |                        GPU_OOM |  1176   3346    11   2339  23.4 |                        GPU_OOM |  1178   3295    15   2480  23.3 |  1074  21609     6   7496  27.9 |  1189   3489     2   2243  25.3
+C10H22    32 |                        GPU_OOM |  1148   3791    15   1987  25.2 |                        GPU_OOM |  1146   3740    16   2228  25.8 |  1106  28771    35  10267  46.1 |  1190   3784     7   1370  23.6
+
+============================================================================================================================================
+TABLE 9 — GPU VRAM LIMITATION ANALYSIS (TIDES vs PySCF on this hardware)
+============================================================================================================================================
+Mol        N nbf_AE nbf_PP |         TIDES AE-GPU         TIDES PP-GPU |         PySCF GPU-AE         PySCF GPU-PP |             VRAM gap
+--------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5     34     33 |                 CONV                 CONV |                 CONV                 CONV | PySCF 1823MB vs TIDES 4800MB
+H2O        3     24     23 |                 CONV                 CONV |                 CONV                 CONV | PySCF 2059MB vs TIDES 4669MB
+NH3        4     29     28 |                 FAIL                 CONV |                 CONV                 CONV | PySCF 1848MB vs TIDES 4410MB
+C2H6       8     58     56 |                 CONV                 CONV |                 CONV                 CONV | PySCF 1912MB vs TIDES 7072MB
+C6H6      12    114    108 |              GPU_OOM              GPU_OOM |                 CONV                 CONV | PySCF 1891MB vs TIDES OOM
+C4H10     14    106    102 |              GPU_OOM              GPU_OOM |                 CONV                 CONV | PySCF 1898MB vs TIDES OOM
+C8H18     26    202    194 |              GPU_OOM              GPU_OOM |                 CONV                 CONV | PySCF 2339MB vs TIDES OOM
+C10H22    32    250    240 |              GPU_OOM              GPU_OOM |                 CONV                 CONV | PySCF 1987MB vs TIDES OOM
+
+################################################################################
+# Running TIDES — XC=B3LYP
+################################################################################
+
+  [B3LYP] CH4 (5 atoms) — GPU-AE
+[NaoDriver] Starting Run (Z={ 6 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.476424 ms, step=0.476424 ms)
+[NaoDriver] grid basis evaluation (elapsed=227.438 ms, step=226.961 ms)
+[NaoDriver] gradient computation (elapsed=342.669 ms, step=115.232 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=352.748 ms, step=10.0784 ms)
+[NaoDriver] VRAM: free=4857MB  total=11888MB  needed~1053MB
+[NaoDriver] Device pipeline ready (stride=857600, functional=B3LYP(local))
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=2202.28 ms, step=1849.53 ms)
+[NaoDriver] E_ion = 13.4083
+[NaoDriver] launching SCF (n=40, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=40 n_retained=39 s_max=5.96463 s_min=6.61176e-07
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=857375 np_compact=233379 (27.2% active)
+[screen] GGA np=857375 np_compact=233379 (27.2% active)
+[SCFDriver] iter=0 E=-36.4473 E_prev=1e+30 P_trace=6.85771 P*S_trace=5
+[SCFDriver] iter=1 E=-49.1119 E_prev=-36.4473 P_trace=5.89624 P*S_trace=5
+[SCFDriver] iter=2 E=-49.1207 E_prev=-49.1119 P_trace=5.68605 P*S_trace=5
+[NaoDriver] SCF (elapsed=3323.02 ms, step=1120.74 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00312944
+  rho_build:   0.625425
+  poisson:     14.4337
+  xc_eval:     102.507
+  vmat_build:  0
+  assemble_H:  0.009189
+  total:       117.591
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 190x190x190):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  9.94586
+    vmat_cpu:   0.005513
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 39.6357
+    gpu_xc:      42.0397
+    gpu_xc_ker:  1.82407
+    gpu_xc_vmat: 40.2156
+    E=-49.122122  CONVERGED  iters=9  wall=3.36s  nbf=40  gpu=True
+    build_H: rho=0.6ms  pois=14.4ms  xc=102.5ms  vmat=0.0ms  total=117.6ms
+    SCF: eig=3.2ms  diis=0.0ms  total=1091.0ms/iter
+    Energy: -36.4472701511  -49.1119041031  -49.1207420813  ...  -49.1221219268  
+
+  [B3LYP] CH4 (5 atoms) — GPU-PP
+[NaoDriver] Starting Run (Z={ 6 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.436525 ms, step=0.436525 ms)
+[NaoDriver] grid basis evaluation (elapsed=178.408 ms, step=177.971 ms)
+[NaoDriver] gradient computation (elapsed=288.416 ms, step=110.008 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=296.947 ms, step=8.53078 ms)
+[NaoDriver] VRAM: free=8637MB  total=11888MB  needed~1053MB
+[NaoDriver] Device pipeline ready (stride=857600, functional=B3LYP(local))
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=1418.87 ms, step=1121.92 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=1880.68 ms, step=461.811 ms)
+[NaoDriver] E_ion = 9.53229
+[NaoDriver] launching SCF (n=40, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=40 n_retained=40 s_max=6.82431 s_min=0.0024172
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=857375 np_compact=233379 (27.2% active)
+[screen] GGA np=857375 np_compact=233379 (27.2% active)
+[SCFDriver] iter=0 E=-1.66677 E_prev=1e+30 P_trace=8.64089 P*S_trace=4
+[SCFDriver] iter=1 E=-7.13368 E_prev=-1.66677 P_trace=6.46424 P*S_trace=4
+[SCFDriver] iter=2 E=-7.27684 E_prev=-7.13368 P_trace=5.92045 P*S_trace=4
+[NaoDriver] SCF (elapsed=2796.7 ms, step=916.02 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00311
+  rho_build:   0.0422808
+  poisson:     7.35825
+  xc_eval:     99.7774
+  vmat_build:  0
+  assemble_H:  0.0100304
+  total:       107.202
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 190x190x190):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.0737881
+    vmat_cpu:   0.00530812
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 31.9484
+    gpu_xc:      40.1563
+    gpu_xc_ker:  1.70526
+    gpu_xc_vmat: 38.451
+    E=-7.282766  CONVERGED  iters=8  wall=2.81s  nbf=40  gpu=True
+    build_H: rho=0.0ms  pois=7.4ms  xc=99.8ms  vmat=0.0ms  total=107.2ms
+    SCF: eig=3.2ms  diis=0.0ms  total=887.2ms/iter
+    Energy: -1.6667656172  -7.1336847427  -7.2768442917  ...  -7.2827656197  
+
+  [B3LYP] CH4 (5 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.468565 ms, step=0.468565 ms)
+[NaoDriver] grid basis evaluation (elapsed=193.964 ms, step=193.495 ms)
+[NaoDriver] gradient computation (elapsed=319.2 ms, step=125.236 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=330.247 ms, step=11.0476 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=1906.54 ms, step=1576.3 ms)
+[NaoDriver] E_ion = 13.4083
+[NaoDriver] launching SCF (n=40, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=40 n_retained=39 s_max=5.96463 s_min=6.61176e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-37.2817 E_prev=1e+30 P_trace=6.34237 P*S_trace=5
+[SCFDriver] iter=1 E=-50.0031 E_prev=-37.2817 P_trace=7.05214 P*S_trace=5
+[SCFDriver] iter=2 E=-50.0117 E_prev=-50.0031 P_trace=6.66525 P*S_trace=5
+[NaoDriver] SCF (elapsed=26221.1 ms, step=24314.6 ms)
+[NaoDriver] H tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] tile trace(P,H) = -19.8765 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0030697
+  rho_build:   281.559
+  poisson:     301.064
+  xc_eval:     1841.74
+  vmat_build:  0
+  assemble_H:  0.0409434
+  total:       2424.41
+  GPU pipeline: no
+    E=-50.034056  CONVERGED  iters=10  wall=26.22s  nbf=40  gpu=False
+    build_H: rho=281.6ms  pois=301.1ms  xc=1841.7ms  vmat=0.0ms  total=2424.4ms
+    SCF: eig=3.4ms  diis=0.0ms  total=24284.3ms/iter
+    Energy: -37.2816568310  -50.0031239294  -50.0117329109  ...  -50.0340560636  
+
+  [B3LYP] CH4 (5 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=1.57011 ms, step=1.57011 ms)
+[NaoDriver] grid basis evaluation (elapsed=269.29 ms, step=267.72 ms)
+[NaoDriver] gradient computation (elapsed=378.7 ms, step=109.41 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=389.758 ms, step=11.0578 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=1192.74 ms, step=802.98 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=1637.39 ms, step=444.648 ms)
+[NaoDriver] E_ion = 9.53229
+[NaoDriver] launching SCF (n=40, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=40 n_retained=40 s_max=6.82431 s_min=0.0024172
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-2.21866 E_prev=1e+30 P_trace=8.67979 P*S_trace=4
+[SCFDriver] iter=1 E=-7.7777 E_prev=-2.21866 P_trace=7.03655 P*S_trace=4
+[SCFDriver] iter=2 E=-7.87021 E_prev=-7.7777 P_trace=6.76615 P*S_trace=4
+[NaoDriver] SCF (elapsed=20915.3 ms, step=19278 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00327975
+  rho_build:   282.407
+  poisson:     295.656
+  xc_eval:     1823.57
+  vmat_build:  0
+  assemble_H:  0.0105291
+  total:       2401.65
+  GPU pipeline: no
+    E=-7.875197  CONVERGED  iters=8  wall=20.94s  nbf=40  gpu=False
+    build_H: rho=282.4ms  pois=295.7ms  xc=1823.6ms  vmat=0.0ms  total=2401.6ms
+    SCF: eig=3.5ms  diis=0.0ms  total=19246.0ms/iter
+    Energy: -2.2186582753  -7.7776986522  -7.8702064483  ...  -7.8751969090  
+
+  COMPARISON CH4 [B3LYP]:
+      ae_gpu: TIDES 3.36s/9it/conv=True  PySCF 6.19s/5it/conv=True  speedup=1.84x
+      pp_gpu: TIDES 2.81s/8it/conv=True  PySCF 8.10s/6it/conv=True  speedup=2.88x
+      ae_cpu: TIDES 26.22s/10it/conv=True  PySCF 5.54s/5it/conv=True  speedup=0.21x
+      pp_cpu: TIDES 20.94s/8it/conv=True  PySCF 4.25s/6it/conv=True  speedup=0.20x
+
+  [B3LYP] H2O (3 atoms) — GPU-AE
+[NaoDriver] Starting Run (Z={ 8 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=8 (O), key=406e60724f327f2d
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.969738 ms, step=0.969738 ms)
+[NaoDriver] grid basis evaluation (elapsed=202.35 ms, step=201.38 ms)
+[NaoDriver] gradient computation (elapsed=252.243 ms, step=49.8931 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=262.155 ms, step=9.9116 ms)
+[NaoDriver] VRAM: free=8318MB  total=11888MB  needed~474MB
+[NaoDriver] Device pipeline ready (stride=641536, functional=B3LYP(local))
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=852.574 ms, step=590.419 ms)
+[NaoDriver] E_ion = 9.08426
+[NaoDriver] launching SCF (n=24, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=24 n_retained=23 s_max=3.61417 s_min=3.34073e-08
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=641277 np_compact=188499 (29.4% active)
+[screen] GGA np=641277 np_compact=188499 (29.4% active)
+[SCFDriver] iter=0 E=-70.1127 E_prev=1e+30 P_trace=6.02107 P*S_trace=5
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0432287)
+[SCFDriver] iter=1 E=-70.927 E_prev=-70.1127 P_trace=3.33494 P*S_trace=5
+[SCFDriver] iter=2 E=-74.3575 E_prev=-70.927 P_trace=3.93579 P*S_trace=5
+[SCFDriver] auto level shift: 0.3 -> 0.15 (comm_max=0.000589617 < 1e-3)
+[SCFDriver] auto level shift: 0.15 -> 0.075 (comm_max=0.000193522 < 1e-3)
+[SCFDriver] auto level shift: 0.075 -> 0.0 (comm_max=3.78942e-05 < 1e-4)
+[NaoDriver] SCF (elapsed=1496.42 ms, step=643.844 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00143536
+  rho_build:   0.130687
+  poisson:     5.36586
+  xc_eval:     37.4727
+  vmat_build:  0
+  assemble_H:  0.00522807
+  total:       42.9853
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 182x174x162):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  3.26797
+    vmat_cpu:   0.00466486
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 21.2155
+    gpu_xc:      9.58499
+    gpu_xc_ker:  1.28213
+    gpu_xc_vmat: 8.30286
+    E=-74.954993  CONVERGED  iters=14  wall=1.51s  nbf=24  gpu=True
+    build_H: rho=0.1ms  pois=5.4ms  xc=37.5ms  vmat=0.0ms  total=43.0ms
+    SCF: eig=1.9ms  diis=0.0ms  total=631.0ms/iter
+    Energy: -70.1126765767  -70.9270044230  -74.3575203473  ...  -74.9549926588  
+
+  [B3LYP] H2O (3 atoms) — GPU-PP
+[NaoDriver] Starting Run (Z={ 8 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=8 (O), key=406e60724f327f2d:pp:O
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.39798 ms, step=0.39798 ms)
+[NaoDriver] grid basis evaluation (elapsed=124.922 ms, step=124.524 ms)
+[NaoDriver] gradient computation (elapsed=182.198 ms, step=57.2761 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=191.401 ms, step=9.20342 ms)
+[NaoDriver] VRAM: free=9722MB  total=11888MB  needed~474MB
+[NaoDriver] Device pipeline ready (stride=641536, functional=B3LYP(local))
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=834.169 ms, step=642.768 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=1052.68 ms, step=218.514 ms)
+[NaoDriver] E_ion = 6.89984
+[NaoDriver] launching SCF (n=24, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=24 n_retained=24 s_max=4.21903 s_min=0.00260215
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=641277 np_compact=188499 (29.4% active)
+[screen] GGA np=641277 np_compact=188499 (29.4% active)
+[SCFDriver] iter=0 E=-10.0088 E_prev=1e+30 P_trace=6.41245 P*S_trace=4
+[SCFDriver] iter=1 E=-13.247 E_prev=-10.0088 P_trace=3.30882 P*S_trace=4
+[SCFDriver] iter=2 E=-15.1851 E_prev=-13.247 P_trace=3.921 P*S_trace=4
+[NaoDriver] SCF (elapsed=1341.53 ms, step=288.848 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.001797
+  rho_build:   0.0435034
+  poisson:     3.36367
+  xc_eval:     33.685
+  vmat_build:  0
+  assemble_H:  0.00646843
+  total:       37.1117
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 182x174x162):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.0690883
+    vmat_cpu:   0.00625357
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 17.2633
+    gpu_xc:      10.3987
+    gpu_xc_ker:  1.27082
+    gpu_xc_vmat: 9.12793
+    E=-15.324211  CONVERGED  iters=7  wall=1.36s  nbf=24  gpu=True
+    build_H: rho=0.0ms  pois=3.4ms  xc=33.7ms  vmat=0.0ms  total=37.1ms
+    SCF: eig=2.1ms  diis=0.0ms  total=275.7ms/iter
+    Energy: -10.0088275490  -13.2469581650  -15.1851060296  ...  -15.3242106798  
+
+  [B3LYP] H2O (3 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 8 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=8 (O), key=406e60724f327f2d
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=1.26095 ms, step=1.26095 ms)
+[NaoDriver] grid basis evaluation (elapsed=164.313 ms, step=163.052 ms)
+[NaoDriver] gradient computation (elapsed=214.261 ms, step=49.9484 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=224.827 ms, step=10.5655 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=675.193 ms, step=450.366 ms)
+[NaoDriver] E_ion = 9.08426
+[NaoDriver] launching SCF (n=24, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=24 n_retained=23 s_max=3.61417 s_min=3.34073e-08
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-71.9124 E_prev=1e+30 P_trace=5.95843 P*S_trace=5
+[SCFDriver] iter=1 E=-73.1002 E_prev=-71.9124 P_trace=3.38085 P*S_trace=5
+[SCFDriver] iter=2 E=-75.6738 E_prev=-73.1002 P_trace=4.44016 P*S_trace=5
+[NaoDriver] SCF (elapsed=9135.46 ms, step=8460.27 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00161133
+  rho_build:   124.589
+  poisson:     176.07
+  xc_eval:     635.666
+  vmat_build:  0
+  assemble_H:  0.00628167
+  total:       936.334
+  GPU pipeline: no
+    E=-76.560080  CONVERGED  iters=9  wall=9.14s  nbf=24  gpu=False
+    build_H: rho=124.6ms  pois=176.1ms  xc=635.7ms  vmat=0.0ms  total=936.3ms
+    SCF: eig=2.2ms  diis=0.0ms  total=8448.3ms/iter
+    Energy: -71.9124429677  -73.1001819899  -75.6738387983  ...  -76.5600799791  
+
+  [B3LYP] H2O (3 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 8 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=8 (O), key=406e60724f327f2d:pp:O
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.395493 ms, step=0.395493 ms)
+[NaoDriver] grid basis evaluation (elapsed=129.529 ms, step=129.134 ms)
+[NaoDriver] gradient computation (elapsed=179.527 ms, step=49.9979 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=188.756 ms, step=9.22909 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=555.04 ms, step=366.284 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=772.476 ms, step=217.436 ms)
+[NaoDriver] E_ion = 6.89984
+[NaoDriver] launching SCF (n=24, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=24 n_retained=24 s_max=4.21903 s_min=0.00260215
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-10.8573 E_prev=1e+30 P_trace=6.16921 P*S_trace=4
+[SCFDriver] iter=1 E=-14.6218 E_prev=-10.8573 P_trace=3.33021 P*S_trace=4
+[SCFDriver] iter=2 E=-15.9627 E_prev=-14.6218 P_trace=4.0364 P*S_trace=4
+[NaoDriver] SCF (elapsed=7365.65 ms, step=6593.18 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00212714
+  rho_build:   127.912
+  poisson:     181.647
+  xc_eval:     627.959
+  vmat_build:  0
+  assemble_H:  0.00641229
+  total:       937.528
+  GPU pipeline: no
+    E=-16.072571  CONVERGED  iters=7  wall=7.37s  nbf=24  gpu=False
+    build_H: rho=127.9ms  pois=181.6ms  xc=628.0ms  vmat=0.0ms  total=937.5ms
+    SCF: eig=2.3ms  diis=0.0ms  total=6579.9ms/iter
+    Energy: -10.8573250607  -14.6217984568  -15.9627347785  ...  -16.0725713115  
+
+  COMPARISON H2O [B3LYP]:
+      ae_gpu: TIDES 1.51s/14it/conv=True  PySCF 6.03s/6it/conv=True  speedup=3.99x
+      pp_gpu: TIDES 1.36s/7it/conv=True  PySCF 5.93s/6it/conv=True  speedup=4.37x
+      ae_cpu: TIDES 9.14s/9it/conv=True  PySCF 3.83s/6it/conv=True  speedup=0.42x
+      pp_cpu: TIDES 7.37s/7it/conv=True  PySCF 5.22s/6it/conv=True  speedup=0.71x
+
+  [B3LYP] NH3 (4 atoms) — GPU-AE
+[NaoDriver] Starting Run (Z={ 7 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=7 (N), key=31e513bf9d4940f7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=1.36312 ms, step=1.36312 ms)
+[NaoDriver] grid basis evaluation (elapsed=250.413 ms, step=249.049 ms)
+[NaoDriver] gradient computation (elapsed=328.195 ms, step=77.7823 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=338.345 ms, step=10.1504 ms)
+[NaoDriver] VRAM: free=9486MB  total=11888MB  needed~755MB
+[NaoDriver] Device pipeline ready (stride=767488, functional=B3LYP(local))
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=1509.8 ms, step=1171.46 ms)
+[NaoDriver] E_ion = 11.8809
+[NaoDriver] launching SCF (n=32, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=32 n_retained=31 s_max=4.89504 s_min=1.42696e-07
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=767125 np_compact=211332 (27.5% active)
+[screen] GGA np=767125 np_compact=211332 (27.5% active)
+[SCFDriver] iter=0 E=-14.7296 E_prev=1e+30 P_trace=23.762 P*S_trace=5
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0111443)
+[SCFDriver] iter=1 E=-10.238 E_prev=-14.7296 P_trace=3.21816 P*S_trace=5
+[SCFDriver] iter=2 E=-13.5248 E_prev=-10.238 P_trace=2.9664 P*S_trace=5
+[NaoDriver] SCF (elapsed=6942.28 ms, step=5432.48 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00192172
+  rho_build:   0.0437715
+  poisson:     1.01292
+  xc_eval:     49.8548
+  vmat_build:  0
+  assemble_H:  0.0054609
+  total:       50.9273
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 190x190x170):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.668749
+    vmat_cpu:   0.00415759
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 24.314
+    gpu_xc:      9.67304
+    gpu_xc_ker:  1.54506
+    gpu_xc_vmat: 8.12798
+    E=-0.817108  FAILED  iters=100  wall=6.96s  nbf=32  gpu=True
+    build_H: rho=0.0ms  pois=1.0ms  xc=49.9ms  vmat=0.0ms  total=50.9ms
+    SCF: eig=2.9ms  diis=0.0ms  total=5401.1ms/iter
+    Energy: -14.7296178175  -10.2380260367  -13.5247910440  ...  -0.8171082366  
+
+  [B3LYP] NH3 (4 atoms) — GPU-PP
+[NaoDriver] Starting Run (Z={ 7 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=7 (N), key=31e513bf9d4940f7:pp:N
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.488735 ms, step=0.488735 ms)
+[NaoDriver] grid basis evaluation (elapsed=189.052 ms, step=188.564 ms)
+[NaoDriver] gradient computation (elapsed=267.703 ms, step=78.6503 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=276.695 ms, step=8.9926 ms)
+[NaoDriver] VRAM: free=9198MB  total=11888MB  needed~755MB
+[NaoDriver] Device pipeline ready (stride=767488, functional=B3LYP(local))
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=1132.55 ms, step=855.857 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=1453.1 ms, step=320.544 ms)
+[NaoDriver] E_ion = 8.76504
+[NaoDriver] launching SCF (n=32, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=32 n_retained=32 s_max=5.70543 s_min=0.00239131
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=767125 np_compact=211332 (27.5% active)
+[screen] GGA np=767125 np_compact=211332 (27.5% active)
+[SCFDriver] iter=0 E=-5.58582 E_prev=1e+30 P_trace=7.392 P*S_trace=4
+[SCFDriver] iter=1 E=-9.79575 E_prev=-5.58582 P_trace=4.03116 P*S_trace=4
+[SCFDriver] iter=2 E=-10.4088 E_prev=-9.79575 P_trace=4.18694 P*S_trace=4
+[NaoDriver] SCF (elapsed=1920.63 ms, step=467.536 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00229825
+  rho_build:   0.0439021
+  poisson:     4.05073
+  xc_eval:     47.3658
+  vmat_build:  0
+  assemble_H:  0.008096
+  total:       51.4826
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 190x190x170):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.0805901
+    vmat_cpu:   0.005459
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 24.0927
+    gpu_xc:      15.2298
+    gpu_xc_ker:  1.6988
+    gpu_xc_vmat: 13.531
+    E=-10.471932  CONVERGED  iters=8  wall=1.94s  nbf=32  gpu=True
+    build_H: rho=0.0ms  pois=4.1ms  xc=47.4ms  vmat=0.0ms  total=51.5ms
+    SCF: eig=2.9ms  diis=0.0ms  total=437.6ms/iter
+    Energy: -5.5858224701  -9.7957485594  -10.4088361344  ...  -10.4719324883  
+
+  [B3LYP] NH3 (4 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 7 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=7 (N), key=31e513bf9d4940f7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=1.56028 ms, step=1.56028 ms)
+[NaoDriver] grid basis evaluation (elapsed=217.218 ms, step=215.658 ms)
+[NaoDriver] gradient computation (elapsed=296.555 ms, step=79.3372 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=306.819 ms, step=10.2643 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=1190.32 ms, step=883.505 ms)
+[NaoDriver] E_ion = 11.8809
+[NaoDriver] launching SCF (n=32, n_occ=5)
+[NaoDriver] SAD initial guess (uniform): trace=5 target=5
+[SCFDriver] S eigenvalue filter: n=32 n_retained=31 s_max=4.89504 s_min=1.42696e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-17.4958 E_prev=1e+30 P_trace=22.0069 P*S_trace=5
+[SCFDriver] auto level shift: 0.0 -> 0.3 (HOMO-LUMO gap=0.0140457)
+[SCFDriver] iter=1 E=-11.7502 E_prev=-17.4958 P_trace=3.44905 P*S_trace=5
+[SCFDriver] iter=2 E=-18.6465 E_prev=-11.7502 P_trace=3.15846 P*S_trace=5
+[NaoDriver] SCF (elapsed=161034 ms, step=159844 ms)
+[NaoDriver] H tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] tile trace(P,H) = -41.4001 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00183918
+  rho_build:   195.674
+  poisson:     243.391
+  xc_eval:     1155.52
+  vmat_build:  0
+  assemble_H:  0.0286831
+  total:       1594.62
+  GPU pipeline: no
+    E=-1.999424  FAILED  iters=100  wall=161.04s  nbf=32  gpu=False
+    build_H: rho=195.7ms  pois=243.4ms  xc=1155.5ms  vmat=0.0ms  total=1594.6ms
+    SCF: eig=3.2ms  diis=0.0ms  total=159812.2ms/iter
+    Energy: -17.4958335234  -11.7502460118  -18.6464950205  ...  -1.9994242304  
+
+  [B3LYP] NH3 (4 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 7 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=7 (N), key=31e513bf9d4940f7:pp:N
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=1.23519 ms, step=1.23519 ms)
+[NaoDriver] grid basis evaluation (elapsed=164.784 ms, step=163.549 ms)
+[NaoDriver] gradient computation (elapsed=240.904 ms, step=76.1197 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=250.977 ms, step=10.0732 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=825.593 ms, step=574.616 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=1165.58 ms, step=339.983 ms)
+[NaoDriver] E_ion = 8.76504
+[NaoDriver] launching SCF (n=32, n_occ=4)
+[NaoDriver] SAD initial guess (uniform): trace=4 target=4
+[SCFDriver] S eigenvalue filter: n=32 n_retained=32 s_max=5.70543 s_min=0.00239131
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-6.26128 E_prev=1e+30 P_trace=7.27524 P*S_trace=4
+[SCFDriver] iter=1 E=-10.6498 E_prev=-6.26128 P_trace=4.1539 P*S_trace=4
+[SCFDriver] iter=2 E=-11.0707 E_prev=-10.6498 P_trace=4.57266 P*S_trace=4
+[NaoDriver] SCF (elapsed=12372.6 ms, step=11207 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00206086
+  rho_build:   197.539
+  poisson:     241.291
+  xc_eval:     1154.08
+  vmat_build:  0
+  assemble_H:  0.00819229
+  total:       1592.92
+  GPU pipeline: no
+    E=-11.126525  CONVERGED  iters=7  wall=12.39s  nbf=32  gpu=False
+    build_H: rho=197.5ms  pois=241.3ms  xc=1154.1ms  vmat=0.0ms  total=1592.9ms
+    SCF: eig=3.2ms  diis=0.0ms  total=11175.5ms/iter
+    Energy: -6.2612777205  -10.6498044155  -11.0706705184  ...  -11.1265250348  
+
+  COMPARISON NH3 [B3LYP]:
+      ae_gpu: TIDES 6.96s/100it/conv=False  PySCF 9.66s/6it/conv=True  speedup=1.39x
+      pp_gpu: TIDES 1.94s/8it/conv=True  PySCF 7.03s/6it/conv=True  speedup=3.63x
+      ae_cpu: TIDES 161.04s/100it/conv=False  PySCF 9.52s/6it/conv=True  speedup=0.06x
+      pp_cpu: TIDES 12.39s/7it/conv=True  PySCF 6.50s/6it/conv=True  speedup=0.52x
+
+  [B3LYP] C2H6 (8 atoms) — GPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.65652 ms, step=0.65652 ms)
+[NaoDriver] grid basis evaluation (elapsed=284.998 ms, step=284.341 ms)
+[NaoDriver] gradient computation (elapsed=478.106 ms, step=193.108 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=492.531 ms, step=14.4255 ms)
+[NaoDriver] VRAM: free=8912MB  total=11888MB  needed~1716MB
+[NaoDriver] Device pipeline ready (stride=875520, functional=B3LYP(local))
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=5056.53 ms, step=4564 ms)
+[NaoDriver] E_ion = 42.4269
+[NaoDriver] launching SCF (n=64, n_occ=9)
+[NaoDriver] SAD initial guess (uniform): trace=9 target=9
+[SCFDriver] S eigenvalue filter: n=64 n_retained=62 s_max=6.89284 s_min=6.44352e-07
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=875425 np_compact=284029 (32.4% active)
+[screen] GGA np=875425 np_compact=284029 (32.4% active)
+[SCFDriver] iter=0 E=-49.5729 E_prev=1e+30 P_trace=431.236 P*S_trace=9
+[SCFDriver] iter=1 E=-62.9306 E_prev=-49.5729 P_trace=409.747 P*S_trace=9
+[SCFDriver] iter=2 E=-64.0384 E_prev=-62.9306 P_trace=402.096 P*S_trace=9
+[NaoDriver] SCF (elapsed=15172.9 ms, step=10116.4 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00724444
+  rho_build:   0.0796472
+  poisson:     2.40847
+  xc_eval:     148.254
+  vmat_build:  0
+  assemble_H:  0.0176181
+  total:       150.78
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 194x190x190):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  1.68195
+    vmat_cpu:   0.00562222
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 39.736
+    gpu_xc:      62.5817
+    gpu_xc_ker:  2.02393
+    gpu_xc_vmat: 60.5578
+    E=-64.116644  CONVERGED  iters=64  wall=15.19s  nbf=64  gpu=True
+    build_H: rho=0.1ms  pois=2.4ms  xc=148.3ms  vmat=0.0ms  total=150.8ms
+    SCF: eig=5.8ms  diis=0.0ms  total=10086.6ms/iter
+    Energy: -49.5728860776  -62.9305819932  -64.0384078495  ...  -64.1166441966  
+
+  [B3LYP] C2H6 (8 atoms) — GPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=0.690388 ms, step=0.690388 ms)
+[NaoDriver] grid basis evaluation (elapsed=285.262 ms, step=284.571 ms)
+[NaoDriver] gradient computation (elapsed=466.125 ms, step=180.863 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=476.125 ms, step=10.0008 ms)
+[NaoDriver] VRAM: free=7260MB  total=11888MB  needed~1716MB
+[NaoDriver] Device pipeline ready (stride=875520, functional=B3LYP(local))
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=2416.92 ms, step=1940.79 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=3317.74 ms, step=900.82 ms)
+[NaoDriver] E_ion = 26.6772
+[NaoDriver] launching SCF (n=64, n_occ=7)
+[NaoDriver] SAD initial guess (uniform): trace=7 target=7
+[SCFDriver] S eigenvalue filter: n=64 n_retained=64 s_max=7.79174 s_min=0.00192288
+[SCFDriver] broker: user override -> regime R0
+[screen] LDA np=875425 np_compact=284029 (32.4% active)
+[screen] GGA np=875425 np_compact=284029 (32.4% active)
+[SCFDriver] iter=0 E=-1.37056 E_prev=1e+30 P_trace=33.9865 P*S_trace=7
+[SCFDriver] iter=1 E=-12.4137 E_prev=-1.37056 P_trace=21.6085 P*S_trace=7
+[SCFDriver] iter=2 E=-12.7715 E_prev=-12.4137 P_trace=21.432 P*S_trace=7
+[NaoDriver] SCF (elapsed=4616.2 ms, step=1298.46 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00901587
+  rho_build:   0.0496589
+  poisson:     9.70356
+  xc_eval:     141.927
+  vmat_build:  0
+  assemble_H:  0.0201691
+  total:       151.726
+  GPU pipeline: yes
+  Poisson substeps (FFT grid 194x190x190):
+    memset_pad: 0
+    zero_pad:   0
+    fft_fwd:    0
+    multiply:   0
+    fft_inv:    0
+    extract:    0
+    energy:     0
+    solve_cpu:  0.0745
+    vmat_cpu:   0.0064795
+  GPU event timings (avg per iteration, ms):
+    gpu_poisson: 39.0845
+    gpu_xc:      64.3557
+    gpu_xc_ker:  1.99947
+    gpu_xc_vmat: 62.3562
+    E=-12.783087  CONVERGED  iters=8  wall=4.64s  nbf=64  gpu=True
+    build_H: rho=0.0ms  pois=9.7ms  xc=141.9ms  vmat=0.0ms  total=151.7ms
+    SCF: eig=5.5ms  diis=0.0ms  total=1268.0ms/iter
+    Energy: -1.3705639556  -12.4136535878  -12.7714937607  ...  -12.7830869926  
+
+  [B3LYP] C2H6 (8 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.727771 ms, step=0.727771 ms)
+[NaoDriver] grid basis evaluation (elapsed=383.215 ms, step=382.488 ms)
+[NaoDriver] gradient computation (elapsed=596.331 ms, step=213.115 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=605.747 ms, step=9.41638 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=5345.44 ms, step=4739.69 ms)
+[NaoDriver] E_ion = 42.4269
+[NaoDriver] launching SCF (n=64, n_occ=9)
+[NaoDriver] SAD initial guess (uniform): trace=9 target=9
+[SCFDriver] S eigenvalue filter: n=64 n_retained=62 s_max=6.89284 s_min=6.44352e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-52.1868 E_prev=1e+30 P_trace=430.696 P*S_trace=9
+[SCFDriver] iter=1 E=-66.0488 E_prev=-52.1868 P_trace=412.74 P*S_trace=9
+[SCFDriver] iter=2 E=-66.9606 E_prev=-66.0488 P_trace=406.146 P*S_trace=9
+[NaoDriver] SCF (elapsed=339234 ms, step=333889 ms)
+[NaoDriver] H tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] tile trace(P,H) = -12.4653 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00638897
+  rho_build:   464.682
+  poisson:     415.164
+  xc_eval:     4022.3
+  vmat_build:  0
+  assemble_H:  0.0807339
+  total:       4902.23
+  GPU pipeline: no
+    E=-67.039526  CONVERGED  iters=68  wall=339.24s  nbf=64  gpu=False
+    build_H: rho=464.7ms  pois=415.2ms  xc=4022.3ms  vmat=0.0ms  total=4902.2ms
+    SCF: eig=5.9ms  diis=0.0ms  total=333857.3ms/iter
+    Energy: -52.1868384982  -66.0488006092  -66.9606144168  ...  -67.0395264036  
+
+  [B3LYP] C2H6 (8 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=1.03951 ms, step=1.03951 ms)
+[NaoDriver] grid basis evaluation (elapsed=315.405 ms, step=314.366 ms)
+[NaoDriver] gradient computation (elapsed=502.814 ms, step=187.409 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=512.553 ms, step=9.73897 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 3 / 4 tiles (sparsity 0.75)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=1694.96 ms, step=1182.41 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=2573.01 ms, step=878.047 ms)
+[NaoDriver] E_ion = 26.6772
+[NaoDriver] launching SCF (n=64, n_occ=7)
+[NaoDriver] SAD initial guess (uniform): trace=7 target=7
+[SCFDriver] S eigenvalue filter: n=64 n_retained=64 s_max=7.79174 s_min=0.00192288
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-2.41693 E_prev=1e+30 P_trace=32.6382 P*S_trace=7
+[SCFDriver] iter=1 E=-13.6189 E_prev=-2.41693 P_trace=22.5835 P*S_trace=7
+[SCFDriver] iter=2 E=-13.8645 E_prev=-13.6189 P_trace=23.2301 P*S_trace=7
+[NaoDriver] SCF (elapsed=42043.3 ms, step=39470.3 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.00819875
+  rho_build:   465.287
+  poisson:     410.829
+  xc_eval:     4046.19
+  vmat_build:  0
+  assemble_H:  0.0207682
+  total:       4922.34
+  GPU pipeline: no
+    E=-13.875471  CONVERGED  iters=8  wall=42.06s  nbf=64  gpu=False
+    build_H: rho=465.3ms  pois=410.8ms  xc=4046.2ms  vmat=0.0ms  total=4922.3ms
+    SCF: eig=5.9ms  diis=0.0ms  total=39440.3ms/iter
+    Energy: -2.4169345863  -13.6188668297  -13.8644502829  ...  -13.8754712912  
+
+  COMPARISON C2H6 [B3LYP]:
+      ae_gpu: TIDES 15.19s/64it/conv=True  PySCF 14.29s/6it/conv=True  speedup=0.94x
+      pp_gpu: TIDES 4.64s/8it/conv=True  PySCF 12.38s/6it/conv=True  speedup=2.67x
+      ae_cpu: TIDES 339.24s/68it/conv=True  PySCF 10.32s/6it/conv=True  speedup=0.03x
+      pp_cpu: TIDES 42.06s/8it/conv=True  PySCF 10.83s/6it/conv=True  speedup=0.26x
+
+  [B3LYP] C6H6 (12 atoms) — GPU-AE: SKIPPED (GPU OOM, nbf=114 > 90)
+
+  [B3LYP] C6H6 (12 atoms) — GPU-PP: SKIPPED (GPU OOM, nbf=108 > 90)
+
+  [B3LYP] C6H6 (12 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=2.21405 ms, step=2.21405 ms)
+[NaoDriver] grid basis evaluation (elapsed=538.764 ms, step=536.55 ms)
+[NaoDriver] gradient computation (elapsed=904.09 ms, step=365.326 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=924.909 ms, step=20.8189 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=10326.9 ms, step=9401.99 ms)
+[NaoDriver] E_ion = 203.416
+[NaoDriver] launching SCF (n=96, n_occ=21)
+[NaoDriver] SAD initial guess (uniform): trace=21 target=21
+[SCFDriver] S eigenvalue filter: n=96 n_retained=90 s_max=3.68357 s_min=6.34322e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-149.85 E_prev=1e+30 P_trace=27.5324 P*S_trace=21
+[SCFDriver] iter=1 E=-155.928 E_prev=-149.85 P_trace=34.2633 P*S_trace=21
+[SCFDriver] iter=2 E=-188.393 E_prev=-155.928 P_trace=38.2125 P*S_trace=21
+[NaoDriver] SCF (elapsed=174436 ms, step=164109 ms)
+[NaoDriver] H tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] tile trace(P,H) = -37.339 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0161771
+  rho_build:   885.089
+  poisson:     640.138
+  xc_eval:     10174.5
+  vmat_build:  0
+  assemble_H:  0.165713
+  total:       11699.9
+  GPU pipeline: no
+    E=-189.871771  CONVERGED  iters=14  wall=174.44s  nbf=96  gpu=False
+    build_H: rho=885.1ms  pois=640.1ms  xc=10174.5ms  vmat=0.0ms  total=11699.9ms
+    SCF: eig=15.6ms  diis=0.0ms  total=164078.2ms/iter
+    Energy: -149.8503441835  -155.9284447646  -188.3927809514  ...  -189.8717706191  
+
+  [B3LYP] C6H6 (12 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=3.47037 ms, step=3.47037 ms)
+[NaoDriver] grid basis evaluation (elapsed=512.046 ms, step=508.575 ms)
+[NaoDriver] gradient computation (elapsed=856.34 ms, step=344.294 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=875.697 ms, step=19.357 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 6 / 9 tiles (sparsity 0.666667)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=2757.44 ms, step=1881.74 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=5092.15 ms, step=2334.71 ms)
+[NaoDriver] E_ion = 103.113
+[NaoDriver] launching SCF (n=96, n_occ=15)
+[NaoDriver] SAD initial guess (uniform): trace=15 target=15
+[SCFDriver] S eigenvalue filter: n=96 n_retained=96 s_max=4.70568 s_min=0.00203151
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=12.3993 E_prev=1e+30 P_trace=11.9508 P*S_trace=15
+[SCFDriver] iter=1 E=-11.9127 E_prev=12.3993 P_trace=11.3255 P*S_trace=15
+[SCFDriver] iter=2 E=-11.9591 E_prev=-11.9127 P_trace=11.2661 P*S_trace=15
+[NaoDriver] SCF (elapsed=2.93823e+06 ms, step=2.93314e+06 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0157251
+  rho_build:   893.086
+  poisson:     651.172
+  xc_eval:     10167.7
+  vmat_build:  0
+  assemble_H:  0.0349804
+  total:       11712
+  GPU pipeline: no
+    E=-12.086237  FAILED  iters=250  wall=2938.29s  nbf=96  gpu=False
+    build_H: rho=893.1ms  pois=651.2ms  xc=10167.7ms  vmat=0.0ms  total=11712.0ms
+    SCF: eig=15.9ms  diis=0.0ms  total=2933111.6ms/iter
+    Energy: 12.3992881732  -11.9127323565  -11.9590525003  ...  -12.0862369106  
+
+  COMPARISON C6H6 [B3LYP]:
+      ae_gpu: TIDES GPU_OOM (skipped, nbf=114)  PySCF 18.75s/6it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      pp_gpu: TIDES GPU_OOM (skipped, nbf=108)  PySCF 15.34s/6it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      ae_cpu: TIDES 174.44s/14it/conv=True  PySCF 18.80s/6it/conv=True  speedup=0.11x
+      pp_cpu: TIDES 2938.29s/250it/conv=False  PySCF 13.60s/6it/conv=True  speedup=0.00x
+
+  [B3LYP] C4H10 (14 atoms) — GPU-AE: SKIPPED (GPU OOM, nbf=106 > 90)
+
+  [B3LYP] C4H10 (14 atoms) — GPU-PP: SKIPPED (GPU OOM, nbf=102 > 90)
+
+  [B3LYP] C4H10 (14 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 6 6 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=0.907158 ms, step=0.907158 ms)
+[NaoDriver] grid basis evaluation (elapsed=520.81 ms, step=519.903 ms)
+[NaoDriver] gradient computation (elapsed=982.932 ms, step=462.122 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=1000.04 ms, step=17.1124 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 10 / 16 tiles (sparsity 0.625)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=15614.4 ms, step=14614.4 ms)
+[NaoDriver] E_ion = 132.892
+[NaoDriver] launching SCF (n=112, n_occ=17)
+[NaoDriver] SAD initial guess (uniform): trace=17 target=17
+[SCFDriver] S eigenvalue filter: n=112 n_retained=108 s_max=7.65248 s_min=6.34684e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-108.386 E_prev=1e+30 P_trace=1692.4 P*S_trace=17
+[SCFDriver] iter=1 E=-131.712 E_prev=-108.386 P_trace=1630.81 P*S_trace=17
+[SCFDriver] iter=2 E=-140.722 E_prev=-131.712 P_trace=1574.5 P*S_trace=17
+[NaoDriver] SCF (elapsed=834953 ms, step=819338 ms)
+[NaoDriver] H tile substrate: 10 / 16 tiles (sparsity 0.625)
+[NaoDriver] tile trace(P,H) = -39.5826 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0221437
+  rho_build:   1145.09
+  poisson:     778.334
+  xc_eval:     14763.5
+  vmat_build:  0
+  assemble_H:  0.228469
+  total:       16687.2
+  GPU pipeline: no
+    E=-143.163498  CONVERGED  iters=49  wall=834.96s  nbf=112  gpu=False
+    build_H: rho=1145.1ms  pois=778.3ms  xc=14763.5ms  vmat=0.0ms  total=16687.2ms
+    SCF: eig=26.5ms  diis=0.0ms  total=819306.6ms/iter
+    Energy: -108.3861268142  -131.7118484482  -140.7219513707  ...  -143.1634978219  
+
+  [B3LYP] C4H10 (14 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 6 6 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=1.13567 ms, step=1.13567 ms)
+[NaoDriver] grid basis evaluation (elapsed=525.645 ms, step=524.509 ms)
+[NaoDriver] gradient computation (elapsed=978.532 ms, step=452.887 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=996.433 ms, step=17.9007 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 10 / 16 tiles (sparsity 0.625)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=3613.36 ms, step=2616.93 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=6383.7 ms, step=2770.34 ms)
+[NaoDriver] E_ion = 78.4991
+[NaoDriver] launching SCF (n=112, n_occ=13)
+[NaoDriver] SAD initial guess (uniform): trace=13 target=13
+[SCFDriver] S eigenvalue filter: n=112 n_retained=112 s_max=8.51716 s_min=0.00123005
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=12.3821 E_prev=1e+30 P_trace=281.631 P*S_trace=13
+[SCFDriver] iter=1 E=-7.91235 E_prev=12.3821 P_trace=71.3825 P*S_trace=13
+[SCFDriver] iter=2 E=-9.24118 E_prev=-7.91235 P_trace=58.4934 P*S_trace=13
+[NaoDriver] SCF (elapsed=541532 ms, step=535149 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0213793
+  rho_build:   1154.56
+  poisson:     776.237
+  xc_eval:     14759.9
+  vmat_build:  0
+  assemble_H:  0.0461328
+  total:       16690.8
+  GPU pipeline: no
+    E=-10.032963  CONVERGED  iters=32  wall=541.56s  nbf=112  gpu=False
+    build_H: rho=1154.6ms  pois=776.2ms  xc=14759.9ms  vmat=0.0ms  total=16690.8ms
+    SCF: eig=24.4ms  diis=0.0ms  total=535117.3ms/iter
+    Energy: 12.3821038935  -7.9123520818  -9.2411842959  ...  -10.0329632712  
+
+  COMPARISON C4H10 [B3LYP]:
+      ae_gpu: TIDES GPU_OOM (skipped, nbf=106)  PySCF 12.96s/7it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      pp_gpu: TIDES GPU_OOM (skipped, nbf=102)  PySCF 12.87s/8it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      ae_cpu: TIDES 834.96s/49it/conv=True  PySCF 13.05s/7it/conv=True  speedup=0.02x
+      pp_cpu: TIDES 541.56s/32it/conv=True  PySCF 13.01s/8it/conv=True  speedup=0.02x
+
+  [B3LYP] C8H18 (26 atoms) — GPU-AE: SKIPPED (GPU OOM, nbf=202 > 90)
+
+  [B3LYP] C8H18 (26 atoms) — GPU-PP: SKIPPED (GPU OOM, nbf=194 > 90)
+
+  [B3LYP] C8H18 (26 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=2.1231 ms, step=2.1231 ms)
+[NaoDriver] grid basis evaluation (elapsed=1304.83 ms, step=1302.71 ms)
+[NaoDriver] gradient computation (elapsed=2547.91 ms, step=1243.08 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=2583.98 ms, step=36.0736 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 28 / 49 tiles (sparsity 0.571429)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=83717.7 ms, step=81133.7 ms)
+[NaoDriver] E_ion = 384.657
+[NaoDriver] launching SCF (n=208, n_occ=33)
+[NaoDriver] SAD initial guess (uniform): trace=33 target=33
+[SCFDriver] S eigenvalue filter: n=208 n_retained=200 s_max=7.55663 s_min=6.30196e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-206.927 E_prev=1e+30 P_trace=3269.12 P*S_trace=33
+[SCFDriver] iter=1 E=-273.783 E_prev=-206.927 P_trace=2612.95 P*S_trace=33
+[SCFDriver] iter=2 E=-255.729 E_prev=-273.783 P_trace=2602.44 P*S_trace=33
+[NaoDriver] SCF (elapsed=8.48015e+06 ms, step=8.39644e+06 ms)
+[NaoDriver] H tile substrate: 28 / 49 tiles (sparsity 0.571429)
+[NaoDriver] tile trace(P,H) = -92.5057 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0774009
+  rho_build:   3891.48
+  poisson:     2594.59
+  xc_eval:     68366.1
+  vmat_build:  0
+  assemble_H:  0.71944
+  total:       74852.9
+  GPU pipeline: no
+    E=-297.224768  CONVERGED  iters=112  wall=8480.17s  nbf=208  gpu=False
+    build_H: rho=3891.5ms  pois=2594.6ms  xc=68366.1ms  vmat=0.0ms  total=74852.9ms
+    SCF: eig=77.2ms  diis=0.2ms  total=8396395.9ms/iter
+    Energy: -206.9272596787  -273.7828164213  -255.7293458817  ...  -297.2247680652  
+
+  [B3LYP] C8H18 (26 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=1.75856 ms, step=1.75856 ms)
+[NaoDriver] grid basis evaluation (elapsed=1216.98 ms, step=1215.22 ms)
+[NaoDriver] gradient computation (elapsed=2501.65 ms, step=1284.67 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=2532.89 ms, step=31.2438 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 28 / 49 tiles (sparsity 0.571429)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=10229 ms, step=7696.13 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=20532.7 ms, step=10303.7 ms)
+[NaoDriver] E_ion = 221.099
+[NaoDriver] launching SCF (n=208, n_occ=25)
+[NaoDriver] SAD initial guess (uniform): trace=25 target=25
+[SCFDriver] S eigenvalue filter: n=208 n_retained=208 s_max=8.44147 s_min=0.00106538
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=124.245 E_prev=1e+30 P_trace=499.493 P*S_trace=25
+[SCFDriver] iter=1 E=82.8195 E_prev=124.245 P_trace=281.062 P*S_trace=25
+[SCFDriver] iter=2 E=81.9087 E_prev=82.8195 P_trace=235.93 P*S_trace=25
+[NaoDriver] SCF (elapsed=6.45562e+06 ms, step=6.43509e+06 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.0762522
+  rho_build:   3813.77
+  poisson:     2589.62
+  xc_eval:     68312.3
+  vmat_build:  0
+  assemble_H:  0.145732
+  total:       74715.9
+  GPU pipeline: no
+    E=81.316384  CONVERGED  iters=86  wall=6455.65s  nbf=208  gpu=False
+    build_H: rho=3813.8ms  pois=2589.6ms  xc=68312.3ms  vmat=0.0ms  total=74715.9ms
+    SCF: eig=72.8ms  diis=0.2ms  total=6435048.6ms/iter
+    Energy: 124.2453537643  82.8194934013  81.9086827738  ...  81.3163835404  
+
+  COMPARISON C8H18 [B3LYP]:
+      ae_gpu: TIDES GPU_OOM (skipped, nbf=202)  PySCF 36.56s/7it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      pp_gpu: TIDES GPU_OOM (skipped, nbf=194)  PySCF 31.68s/8it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      ae_cpu: TIDES 8480.17s/112it/conv=True  PySCF 44.52s/7it/conv=True  speedup=0.01x
+      pp_cpu: TIDES 6455.65s/86it/conv=True  PySCF 38.02s/8it/conv=True  speedup=0.01x
+
+  [B3LYP] C10H22 (32 atoms) — GPU-AE: SKIPPED (GPU OOM, nbf=250 > 90)
+
+  [B3LYP] C10H22 (32 atoms) — GPU-PP: SKIPPED (GPU OOM, nbf=240 > 90)
+
+  [B3LYP] C10H22 (32 atoms) — CPU-AE
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 6 6 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=6 (C), key=9422f3acfaaa7281
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoGenerator] Cache hit for Z=1 (H), key=bd2964eec53c53a7
+[NaoDriver] basis generation (elapsed=2.74861 ms, step=2.74861 ms)
+[NaoDriver] grid basis evaluation (elapsed=1724.39 ms, step=1721.64 ms)
+[NaoDriver] gradient computation (elapsed=3411.8 ms, step=1687.4 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=3461.76 ms, step=49.9597 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 36 / 64 tiles (sparsity 0.5625)
+[NaoDriver] V_ext assembly (analytic on-site + erf grid) (elapsed=158374 ms, step=154913 ms)
+[NaoDriver] E_ion = 541.059
+[NaoDriver] launching SCF (n=256, n_occ=41)
+[NaoDriver] SAD initial guess (uniform): trace=41 target=41
+[SCFDriver] S eigenvalue filter: n=256 n_retained=246 s_max=7.61733 s_min=6.27474e-07
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=-310.333 E_prev=1e+30 P_trace=4935.45 P*S_trace=41
+[SCFDriver] iter=1 E=-407.689 E_prev=-310.333 P_trace=4180.07 P*S_trace=41
+[SCFDriver] iter=2 E=-349.961 E_prev=-407.689 P_trace=4232.39 P*S_trace=41
+[NaoDriver] SCF (elapsed=1.47555e+07 ms, step=1.45972e+07 ms)
+[NaoDriver] H tile substrate: 36 / 64 tiles (sparsity 0.5625)
+[NaoDriver] tile trace(P,H) = -149.561 (substrate product path)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.119975
+  rho_build:   5949.02
+  poisson:     4424.37
+  xc_eval:     111111
+  vmat_build:  0
+  assemble_H:  1.22151
+  total:       121486
+  GPU pipeline: no
+    E=-420.545168  FAILED  iters=120  wall=14755.60s  nbf=256  gpu=False
+    build_H: rho=5949.0ms  pois=4424.4ms  xc=111111.1ms  vmat=0.0ms  total=121485.8ms
+    SCF: eig=88.7ms  diis=0.3ms  total=14597111.9ms/iter
+    Energy: -310.3332186596  -407.6891567517  -349.9605184931  ...  -420.5451682130  
+
+  [B3LYP] C10H22 (32 atoms) — CPU-PP
+[NaoDriver] Starting Run (Z={ 6 6 6 6 6 6 6 6 6 6 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 }, grid_h=0.3)
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=6 (C), key=9422f3acfaaa7281:pp:C
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoGenerator] Cache hit (pseudo) for Z=1 (H), key=bd2964eec53c53a7:pp:H
+[NaoDriver] basis generation (elapsed=2.39631 ms, step=2.39631 ms)
+[NaoDriver] grid basis evaluation (elapsed=1675.05 ms, step=1672.66 ms)
+[NaoDriver] gradient computation (elapsed=3373.74 ms, step=1698.69 ms)
+[NaoDriver] S/T assembly (two-center) (elapsed=3420.79 ms, step=47.0505 ms)
+[NaoDriver] TIDES_DISABLE_GPU set — using CPU-only path
+[NaoDriver] S tile substrate: 36 / 64 tiles (sparsity 0.5625)
+[NaoDriver] V_ext assembly (analytic on-site PP + grid) (elapsed=14932.2 ms, step=11511.5 ms)
+[NaoDriver] V_nl (KB) assembly (elapsed=31019.8 ms, step=16087.5 ms)
+[NaoDriver] E_ion = 309.402
+[NaoDriver] launching SCF (n=256, n_occ=31)
+[NaoDriver] SAD initial guess (uniform): trace=31 target=31
+[SCFDriver] S eigenvalue filter: n=256 n_retained=256 s_max=8.488 s_min=0.00100407
+[SCFDriver] broker: user override -> regime R0
+[SCFDriver] iter=0 E=208.208 E_prev=1e+30 P_trace=1272.29 P*S_trace=31
+[SCFDriver] iter=1 E=157.34 E_prev=208.208 P_trace=1057.64 P*S_trace=31
+[SCFDriver] iter=2 E=158.199 E_prev=157.34 P_trace=882.967 P*S_trace=31
+[NaoDriver] SCF (elapsed=8.35242e+06 ms, step=8.3214e+06 ms)
+[NaoDriver] build_H substep timings (avg per iteration, ms):
+  quantize_P:  0.124977
+  rho_build:   6093.55
+  poisson:     4516.07
+  xc_eval:     113429
+  vmat_build:  0
+  assemble_H:  0.227627
+  total:       124039
+  GPU pipeline: no
+    E=154.473177  CONVERGED  iters=67  wall=8352.52s  nbf=256  gpu=False
+    build_H: rho=6093.5ms  pois=4516.1ms  xc=113429.3ms  vmat=0.0ms  total=124039.3ms
+    SCF: eig=87.1ms  diis=0.3ms  total=8321195.4ms/iter
+    Energy: 208.2079557017  157.3402668641  158.1989932132  ...  154.4731773759  
+
+  COMPARISON C10H22 [B3LYP]:
+      ae_gpu: TIDES GPU_OOM (skipped, nbf=250)  PySCF 59.45s/7it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      pp_gpu: TIDES GPU_OOM (skipped, nbf=240)  PySCF 124.24s/8it/conv=True  [PySCF GPU handles this — TIDES VRAM limit]
+      ae_cpu: TIDES 14755.60s/120it/conv=False  PySCF 69.20s/7it/conv=True  speedup=0.00x
+      pp_cpu: TIDES 8352.52s/67it/conv=True  PySCF 64.54s/8it/conv=True  speedup=0.01x
+
+============================================================================================================================================
+  UNIFIED BENCHMARK DASHBOARD — B3LYP
+============================================================================================================================================
+
+============================================================================================================================================
+TABLE 1 — SPEED (wall time, seconds)
+============================================================================================================================================
+Mol        N | TIDES AE-GPU PySCF GPU-AE  speedup | TIDES PP-GPU PySCF GPU-PP  speedup | TIDES AE-CPU PySCF CPU-AE  speedup | TIDES PP-CPU PySCF CPU-PP  speedup
+--------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5 |    3.36s    6.19s    1.84x |    2.81s    8.10s    2.88x |   26.22s    5.54s    0.21x |   20.94s    4.25s    0.20x
+H2O        3 |    1.51s    6.03s    3.99x |    1.36s    5.93s    4.37x |    9.14s    3.83s    0.42x |    7.37s    5.22s    0.71x
+NH3        4 |    6.96s    9.66s    1.39x |    1.94s    7.03s    3.63x |  161.04s    9.52s    0.06x |   12.39s    6.50s    0.52x
+C2H6       8 |   15.19s   14.29s    0.94x |    4.64s   12.38s    2.67x |  339.24s   10.32s    0.03x |   42.06s   10.83s    0.26x
+C6H6      12 |   N/A   18.75s      N/A |   N/A   15.34s      N/A |  174.44s   18.80s    0.11x | 2938.29s   13.60s    0.00x
+C4H10     14 |   N/A   12.96s      N/A |   N/A   12.87s      N/A |  834.96s   13.05s    0.02x |  541.56s   13.01s    0.02x
+C8H18     26 |   N/A   36.56s      N/A |   N/A   31.68s      N/A | 8480.17s   44.52s    0.01x | 6455.65s   38.02s    0.01x
+C10H22    32 |   N/A   59.45s      N/A |   N/A  124.24s      N/A | 14755.60s   69.20s    0.00x | 8352.52s   64.54s    0.01x
+
+============================================================================================================================================
+TABLE 2 — CONVERGENCE
+============================================================================================================================================
+Mol        N |           AE-GPU           PP-GPU |           AE-CPU           PP-CPU
+----------------------------------------------------------------------------------------------------
+CH4        5 |    T= YES P= YES    T= YES P= YES |    T= YES P= YES    T= YES P= YES
+H2O        3 |    T= YES P= YES    T= YES P= YES |    T= YES P= YES    T= YES P= YES
+NH3        4 |    T= NO  P= YES    T= YES P= YES |    T= NO  P= YES    T= YES P= YES
+C2H6       8 |    T= YES P= YES    T= YES P= YES |    T= YES P= YES    T= YES P= YES
+C6H6      12 |    T= NO  P= YES    T= NO  P= YES |    T= YES P= YES    T= NO  P= YES
+C4H10     14 |    T= NO  P= YES    T= NO  P= YES |    T= YES P= YES    T= YES P= YES
+C8H18     26 |    T= NO  P= YES    T= NO  P= YES |    T= YES P= YES    T= YES P= YES
+C10H22    32 |    T= NO  P= YES    T= NO  P= YES |    T= NO  P= YES    T= YES P= YES
+
+============================================================================================================================================
+TABLE 3 — SCF ITERATIONS
+============================================================================================================================================
+Mol        N |               AE-GPU               PP-GPU |               AE-CPU               PP-CPU
+--------------------------------------------------------------------------------------------------------------
+CH4        5 | T=   9 P=   5   1.8x T=   8 P=   6   1.3x | T=  10 P=   5   2.0x T=   8 P=   6   1.3x
+H2O        3 | T=  14 P=   6   2.3x T=   7 P=   6   1.2x | T=   9 P=   6   1.5x T=   7 P=   6   1.2x
+NH3        4 | T= 100 P=   6  16.7x T=   8 P=   6   1.3x | T= 100 P=   6  16.7x T=   7 P=   6   1.2x
+C2H6       8 | T=  64 P=   6  10.7x T=   8 P=   6   1.3x | T=  68 P=   6  11.3x T=   8 P=   6   1.3x
+C6H6      12 | T=   0 P=   6    N/A T=   0 P=   6    N/A | T=  14 P=   6   2.3x T= 250 P=   6  41.7x
+C4H10     14 | T=   0 P=   7    N/A T=   0 P=   8    N/A | T=  49 P=   7   7.0x T=  32 P=   8   4.0x
+C8H18     26 | T=   0 P=   7    N/A T=   0 P=   8    N/A | T= 112 P=   7  16.0x T=  86 P=   8  10.8x
+C10H22    32 | T=   0 P=   7    N/A T=   0 P=   8    N/A | T= 120 P=   7  17.1x T=  67 P=   8   8.4x
+
+============================================================================================================================================
+TABLE 4 — PER-ITERATION COST (ms/iter, averaged)
+============================================================================================================================================
+Mol        N |                             TIDES AE-GPU |                   PySCF GPU-AE | ratio
+             |  build_H      eig     diis    total |     veff      eig    total |   iter
+------------------------------------------------------------------------------------------------------------------------
+CH4        5 |   117.6     3.2     0.0  1091.0 |   798.2    16.0   886.6 |  1.23x
+H2O        3 |    43.0     1.9     0.0   631.0 |   665.0     0.2   791.1 |  0.80x
+NH3        4 |    50.9     2.9     0.0  5401.1 |  1101.5     0.3  1225.5 |  4.41x
+C2H6       8 |   150.8     5.8     0.0 10086.6 |  1635.4    24.7  1757.8 |  5.74x
+C6H6      12 |     N/A     N/A     N/A     N/A |  1975.9   216.4  2303.0 |    N/A
+C4H10     14 |     N/A     N/A     N/A     N/A |  1238.4    90.3  1419.4 |    N/A
+C8H18     26 |     N/A     N/A     N/A     N/A |  3678.4   224.7  4037.3 |    N/A
+C10H22    32 |     N/A     N/A     N/A     N/A |  6063.0   396.5  6566.3 |    N/A
+
+============================================================================================================================================
+TABLE 5 — OPERATION BREAKDOWN (% of SCF time, AE-GPU vs GPU-AE)
+============================================================================================================================================
+Mol        N |                                              TIDES |                                              PySCF
+             |   rho%  pois%    xc%  vmat%   eig%  diis% other% | hcore%  veff%   eig%  rdm1%  etot% other%
+--------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5 |   0.1%   1.3%   9.4%   0.0%   0.3%   0.0%  88.9% |   5.8%  90.0%   1.8%   0.0%   0.0%   2.3%
+H2O        3 |   0.0%   0.9%   5.9%   0.0%   0.3%   0.0%  92.9% |  12.4%  84.1%   0.0%   0.0%   0.0%   3.5%
+NH3        4 |   0.0%   0.0%   0.9%   0.0%   0.1%   0.0%  99.0% |   7.2%  89.9%   0.0%   0.0%   0.0%   2.9%
+C2H6       8 |   0.0%   0.0%   1.5%   0.0%   0.1%   0.0%  98.4% |   3.8%  93.0%   1.4%   0.0%   0.0%   1.7%
+C6H6      12 |   N/A   N/A   N/A   N/A   N/A   N/A   N/A |   3.0%  85.8%   9.4%   0.9%   0.0%   0.9%
+C4H10     14 |   N/A   N/A   N/A   N/A   N/A   N/A   N/A |   4.8%  87.2%   6.4%   0.0%   0.0%   1.6%
+C8H18     26 |   N/A   N/A   N/A   N/A   N/A   N/A   N/A |   2.3%  91.1%   5.6%   0.4%   0.0%   0.5%
+C10H22    32 |   N/A   N/A   N/A   N/A   N/A   N/A   N/A |   0.9%  92.3%   6.0%   0.4%   0.0%   0.3%
+
+============================================================================================================================================
+TABLE 6 — CONVERGENCE TRAJECTORY (energy per iteration, AE-GPU vs GPU-AE)
+============================================================================================================================================
+
+  CH4 (5 atoms):
+    TIDES (9 iters):  -36.4472701511  -49.1119041031  -49.1207420813  -49.1216829879  -49.1221021482  ...  -49.1221219238  -49.1221219268  
+    PySCF (5 iters):  -40.4667705745  -40.4600990484  -40.4876908836  -40.4876917865  -40.4876918064  
+    TIDES |dE|:  1.27e+01  8.84e-03  9.41e-04  4.19e-04  1.89e-05  7.90e-07  4.43e-08  3.03e-09  
+    PySCF |dE|:  1.87e-01  6.67e-03  2.76e-02  9.03e-07  1.99e-08  
+
+  H2O (3 atoms):
+    TIDES (14 iters):  -70.1126765767  -70.9270044230  -74.3575203473  -74.7376812480  -74.9078671369  ...  -74.9549926487  -74.9549926588  
+    PySCF (6 iters):  -76.2670349815  -76.1766743156  -76.3581800797  -76.3582899342  -76.3582923692  -76.3582924088  
+    TIDES |dE|:  8.14e-01  3.43e+00  3.80e-01  1.70e-01  3.64e-02  8.77e-03  1.72e-03  2.13e-04  3.03e-05  6.00e-06  1.88e-06  2.32e-07  1.02e-08  
+    PySCF |dE|:  1.02e-02  9.04e-02  1.82e-01  1.10e-04  2.44e-06  3.96e-08  
+
+  NH3 (4 atoms):
+    TIDES (100 iters):  -14.7296178175  -10.2380260367  -13.5247910440  -11.0881225133  -10.2756657535  ...  -2.8306235388  -0.8171082366  
+    PySCF (6 iters):  -56.4749505932  -56.4494324935  -56.5093629176  -56.5094389229  -56.5094397916  -56.5094398055  
+    TIDES |dE|:  4.49e+00  3.29e+00  2.44e+00  8.12e-01  5.80e+00  1.50e+00  2.04e+00  1.90e+00  3.83e+00  1.55e-01  8.93e-01  1.90e-01  5.53e+00  8.79e-01  2.01e+00  1.97e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  4.70e+00  1.24e+00  3.25e-01  5.32e+00  1.10e+00  2.02e+00  1.98e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  4.70e+00  1.24e+00  3.25e-01  5.32e+00  1.10e+00  2.02e+00  1.98e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  4.70e+00  1.24e+00  3.25e-01  5.32e+00  1.10e+00  2.02e+00  1.98e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  2.01e+00  
+    PySCF |dE|:  7.96e-02  2.55e-02  5.99e-02  7.60e-05  8.69e-07  1.39e-08  
+
+  C2H6 (8 atoms):
+    TIDES (64 iters):  -49.5728860776  -62.9305819932  -64.0384078495  -64.0610476267  -64.0666269144  ...  -64.1166441940  -64.1166441966  
+    PySCF (6 iters):  -79.7414707282  -79.7296228386  -79.7709252452  -79.7709524859  -79.7709543061  -79.7709543067  
+    TIDES |dE|:  1.34e+01  1.11e+00  2.26e-02  5.58e-03  6.76e-03  7.53e-03  7.71e-03  5.45e-03  1.90e-03  2.68e-03  4.82e-03  1.45e-03  1.70e-02  5.44e-03  4.29e-03  1.65e-03  5.07e-04  2.96e-04  1.55e-04  1.01e-04  1.43e-05  1.04e-05  1.09e-05  8.64e-06  1.02e-05  9.18e-06  8.73e-06  1.43e-05  4.06e-06  5.38e-06  4.37e-06  1.77e-06  1.17e-06  1.38e-06  8.74e-07  2.17e-05  6.50e-06  5.04e-06  6.75e-07  7.58e-07  7.29e-07  1.41e-07  3.16e-07  1.28e-06  2.89e-07  5.53e-08  2.62e-08  2.00e-09  6.50e-08  7.19e-08  3.34e-08  9.28e-08  4.38e-08  5.43e-09  3.63e-09  1.22e-08  8.25e-10  5.37e-09  4.13e-08  1.62e-08  8.50e-09  3.60e-09  2.60e-09  
+    PySCF |dE|:  1.03e-01  1.18e-02  4.13e-02  2.72e-05  1.82e-06  6.74e-10  
+
+  C6H6 (12 atoms):
+    TIDES (0 iters):  
+    PySCF (6 iters):  -232.0507303887  -232.0482711633  -232.0844494692  -232.0845116477  -232.0845171078  -232.0845171096  
+    PySCF |dE|:  8.05e-01  2.46e-03  3.62e-02  6.22e-05  5.46e-06  1.78e-09  
+
+  C4H10 (14 atoms):
+    TIDES (0 iters):  
+    PySCF (7 iters):  -158.2922139591  -158.2709313991  -158.3404445388  -158.3405597615  -158.3405828690  -158.3405866572  -158.3405866924  
+    PySCF |dE|:  4.80e-02  2.13e-02  6.95e-02  1.15e-04  2.31e-05  3.79e-06  3.52e-08  
+
+  C8H18 (26 atoms):
+    TIDES (0 iters):  
+    PySCF (7 iters):  -315.3947952611  -315.3638361575  -315.4794675716  -315.4795964894  -315.4796384385  -315.4796447655  -315.4796448033  
+    PySCF |dE|:  3.44e-01  3.10e-02  1.16e-01  1.29e-04  4.19e-05  6.33e-06  3.79e-08  
+
+  C10H22 (32 atoms):
+    TIDES (0 iters):  
+    PySCF (7 iters):  -393.9447561701  -393.9054202250  -394.0475452933  -394.0477400824  -394.0477748326  -394.0477818610  -394.0477819596  
+    PySCF |dE|:  4.91e-01  3.93e-02  1.42e-01  1.95e-04  3.48e-05  7.03e-06  9.86e-08  
+
+============================================================================================================================================
+TABLE 7 — FULL PROFILING DETAIL (AE-GPU vs GPU-AE, ms/iter)
+============================================================================================================================================
+Mol        N |                                               TIDES substeps |                                   PySCF operations
+             |  quant    rho   pois     xc   vmat  asmbl    eig   diis  total |  hcore   veff    eig   rdm1   etot  total
+--------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5 |     0.0     0.6    14.4   102.5     N/A     0.0     3.2     0.0  1091.0 |    51.6   798.2    16.0     0.0     0.1   886.6
+H2O        3 |     0.0     0.1     5.4    37.5     N/A     0.0     1.9     0.0   631.0 |    98.1   665.0     0.2     0.0     0.1   791.1
+NH3        4 |     0.0     0.0     1.0    49.9     N/A     0.0     2.9     0.0  5401.1 |    88.3  1101.5     0.3     0.0     0.1  1225.5
+C2H6       8 |     0.0     0.1     2.4   148.3     N/A     0.0     5.8     0.0 10086.6 |    67.0  1635.4    24.7     0.0     0.1  1757.8
+C6H6      12 |     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A |    68.8  1975.9   216.4    20.3     0.1  2303.0
+C4H10     14 |     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A |    67.6  1238.4    90.3     0.1     0.1  1419.4
+C8H18     26 |     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A |    94.4  3678.4   224.7    17.4     0.1  4037.3
+C10H22    32 |     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A |    61.5  6063.0   396.5    23.0     0.1  6566.3
+
+============================================================================================================================================
+TABLE 8 — RESOURCE USAGE (CPU%, RAM, GPU%, VRAM, power, temp)
+============================================================================================================================================
+Mol        N |                   TIDES AE-GPU |                   PySCF GPU-AE |                   TIDES PP-GPU |                   PySCF GPU-PP |                   TIDES AE-CPU |                   PySCF CPU-AE
+             |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W |  CPU%    RAM  GPU%   VRAM     W
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5 |   916  13447    51   8479  43.7 |  1106    654     1   1823  49.8 |  1070  13448     0   4743  56.7 |  1098    655    41   1823  81.9 |  7282  13448     7   4223  49.5 |  1098    648    11   1823  63.8
+H2O        3 |   820  13448     7   4433  49.0 |   990    627    49   2012  81.2 |  1002  13448    54   3043  60.5 |  1022    625    24   2074  70.5 |   884  13448    16   2981  51.4 |  1086    627    53   2061  93.5
+NH3        4 |   774  13448    66   4091  72.9 |   796    652    54   2225  91.8 |  1175  13448    25   3847  67.4 |   802    651     6   2218  51.2 |  7637  13448     7   3607  51.6 |   746    650     6   1876  53.9
+C2H6       8 |  1142  13455    62   7029  66.8 |   844    800    18   2102  65.0 |  5925  13455    19   6747  59.3 |   883    800    19   2064  44.3 |   966  13455     3   5621  50.0 |   864    791     6   1902  52.8
+C6H6      12 |                        GPU_OOM |  1086   1333    48   1883  84.9 |                        GPU_OOM |  1124   1336     2   1895  44.0 |  1080  13515     2   6088  48.5 |  1110   1314    36   1892  82.0
+C4H10     14 |                        GPU_OOM |  1172   1564     8   1834  21.7 |                        GPU_OOM |  1183   1598     4   1843  22.1 |  1130  13550     2   6165  47.9 |  1184   1557     4   1834  21.8
+C8H18     26 |                        GPU_OOM |  1178   3553     4   1432  22.2 |                        GPU_OOM |  1186   3690     5   1419  22.0 |  1126  21635     6   7373  28.1 |  1180   3379     3   2164  23.1
+C10H22    32 |                        GPU_OOM |  1176   3886    21   2392  26.3 |                        GPU_OOM |  1188   3819    19   2364  25.1 |  1151  28666     6   8018  25.8 |  1176   3864    19   1774  24.9
+
+============================================================================================================================================
+TABLE 9 — GPU VRAM LIMITATION ANALYSIS (TIDES vs PySCF on this hardware)
+============================================================================================================================================
+Mol        N nbf_AE nbf_PP |         TIDES AE-GPU         TIDES PP-GPU |         PySCF GPU-AE         PySCF GPU-PP |             VRAM gap
+--------------------------------------------------------------------------------------------------------------------------------------------
+CH4        5     34     33 |                 CONV                 CONV |                 CONV                 CONV | PySCF 1823MB vs TIDES 8479MB
+H2O        3     24     23 |                 CONV                 CONV |                 CONV                 CONV | PySCF 2012MB vs TIDES 4433MB
+NH3        4     29     28 |                 FAIL                 CONV |                 CONV                 CONV | PySCF 2225MB vs TIDES 4091MB
+C2H6       8     58     56 |                 CONV                 CONV |                 CONV                 CONV | PySCF 2102MB vs TIDES 7029MB
+C6H6      12    114    108 |              GPU_OOM              GPU_OOM |                 CONV                 CONV | PySCF 1883MB vs TIDES OOM
+C4H10     14    106    102 |              GPU_OOM              GPU_OOM |                 CONV                 CONV | PySCF 1834MB vs TIDES OOM
+C8H18     26    202    194 |              GPU_OOM              GPU_OOM |                 CONV                 CONV | PySCF 1432MB vs TIDES OOM
+C10H22    32    250    240 |              GPU_OOM              GPU_OOM |                 CONV                 CONV | PySCF 2392MB vs TIDES OOM
+
+
+Results saved to /home/indranil/git/New_DFT_Code/tides/bench/profiling_results/unified_benchmark_2026-07-22_1045.json
